@@ -1,0 +1,8 @@
+# Cargo build directory — local-only, regenerated on every build.
+target/
+
+# Library crate: the resolved lockfile is not committed.
+Cargo.lock
+
+# Editor temporaries.
+**/*.rs.bk

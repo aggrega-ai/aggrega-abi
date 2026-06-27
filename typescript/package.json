@@ -1,0 +1,14 @@
+{
+  "name": "@aggrega-ai/aggrega-abi",
+  "version": "0.1.0-alpha.1",
+  "description": "Portable codec for the Aggrega Wasm plugin ABI.",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
