@@ -13,7 +13,10 @@
 //! The contract proven per payload: deserialize the golden through the generated
 //! type, re-serialize, and assert byte-identical output.
 
-use aggrega_abi::{LinterInput, LinterOutput, MutatorInput, MutatorOutput};
+use aggrega_abi::{
+    IRGraph, LinterInput, LinterOutput, MutatorInput, MutatorOutput, PolicyValidatorInput,
+    PolicyValidatorOutput,
+};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
 use std::path::Path;
@@ -53,4 +56,19 @@ fn linter_input_parity() {
 #[test]
 fn linter_output_parity() {
     round_trip::<LinterOutput>("LinterOutput.golden.json");
+}
+
+#[test]
+fn ir_graph_parity() {
+    round_trip::<IRGraph>("IRGraph.golden.json");
+}
+
+#[test]
+fn policy_validator_input_parity() {
+    round_trip::<PolicyValidatorInput>("PolicyValidatorInput.golden.json");
+}
+
+#[test]
+fn policy_validator_output_parity() {
+    round_trip::<PolicyValidatorOutput>("PolicyValidatorOutput.golden.json");
 }

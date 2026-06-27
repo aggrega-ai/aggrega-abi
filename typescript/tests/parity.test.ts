@@ -28,6 +28,12 @@ import {
   decodeLinterInput,
   encodeLinterOutput,
   decodeLinterOutput,
+  encodeIRGraph,
+  decodeIRGraph,
+  encodePolicyValidatorInput,
+  decodePolicyValidatorInput,
+  encodePolicyValidatorOutput,
+  decodePolicyValidatorOutput,
 } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -54,4 +60,19 @@ test("LinterInput wire parity", () => {
 test("LinterOutput wire parity", () => {
   const want = golden("LinterOutput.golden.json");
   assert.equal(encodeLinterOutput(decodeLinterOutput(want)), want);
+});
+
+test("IRGraph wire parity", () => {
+  const want = golden("IRGraph.golden.json");
+  assert.equal(encodeIRGraph(decodeIRGraph(want)), want);
+});
+
+test("PolicyValidatorInput wire parity", () => {
+  const want = golden("PolicyValidatorInput.golden.json");
+  assert.equal(encodePolicyValidatorInput(decodePolicyValidatorInput(want)), want);
+});
+
+test("PolicyValidatorOutput wire parity", () => {
+  const want = golden("PolicyValidatorOutput.golden.json");
+  assert.equal(encodePolicyValidatorOutput(decodePolicyValidatorOutput(want)), want);
 });

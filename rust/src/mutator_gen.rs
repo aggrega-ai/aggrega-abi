@@ -11,21 +11,21 @@ use serde_json::value::RawValue;
 use std::collections::BTreeMap;
 
 /// The payload the host hands the mutator plugin on each invocation: release-level compilation context plus a labels-only projection of the topology graph.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MutatorInput {
     pub compilation_context: CompilationContext,
     pub graph: MutatorGraph,
 }
 
 /// The response shape the mutator plugin emits: a list of opaque JSON Patch documents the host applies to the topology graph. Patches stay opaque at the schema layer so the host need not duplicate the JSON Patch parser the guest already implements.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MutatorOutput {
     /// Opaque JSON Patch documents to apply to the topology graph, in order.
     pub patches: Vec<Box<RawValue>>,
 }
 
 /// Release-level metadata the mutator reads when deciding which compliance, FinOps, or governance rules apply to the build.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CompilationContext {
     /// The boundary path or destination identifier the Release targets.
     pub release_destination: String,
@@ -36,14 +36,14 @@ pub struct CompilationContext {
 }
 
 /// The labels-only projection of the topology graph exposed to the mutator plugin. Intentionally narrower than the full topology result: edges, values, and feature payloads are not exposed because the mutator's job is labelling, not topology reshaping.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MutatorGraph {
     /// Nodes keyed by absolute node ID.
     pub nodes: BTreeMap<String, MutatorNode>,
 }
 
 /// The minimum per-node projection the mutator plugin needs to evaluate compliance rules: which Component the node implements, which version of that Component resolved, and which labels the node carries.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MutatorNode {
     /// The name of the underlying Component the node instantiates.
     pub component: String,

@@ -68,7 +68,7 @@ export function decodeMutatorInput(data: string): MutatorInput {
 
 export function encodeMutatorOutput(v: MutatorOutput): string {
   const parts: string[] = [];
-  parts.push(`${jstr("patches")}:${`[${v.patches.map((e) => encodeOpaque(e)).join(",")}]`}`);
+  parts.push(`${jstr("patches")}:${`[${v.patches!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -90,7 +90,7 @@ export function decodeCompilationContext(data: string): CompilationContext {
 
 export function encodeMutatorGraph(v: MutatorGraph): string {
   const parts: string[] = [];
-  parts.push(`${jstr("nodes")}:${`{${Object.keys(v.nodes).sort().map((k) => { const m = v.nodes; return `${jstr(k)}:${encodeMutatorNode(m[k])}`; }).join(",")}}`}`);
+  parts.push(`${jstr("nodes")}:${`{${Object.keys(v.nodes!).sort().map((k0) => `${jstr(k0)}:${encodeMutatorNode(v.nodes![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -102,7 +102,7 @@ export function encodeMutatorNode(v: MutatorNode): string {
   const parts: string[] = [];
   parts.push(`${jstr("component")}:${jstr(v.component)}`);
   parts.push(`${jstr("resolved_version")}:${jstr(v.resolved_version)}`);
-  parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels).sort().map((k) => { const m = v.labels; return `${jstr(k)}:${jstr(m[k])}`; }).join(",")}}`}`);
+  parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
 

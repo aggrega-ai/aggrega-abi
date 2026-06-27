@@ -99,7 +99,7 @@ export function decodeLinterInput(data: string): LinterInput {
 
 export function encodeLinterOutput(v: LinterOutput): string {
   const parts: string[] = [];
-  parts.push(`${jstr("findings")}:${`[${v.findings.map((e) => encodeLinterFinding(e)).join(",")}]`}`);
+  parts.push(`${jstr("findings")}:${`[${v.findings!.map((e0) => encodeLinterFinding(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -124,7 +124,7 @@ export function encodePolicies(v: Policies): string {
   const parts: string[] = [];
   if (v.enforce_monotonic_narrowing !== undefined && v.enforce_monotonic_narrowing !== false) parts.push(`${jstr("enforce_monotonic_narrowing")}:${String(v.enforce_monotonic_narrowing)}`);
   if (v.enforce_immutability !== undefined && v.enforce_immutability !== false) parts.push(`${jstr("enforce_immutability")}:${String(v.enforce_immutability)}`);
-  if (v.narrowing_exemptions !== undefined && v.narrowing_exemptions.length > 0) parts.push(`${jstr("narrowing_exemptions")}:${`[${v.narrowing_exemptions.map((e) => encodeNarrowingExemption(e)).join(",")}]`}`);
+  if (v.narrowing_exemptions !== undefined && v.narrowing_exemptions.length > 0) parts.push(`${jstr("narrowing_exemptions")}:${`[${v.narrowing_exemptions!.map((e0) => encodeNarrowingExemption(e0)).join(",")}]`}`);
   if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) parts.push(`${jstr("allow_dynamic_refs")}:${String(v.allow_dynamic_refs)}`);
   if (v.allow_id_overrides !== undefined && v.allow_id_overrides !== false) parts.push(`${jstr("allow_id_overrides")}:${String(v.allow_id_overrides)}`);
   if (v.allow_direct_x_aggrega_extensions !== undefined && v.allow_direct_x_aggrega_extensions !== false) parts.push(`${jstr("allow_direct_x_aggrega_extensions")}:${String(v.allow_direct_x_aggrega_extensions)}`);
@@ -141,7 +141,7 @@ export function decodePolicies(data: string): Policies {
 export function encodeNarrowingExemption(v: NarrowingExemption): string {
   const parts: string[] = [];
   parts.push(`${jstr("entity")}:${jstr(v.entity)}`);
-  parts.push(`${jstr("paths")}:${`[${v.paths.map((e) => jstr(e)).join(",")}]`}`);
+  parts.push(`${jstr("paths")}:${`[${v.paths!.map((e0) => jstr(e0)).join(",")}]`}`);
   parts.push(`${jstr("reason")}:${jstr(v.reason)}`);
   return `{${parts.join(",")}}`;
 }

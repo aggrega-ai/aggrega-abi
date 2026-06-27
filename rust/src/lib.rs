@@ -14,8 +14,12 @@
 //!
 //! Contract floor: `v1alpha1`.
 
+mod ir_gen;
 mod linter_gen;
 mod mutator_gen;
+mod policy_gen;
 
+pub use ir_gen::*;
 pub use linter_gen::*;
 pub use mutator_gen::*;
+pub use policy_gen::*;
