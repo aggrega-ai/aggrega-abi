@@ -26,8 +26,9 @@ type LinterInput struct {
 	// Parent Parsed structure of the resolved parent entity in the extends chain, for rules that perform child-vs-parent comparison (narrowing). The host caller resolves the entity's spec.extends URI before invocation. Omitted when no parent exists or the rule does not need parent context.
 	Parent json.RawMessage `json:"parent,omitempty" yaml:"parent,omitempty"`
 	// SourcePath Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
-	SourcePath string   `json:"source_path,omitempty" yaml:"source_path,omitempty"`
-	Policies   Policies `json:"policies,omitempty" yaml:"policies,omitempty"`
+	SourcePath string `json:"source_path,omitempty" yaml:"source_path,omitempty"`
+	// Policies The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
+	Policies Policies `json:"policies,omitempty" yaml:"policies,omitempty"`
 }
 
 // LinterOutput The response shape the publishing-linter plugin emits. findings carries one entry per rule invocation that produced a result. The schema-evolution rule emits exactly one finding (the classification verdict); structural rules may emit zero (no violations) or many (one per offence).

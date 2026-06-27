@@ -31,6 +31,7 @@ export interface LinterInput {
   parent?: unknown;
   // Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
   source_path?: string;
+  // The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
   policies?: Policies;
 }
 
