@@ -1,0 +1,1 @@
+{"rule_id":"schema-evolution","entity_kind":"Component","proposed":{"z":1,"a":2},"previous":{"k":"v"},"policies":{"enforce_immutability":true,"narrowing_exemptions":[{"entity":"core/x","paths":["/a","/b"],"reason":"legacy"}]}}

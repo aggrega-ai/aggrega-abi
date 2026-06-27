@@ -19,24 +19,26 @@ import (
 // an actual import line or a reflect.Symbol reference.
 func TestGeneratedCodec_ReflectFree(t *testing.T) {
 	t.Parallel()
-	src, err := os.ReadFile("frp_gen.go")
-	if err != nil {
-		t.Fatalf("read generated codec: %v", err)
-	}
-	for i, line := range strings.Split(string(src), "\n") {
-		trimmed := strings.TrimSpace(line)
-		// An import of the reflect package, in either single- or grouped-import
-		// form.
-		if trimmed == `import "reflect"` || trimmed == `"reflect"` {
-			t.Errorf("frp_gen.go:%d imports reflect: %q", i+1, trimmed)
+	for _, file := range []string{"frp_gen.go", "mutator_gen.go", "linter_gen.go"} {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read generated codec %s: %v", file, err)
 		}
-		// A qualified reflect.* reference. Skip comment lines so the
-		// "reflect-free" descriptor in the godoc does not trip the check.
-		if strings.HasPrefix(trimmed, "//") {
-			continue
-		}
-		if strings.Contains(line, "reflect.") {
-			t.Errorf("frp_gen.go:%d references reflect.: %q", i+1, trimmed)
+		for i, line := range strings.Split(string(src), "\n") {
+			trimmed := strings.TrimSpace(line)
+			// An import of the reflect package, in either single- or
+			// grouped-import form.
+			if trimmed == `import "reflect"` || trimmed == `"reflect"` {
+				t.Errorf("%s:%d imports reflect: %q", file, i+1, trimmed)
+			}
+			// A qualified reflect.* reference. Skip comment lines so the
+			// "reflect-free" descriptor in the godoc does not trip the check.
+			if strings.HasPrefix(trimmed, "//") {
+				continue
+			}
+			if strings.Contains(line, "reflect.") {
+				t.Errorf("%s:%d references reflect.: %q", file, i+1, trimmed)
+			}
 		}
 	}
 }

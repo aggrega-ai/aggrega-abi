@@ -1,0 +1,1 @@
+{"compilation_context":{"release_destination":"prod/eu","release_name":"checkout","environment":"prod"},"graph":{"nodes":{"db":{"component":"core/postgres","resolved_version":"15.1.0","labels":{"tier":"data"}},"web":{"component":"core/web","resolved_version":"1.2.3","labels":{"team":"checkout","tier":"frontend"}}}}}

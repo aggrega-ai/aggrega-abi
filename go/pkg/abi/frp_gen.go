@@ -1033,9 +1033,10 @@ func readKey(dec *json.Decoder) (string, error) {
 // Decoder.InputOffset — no Decoder.Decode dispatch.
 func readRaw(dec *json.Decoder, data []byte) (json.RawMessage, error) {
 	// InputOffset before the first value token points just past the
-	// preceding token (an object key, or nothing), so the slice may carry a
-	// leading key/value separator and whitespace; the value's own bytes are
-	// recovered by trimming those leading non-value bytes. The trailing
+	// preceding token (an object key, a preceding array element, or
+	// nothing), so the slice may carry a leading key/value separator (:),
+	// an array-element separator (,), and whitespace; the value's own bytes
+	// are recovered by trimming those leading non-value bytes. The trailing
 	// offset is exact (just past the value's last token).
 	start := dec.InputOffset()
 	depth := 0
@@ -1056,7 +1057,7 @@ func readRaw(dec *json.Decoder, data []byte) (json.RawMessage, error) {
 		}
 	}
 	end := dec.InputOffset()
-	value := bytes.TrimLeft(data[start:end], " \t\n\r:")
+	value := bytes.TrimLeft(data[start:end], " \t\n\r:,")
 	out := make(json.RawMessage, len(value))
 	copy(out, value)
 	return out, nil

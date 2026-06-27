@@ -3,10 +3,19 @@
 
 //! Portable codec for the Aggrega Wasm plugin ABI.
 //!
-//! The reflect-free socket codec — the encode/decode routines for the
-//! typed payloads that cross the host/guest boundary — is generated
-//! into this crate from the canonical schemas. The codec is consumable
-//! directly by plugin authors working against the raw Extism runtime,
-//! and is re-exported by the Rust Plugin Development Kit.
+//! The socket codec — the typed payloads that cross the host/guest
+//! boundary plus their JSON serialization — is generated into this crate
+//! from the canonical schemas. serde_json is the wire codec; the
+//! generated types are shaped (BTreeMap for sorted map keys, RawValue for
+//! verbatim opaque carry) so the wire is byte-identical to the Go and
+//! TypeScript codecs generated from the same schema. The codec is
+//! consumable directly by plugin authors working against the raw Extism
+//! runtime, and is re-exported by the Rust Plugin Development Kit.
 //!
 //! Contract floor: `v1alpha1`.
+
+mod linter_gen;
+mod mutator_gen;
+
+pub use linter_gen::*;
+pub use mutator_gen::*;

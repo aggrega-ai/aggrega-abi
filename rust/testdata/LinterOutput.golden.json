@@ -1,0 +1,1 @@
+{"findings":[{"rule_id":"schema-evolution","severity":"error","classification":"MAJOR","message":"breaking"},{"rule_id":"name_shape","severity":"warning","message":"ok"}]}
