@@ -32,6 +32,7 @@ pub struct LinterInput {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_path: String,
     /// The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
+    #[serde(default)]
     pub policies: Policies,
 }
 
