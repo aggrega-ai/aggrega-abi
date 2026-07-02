@@ -20,3 +20,4 @@ export * from "./mutator_gen.ts";
 export * from "./linter_gen.ts";
 export * from "./ir_gen.ts";
 export * from "./policy_gen.ts";
+export * from "./providerrender_gen.ts";

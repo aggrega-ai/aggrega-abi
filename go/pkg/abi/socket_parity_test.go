@@ -71,3 +71,18 @@ func TestSocketParity_PolicyValidatorOutput(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.PolicyValidatorOutput](t, "PolicyValidatorOutput.golden.json")
 }
+
+func TestSocketParity_RenderNodeInput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.RenderNodeInput](t, "RenderNodeInput.golden.json")
+}
+
+func TestSocketParity_RenderNodeOutput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.RenderNodeOutput](t, "RenderNodeOutput.golden.json")
+}
+
+func TestSocketParity_AssembleBoundaryInput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.AssembleBoundaryInput](t, "AssembleBoundaryInput.golden.json")
+}
