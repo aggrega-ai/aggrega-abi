@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::collections::BTreeMap;
 
+fn is_default<T: Default + PartialEq>(v: &T) -> bool {
+    *v == T::default()
+}
+
 /// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, and an optional pre-packaged catalog projection. When the catalog projection is present the guest renders from the payload alone and needs no host round-trips for catalog content; when it is omitted the guest fetches catalog entries through the read-only host functions bound at load time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderNodeInput {
@@ -27,7 +31,7 @@ pub struct RenderNodeInput {
     pub workload_projection: Option<Box<WorkloadProjection>>,
 }
 
-/// The per-node IR data a Provider guest renders — a bounded projection of the full IR node: its id, type, resolved recipe, values, feature attachments, and outbound uses edges, narrower than the complete node surface which also carries provenance and source-file metadata the guest does not need to render. Values, features, and uses preserve author order so the wire payload is byte-identical across runs of identical input.
+/// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, and build provenance. Source-file content is not carried here; it travels separately in the source projection. Values, features, and uses preserve author order so the wire payload is byte-identical across runs of identical input.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRNodeProjection {
     /// The node's absolute id within the topology graph.
@@ -46,6 +50,37 @@ pub struct IRNodeProjection {
     /// The node's outbound uses edges keyed by socket alias, each carrying the ordered target node ids bound to that socket. Preserves author order so the payload is byte-identical across runs of identical input.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub uses: BTreeMap<String, Vec<String>>,
+    /// The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub boundary_path: String,
+    /// The node's deployment wave, stamped as the aggrega.ai/sync-wave and argocd.argoproj.io/sync-wave annotations when non-zero. This is the per-node render-input carrier of the wave, distinct from the boundary context's sync wave that feeds the assemble export.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub sync_wave: i64,
+    /// The bound Recipe's name, paired with recipe_version to form the aggrega.ai/recipe-uri annotation; when either half is empty the annotation is not stamped.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub recipe_name: String,
+    /// The bound Recipe's version, paired with recipe_name to form the aggrega.ai/recipe-uri annotation; when either half is empty the annotation is not stamped.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub recipe_version: String,
+    /// The Kubernetes-safe component identity. When non-empty it overrides the node id as the app.kubernetes.io/name and aggrega.ai/component-id label value, for resources whose node id carries marker syntax that needs sanitization; empty means the node id is already label-valid and is used directly.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label_component_id: String,
+    /// The build-identity provenance the guest stamps onto every emitted manifest as aggrega.ai labels.
+    pub provenance: NodeProvenance,
+}
+
+/// The build-identity provenance for one node — the compiler, aggregate, and environment identity the guest stamps onto every emitted manifest as aggrega.ai labels. Each field elides when empty, so a partial identity stamps only the labels it carries.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct NodeProvenance {
+    /// The compiler version, stamped as the aggrega.ai/compiler-version label when non-empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub compiler_version: String,
+    /// The aggregate name, stamped as the aggrega.ai/aggregate-name label when non-empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub aggregate_name: String,
+    /// The environment name, stamped as the aggrega.ai/environment label when non-empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub environment: String,
 }
 
 /// The pre-packaged catalog content a Provider guest renders against when the host supplies catalog entries in the payload rather than behind host functions. It is a closure walk outward from the IR node: only the catalog entries transitively referenced by the node being rendered are included, not the whole catalog. Each map is keyed by catalog URI and preserves key order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads each entry through the catalog entity's own wire contract.

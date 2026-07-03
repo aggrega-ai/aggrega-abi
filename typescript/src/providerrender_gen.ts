@@ -30,7 +30,7 @@ export interface RenderNodeInput {
   workload_projection?: WorkloadProjection;
 }
 
-// The per-node IR data a Provider guest renders — a bounded projection of the full IR node: its id, type, resolved recipe, values, feature attachments, and outbound uses edges, narrower than the complete node surface which also carries provenance and source-file metadata the guest does not need to render. Values, features, and uses preserve author order so the wire payload is byte-identical across runs of identical input.
+// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, and build provenance. Source-file content is not carried here; it travels separately in the source projection. Values, features, and uses preserve author order so the wire payload is byte-identical across runs of identical input.
 export interface IRNodeProjection {
   // The node's absolute id within the topology graph.
   id: string;
@@ -44,6 +44,28 @@ export interface IRNodeProjection {
   features?: Record<string, unknown>;
   // The node's outbound uses edges keyed by socket alias, each carrying the ordered target node ids bound to that socket. Preserves author order so the payload is byte-identical across runs of identical input.
   uses?: Record<string, string[]>;
+  // The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
+  boundary_path?: string;
+  // The node's deployment wave, stamped as the aggrega.ai/sync-wave and argocd.argoproj.io/sync-wave annotations when non-zero. This is the per-node render-input carrier of the wave, distinct from the boundary context's sync wave that feeds the assemble export.
+  sync_wave?: number;
+  // The bound Recipe's name, paired with recipe_version to form the aggrega.ai/recipe-uri annotation; when either half is empty the annotation is not stamped.
+  recipe_name?: string;
+  // The bound Recipe's version, paired with recipe_name to form the aggrega.ai/recipe-uri annotation; when either half is empty the annotation is not stamped.
+  recipe_version?: string;
+  // The Kubernetes-safe component identity. When non-empty it overrides the node id as the app.kubernetes.io/name and aggrega.ai/component-id label value, for resources whose node id carries marker syntax that needs sanitization; empty means the node id is already label-valid and is used directly.
+  label_component_id?: string;
+  // The build-identity provenance the guest stamps onto every emitted manifest as aggrega.ai labels.
+  provenance: NodeProvenance;
+}
+
+// The build-identity provenance for one node — the compiler, aggregate, and environment identity the guest stamps onto every emitted manifest as aggrega.ai labels. Each field elides when empty, so a partial identity stamps only the labels it carries.
+export interface NodeProvenance {
+  // The compiler version, stamped as the aggrega.ai/compiler-version label when non-empty.
+  compiler_version?: string;
+  // The aggregate name, stamped as the aggrega.ai/aggregate-name label when non-empty.
+  aggregate_name?: string;
+  // The environment name, stamped as the aggrega.ai/environment label when non-empty.
+  environment?: string;
 }
 
 // The pre-packaged catalog content a Provider guest renders against when the host supplies catalog entries in the payload rather than behind host functions. It is a closure walk outward from the IR node: only the catalog entries transitively referenced by the node being rendered are included, not the whole catalog. Each map is keyed by catalog URI and preserves key order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads each entry through the catalog entity's own wire contract.
@@ -141,11 +163,29 @@ export function encodeIRNodeProjection(v: IRNodeProjection): string {
   if (v.values !== undefined && Object.keys(v.values).length > 0) parts.push(`${jstr("values")}:${`{${Object.keys(v.values!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values![k0])}`).join(",")}}`}`);
   if (v.features !== undefined && Object.keys(v.features).length > 0) parts.push(`${jstr("features")}:${`{${Object.keys(v.features!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.features![k0])}`).join(",")}}`}`);
   if (v.uses !== undefined && Object.keys(v.uses).length > 0) parts.push(`${jstr("uses")}:${`{${Object.keys(v.uses!).sort().map((k0) => `${jstr(k0)}:${`[${v.uses![k0]!.map((e1) => jstr(e1)).join(",")}]`}`).join(",")}}`}`);
+  if (v.boundary_path !== undefined && v.boundary_path !== "") parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
+  if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
+  if (v.recipe_name !== undefined && v.recipe_name !== "") parts.push(`${jstr("recipe_name")}:${jstr(v.recipe_name)}`);
+  if (v.recipe_version !== undefined && v.recipe_version !== "") parts.push(`${jstr("recipe_version")}:${jstr(v.recipe_version)}`);
+  if (v.label_component_id !== undefined && v.label_component_id !== "") parts.push(`${jstr("label_component_id")}:${jstr(v.label_component_id)}`);
+  parts.push(`${jstr("provenance")}:${encodeNodeProvenance(v.provenance)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeIRNodeProjection(data: string): IRNodeProjection {
   return JSON.parse(data) as IRNodeProjection;
+}
+
+export function encodeNodeProvenance(v: NodeProvenance): string {
+  const parts: string[] = [];
+  if (v.compiler_version !== undefined && v.compiler_version !== "") parts.push(`${jstr("compiler_version")}:${jstr(v.compiler_version)}`);
+  if (v.aggregate_name !== undefined && v.aggregate_name !== "") parts.push(`${jstr("aggregate_name")}:${jstr(v.aggregate_name)}`);
+  if (v.environment !== undefined && v.environment !== "") parts.push(`${jstr("environment")}:${jstr(v.environment)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeNodeProvenance(data: string): NodeProvenance {
+  return JSON.parse(data) as NodeProvenance;
 }
 
 export function encodeCatalogProjection(v: CatalogProjection): string {
