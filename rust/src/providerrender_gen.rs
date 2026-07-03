@@ -151,18 +151,24 @@ pub struct WorkloadProjection {
     pub secrets: BTreeMap<String, BTreeMap<String, String>>,
 }
 
-/// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one boundary into a single assembled artifact (an umbrella chart, a merged compose file). It carries the boundary metadata, the per-node render outputs that fed the boundary, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
+/// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs and their merged annotations, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssembleBoundaryInput {
-    /// The per-render boundary metadata the guest assembles into. Opaque at this schema layer; the guest reads the boundary-context shape through the render-context wire contract.
-    pub boundary: Box<RawValue>,
-    /// The per-node render outputs that fed this boundary, in node order.
+    /// Optional per-render boundary metadata a guest may consult. A dispatch group can merge contributors from multiple boundaries, so there is no single boundary; the field is carry-only-consumed and absent when the host merges across boundaries. Opaque at this schema layer; the guest reads the boundary-context shape through the render-context wire contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boundary: Option<Box<RawValue>>,
+    /// The per-node render outputs that fed this dispatch group, in node order.
     pub rendered_nodes: Vec<RenderedNode>,
     /// The render-time context the host hands the guest, the same opaque render-context passthrough the render_node export receives.
     pub context: Box<RawValue>,
+    /// The evaluated dispatch-group output path the assembled artifact lands at; a boundary assembler uses it as the boundary-level fallback identity (e.g. the compose network name for a node carrying no namespace annotation).
+    pub boundary_path: String,
+    /// The graph's directed uses edges, so a boundary assembler can infer per-service ordering/dependencies across the dispatch group's contributors (e.g. compose depends_on).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub edges: Vec<RenderEdge>,
 }
 
-/// One node's render output as it appears in an assemble_boundary input: the node id, its type, and the render output the render_node export produced for it.
+/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, and the render output the render_node export produced for it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderedNode {
     /// The node's absolute id within the topology graph.
@@ -171,5 +177,29 @@ pub struct RenderedNode {
     #[serde(rename = "type")]
     pub r#type: String,
     pub rendered: RenderNodeOutput,
+    /// The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub annotations: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RenderEdge {
+    /// The consuming node's id — the source end of a directed uses edge.
+    pub source: String,
+    /// The consumed node's id — the target end a directed uses edge points at.
+    pub target: String,
+}
+
+/// The payload a Provider guest returns from its assemble_boundary export: the serialized bytes of each assembled file, any diagnostics the guest raised while assembling, and whether the orchestrator nests each contributor's per-node files under a per-node sub-directory. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AssembleBoundaryOutput {
+    /// The assembled output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
+    pub files: Vec<RenderedFile>,
+    /// Diagnostics the guest raised while assembling. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Box<RawValue>>,
+    /// Whether the orchestrator nests each contributor's per-node files under charts/<nodeID>/ rather than emitting them flat; the assembler signals this per provider (compose emits flat, so false; an umbrella-chart assembler nests, so true).
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub nest_per_node: bool,
 }
 

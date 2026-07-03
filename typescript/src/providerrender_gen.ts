@@ -122,23 +122,46 @@ export interface WorkloadProjection {
   secrets?: Record<string, Record<string, string>>;
 }
 
-// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one boundary into a single assembled artifact (an umbrella chart, a merged compose file). It carries the boundary metadata, the per-node render outputs that fed the boundary, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
+// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs and their merged annotations, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
 export interface AssembleBoundaryInput {
-  // The per-render boundary metadata the guest assembles into. Opaque at this schema layer; the guest reads the boundary-context shape through the render-context wire contract.
-  boundary: unknown;
-  // The per-node render outputs that fed this boundary, in node order.
+  // Optional per-render boundary metadata a guest may consult. A dispatch group can merge contributors from multiple boundaries, so there is no single boundary; the field is carry-only-consumed and absent when the host merges across boundaries. Opaque at this schema layer; the guest reads the boundary-context shape through the render-context wire contract.
+  boundary?: unknown;
+  // The per-node render outputs that fed this dispatch group, in node order.
   rendered_nodes: RenderedNode[];
   // The render-time context the host hands the guest, the same opaque render-context passthrough the render_node export receives.
   context: unknown;
+  // The evaluated dispatch-group output path the assembled artifact lands at; a boundary assembler uses it as the boundary-level fallback identity (e.g. the compose network name for a node carrying no namespace annotation).
+  boundary_path: string;
+  // The graph's directed uses edges, so a boundary assembler can infer per-service ordering/dependencies across the dispatch group's contributors (e.g. compose depends_on).
+  edges?: RenderEdge[];
 }
 
-// One node's render output as it appears in an assemble_boundary input: the node id, its type, and the render output the render_node export produced for it.
+// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, and the render output the render_node export produced for it.
 export interface RenderedNode {
   // The node's absolute id within the topology graph.
   id: string;
   // The node's component-type label.
   type: string;
   rendered: RenderNodeOutput;
+  // The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
+  annotations?: Record<string, string>;
+}
+
+export interface RenderEdge {
+  // The consuming node's id — the source end of a directed uses edge.
+  source: string;
+  // The consumed node's id — the target end a directed uses edge points at.
+  target: string;
+}
+
+// The payload a Provider guest returns from its assemble_boundary export: the serialized bytes of each assembled file, any diagnostics the guest raised while assembling, and whether the orchestrator nests each contributor's per-node files under a per-node sub-directory. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
+export interface AssembleBoundaryOutput {
+  // The assembled output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
+  files: RenderedFile[];
+  // Diagnostics the guest raised while assembling. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it.
+  diagnostics?: unknown[];
+  // Whether the orchestrator nests each contributor's per-node files under charts/<nodeID>/ rather than emitting them flat; the assembler signals this per provider (compose emits flat, so false; an umbrella-chart assembler nests, so true).
+  nest_per_node?: boolean;
 }
 
 export function encodeRenderNodeInput(v: RenderNodeInput): string {
@@ -259,9 +282,11 @@ export function decodeWorkloadProjection(data: string): WorkloadProjection {
 
 export function encodeAssembleBoundaryInput(v: AssembleBoundaryInput): string {
   const parts: string[] = [];
-  parts.push(`${jstr("boundary")}:${encodeOpaque(v.boundary)}`);
+  if (v.boundary !== undefined && v.boundary !== null) parts.push(`${jstr("boundary")}:${encodeOpaque(v.boundary)}`);
   parts.push(`${jstr("rendered_nodes")}:${`[${v.rendered_nodes!.map((e0) => encodeRenderedNode(e0)).join(",")}]`}`);
   parts.push(`${jstr("context")}:${encodeOpaque(v.context)}`);
+  parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
+  if (v.edges !== undefined && v.edges.length > 0) parts.push(`${jstr("edges")}:${`[${v.edges!.map((e0) => encodeRenderEdge(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -274,10 +299,34 @@ export function encodeRenderedNode(v: RenderedNode): string {
   parts.push(`${jstr("id")}:${jstr(v.id)}`);
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
   parts.push(`${jstr("rendered")}:${encodeRenderNodeOutput(v.rendered)}`);
+  if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) parts.push(`${jstr("annotations")}:${`{${Object.keys(v.annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.annotations![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeRenderedNode(data: string): RenderedNode {
   return JSON.parse(data) as RenderedNode;
+}
+
+export function encodeRenderEdge(v: RenderEdge): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("source")}:${jstr(v.source)}`);
+  parts.push(`${jstr("target")}:${jstr(v.target)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeRenderEdge(data: string): RenderEdge {
+  return JSON.parse(data) as RenderEdge;
+}
+
+export function encodeAssembleBoundaryOutput(v: AssembleBoundaryOutput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => encodeRenderedFile(e0)).join(",")}]`}`);
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.nest_per_node !== undefined && v.nest_per_node !== false) parts.push(`${jstr("nest_per_node")}:${String(v.nest_per_node)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeAssembleBoundaryOutput(data: string): AssembleBoundaryOutput {
+  return JSON.parse(data) as AssembleBoundaryOutput;
 }
 

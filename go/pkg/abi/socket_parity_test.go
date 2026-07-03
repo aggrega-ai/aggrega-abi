@@ -86,3 +86,8 @@ func TestSocketParity_AssembleBoundaryInput(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.AssembleBoundaryInput](t, "AssembleBoundaryInput.golden.json")
 }
+
+func TestSocketParity_AssembleBoundaryOutput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.AssembleBoundaryOutput](t, "AssembleBoundaryOutput.golden.json")
+}
