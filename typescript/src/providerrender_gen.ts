@@ -26,6 +26,8 @@ export interface RenderNodeInput {
   catalog_projection?: CatalogProjection;
   // The pre-packaged source content the host read at compile time from the local source and hands the guest, so the guest reconstructs the source in memory and touches no filesystem. Present for sourced providers; absent otherwise.
   source_projection?: SourceProjection;
+  // The pre-evaluated workload the host hands the guest to synthesize provider-native manifests from; present when the bound Recipe declares a workload rather than a chart source, absent otherwise.
+  workload_projection?: WorkloadProjection;
 }
 
 // The per-node IR data a Provider guest renders — a bounded projection of the full IR node: its id, type, resolved recipe, values, feature attachments, and outbound uses edges, narrower than the complete node surface which also carries provenance and source-file metadata the guest does not need to render. Values, features, and uses preserve author order so the wire payload is byte-identical across runs of identical input.
@@ -90,6 +92,14 @@ export interface SourceProjection {
   files: SourceFile[];
 }
 
+// The pre-evaluated workload content the host hands a Provider guest so the guest synthesizes provider-native manifests from it in memory, present when the bound Recipe declares a workload rather than a chart source. Determinism is the guest's responsibility: identical input must produce identical bytes.
+export interface WorkloadProjection {
+  // The host-evaluated, post-validation Workload the guest synthesizes; opaque at this schema layer so the socket schema does not rebind the Workload entity contract.
+  workload: unknown;
+  // The per-slot secret provides the synthesis consumes, keyed by secret slot; each slot's provides carries the generated Secret's identity a workload secret reference resolves to.
+  secrets?: Record<string, Record<string, string>>;
+}
+
 // The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one boundary into a single assembled artifact (an umbrella chart, a merged compose file). It carries the boundary metadata, the per-node render outputs that fed the boundary, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
 export interface AssembleBoundaryInput {
   // The per-render boundary metadata the guest assembles into. Opaque at this schema layer; the guest reads the boundary-context shape through the render-context wire contract.
@@ -115,6 +125,7 @@ export function encodeRenderNodeInput(v: RenderNodeInput): string {
   parts.push(`${jstr("context")}:${encodeOpaque(v.context)}`);
   if (v.catalog_projection !== undefined && v.catalog_projection !== null) parts.push(`${jstr("catalog_projection")}:${encodeCatalogProjection(v.catalog_projection)}`);
   if (v.source_projection !== undefined && v.source_projection !== null) parts.push(`${jstr("source_projection")}:${encodeSourceProjection(v.source_projection)}`);
+  if (v.workload_projection !== undefined && v.workload_projection !== null) parts.push(`${jstr("workload_projection")}:${encodeWorkloadProjection(v.workload_projection)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -193,6 +204,17 @@ export function encodeSourceProjection(v: SourceProjection): string {
 
 export function decodeSourceProjection(data: string): SourceProjection {
   return JSON.parse(data) as SourceProjection;
+}
+
+export function encodeWorkloadProjection(v: WorkloadProjection): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("workload")}:${encodeOpaque(v.workload)}`);
+  if (v.secrets !== undefined && Object.keys(v.secrets).length > 0) parts.push(`${jstr("secrets")}:${`{${Object.keys(v.secrets!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.secrets![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.secrets![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeWorkloadProjection(data: string): WorkloadProjection {
+  return JSON.parse(data) as WorkloadProjection;
 }
 
 export function encodeAssembleBoundaryInput(v: AssembleBoundaryInput): string {

@@ -22,6 +22,9 @@ pub struct RenderNodeInput {
     /// The pre-packaged source content the host read at compile time from the local source and hands the guest, so the guest reconstructs the source in memory and touches no filesystem. Present for sourced providers; absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_projection: Option<Box<SourceProjection>>,
+    /// The pre-evaluated workload the host hands the guest to synthesize provider-native manifests from; present when the bound Recipe declares a workload rather than a chart source, absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workload_projection: Option<Box<WorkloadProjection>>,
 }
 
 /// The per-node IR data a Provider guest renders — a bounded projection of the full IR node: its id, type, resolved recipe, values, feature attachments, and outbound uses edges, narrower than the complete node surface which also carries provenance and source-file metadata the guest does not need to render. Values, features, and uses preserve author order so the wire payload is byte-identical across runs of identical input.
@@ -101,6 +104,16 @@ pub struct SourceFile {
 pub struct SourceProjection {
     /// The source files, keyed by source-root-relative path, in the host's deterministic walk order.
     pub files: Vec<SourceFile>,
+}
+
+/// The pre-evaluated workload content the host hands a Provider guest so the guest synthesizes provider-native manifests from it in memory, present when the bound Recipe declares a workload rather than a chart source. Determinism is the guest's responsibility: identical input must produce identical bytes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkloadProjection {
+    /// The host-evaluated, post-validation Workload the guest synthesizes; opaque at this schema layer so the socket schema does not rebind the Workload entity contract.
+    pub workload: Box<RawValue>,
+    /// The per-slot secret provides the synthesis consumes, keyed by secret slot; each slot's provides carries the generated Secret's identity a workload secret reference resolves to.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub secrets: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one boundary into a single assembled artifact (an umbrella chart, a merged compose file). It carries the boundary metadata, the per-node render outputs that fed the boundary, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
