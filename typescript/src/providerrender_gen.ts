@@ -134,6 +134,12 @@ export interface AssembleBoundaryInput {
   boundary_path: string;
   // The graph's directed uses edges, so a boundary assembler can infer per-service ordering/dependencies across the dispatch group's contributors (e.g. compose depends_on).
   edges?: RenderEdge[];
+  // The per-sub-chart payload an umbrella-chart assembler consumes to emit one dependency and one values scope per contributor. Each entry carries the sub-chart's identity, per-instance values, and, for a sub-chart vendored from a chart source, the pristine bytes of that chart's Chart.yaml file. Present for umbrella-chart assembly; a flat-merging assembler omits it.
+  sub_charts?: SubChart[];
+  // The chart name an umbrella-chart assembler uses for the assembled chart when a name is supplied for the dispatch group; empty when the assembler derives the name from the dispatch-group output path.
+  chart_name?: string;
+  // The top-level aggregate name an umbrella-chart assembler folds into the assembled chart's derived name; empty when no aggregate identity contributes to the name.
+  aggregate_name?: string;
 }
 
 // One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, and the render output the render_node export produced for it.
@@ -152,6 +158,18 @@ export interface RenderEdge {
   source: string;
   // The consumed node's id — the target end a directed uses edge points at.
   target: string;
+}
+
+// One sub-chart contributing to an umbrella chart: its instance identity, the version the umbrella pins, the per-instance values the umbrella scopes under the sub-chart's alias, and, for a sub-chart vendored from a chart source, the pristine bytes of that chart's Chart.yaml file. An umbrella-chart assembler builds the umbrella's dependencies and values file from these pure-data views alone and touches no filesystem.
+export interface SubChart {
+  // The sub-chart's instance identity within the dispatch group; the umbrella scopes the sub-chart's dependency alias and its values under it, so multiple instances of one source chart stay distinct.
+  instance_id: string;
+  // The version the umbrella pins for the sub-chart. A sub-chart vendored from a chart source instead draws its dependency name and version from that chart's Chart.yaml file so the dependency binds; this value applies to a generative sub-chart that carries no vendored chart.
+  version?: string;
+  // The per-instance values the umbrella scopes under the sub-chart's alias in the umbrella values.yaml, an author-ordered key set. Preserves author order so the payload is byte-identical across runs of identical input.
+  values?: Record<string, unknown>;
+  // The pristine bytes of the vendored chart's Chart.yaml, read from the local source at compile time, from which the umbrella draws the sub-chart dependency's name and version. Empty for a generative sub-chart that carries no vendored chart (base64 on the JSON wire).
+  chart_yaml?: string;
 }
 
 // The payload a Provider guest returns from its assemble_boundary export: the serialized bytes of each assembled file, any diagnostics the guest raised while assembling, and whether the orchestrator nests each contributor's per-node files under a per-node sub-directory. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
@@ -287,6 +305,9 @@ export function encodeAssembleBoundaryInput(v: AssembleBoundaryInput): string {
   parts.push(`${jstr("context")}:${encodeOpaque(v.context)}`);
   parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
   if (v.edges !== undefined && v.edges.length > 0) parts.push(`${jstr("edges")}:${`[${v.edges!.map((e0) => encodeRenderEdge(e0)).join(",")}]`}`);
+  if (v.sub_charts !== undefined && v.sub_charts.length > 0) parts.push(`${jstr("sub_charts")}:${`[${v.sub_charts!.map((e0) => encodeSubChart(e0)).join(",")}]`}`);
+  if (v.chart_name !== undefined && v.chart_name !== "") parts.push(`${jstr("chart_name")}:${jstr(v.chart_name)}`);
+  if (v.aggregate_name !== undefined && v.aggregate_name !== "") parts.push(`${jstr("aggregate_name")}:${jstr(v.aggregate_name)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -316,6 +337,19 @@ export function encodeRenderEdge(v: RenderEdge): string {
 
 export function decodeRenderEdge(data: string): RenderEdge {
   return JSON.parse(data) as RenderEdge;
+}
+
+export function encodeSubChart(v: SubChart): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("instance_id")}:${jstr(v.instance_id)}`);
+  if (v.version !== undefined && v.version !== "") parts.push(`${jstr("version")}:${jstr(v.version)}`);
+  if (v.values !== undefined && Object.keys(v.values).length > 0) parts.push(`${jstr("values")}:${`{${Object.keys(v.values!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values![k0])}`).join(",")}}`}`);
+  if (v.chart_yaml !== undefined && v.chart_yaml !== "") parts.push(`${jstr("chart_yaml")}:${jstr(v.chart_yaml)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSubChart(data: string): SubChart {
+  return JSON.parse(data) as SubChart;
 }
 
 export function encodeAssembleBoundaryOutput(v: AssembleBoundaryOutput): string {

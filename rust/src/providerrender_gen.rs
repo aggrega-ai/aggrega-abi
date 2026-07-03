@@ -166,6 +166,15 @@ pub struct AssembleBoundaryInput {
     /// The graph's directed uses edges, so a boundary assembler can infer per-service ordering/dependencies across the dispatch group's contributors (e.g. compose depends_on).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub edges: Vec<RenderEdge>,
+    /// The per-sub-chart payload an umbrella-chart assembler consumes to emit one dependency and one values scope per contributor. Each entry carries the sub-chart's identity, per-instance values, and, for a sub-chart vendored from a chart source, the pristine bytes of that chart's Chart.yaml file. Present for umbrella-chart assembly; a flat-merging assembler omits it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sub_charts: Vec<SubChart>,
+    /// The chart name an umbrella-chart assembler uses for the assembled chart when a name is supplied for the dispatch group; empty when the assembler derives the name from the dispatch-group output path.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub chart_name: String,
+    /// The top-level aggregate name an umbrella-chart assembler folds into the assembled chart's derived name; empty when no aggregate identity contributes to the name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub aggregate_name: String,
 }
 
 /// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, and the render output the render_node export produced for it.
@@ -188,6 +197,22 @@ pub struct RenderEdge {
     pub source: String,
     /// The consumed node's id — the target end a directed uses edge points at.
     pub target: String,
+}
+
+/// One sub-chart contributing to an umbrella chart: its instance identity, the version the umbrella pins, the per-instance values the umbrella scopes under the sub-chart's alias, and, for a sub-chart vendored from a chart source, the pristine bytes of that chart's Chart.yaml file. An umbrella-chart assembler builds the umbrella's dependencies and values file from these pure-data views alone and touches no filesystem.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SubChart {
+    /// The sub-chart's instance identity within the dispatch group; the umbrella scopes the sub-chart's dependency alias and its values under it, so multiple instances of one source chart stay distinct.
+    pub instance_id: String,
+    /// The version the umbrella pins for the sub-chart. A sub-chart vendored from a chart source instead draws its dependency name and version from that chart's Chart.yaml file so the dependency binds; this value applies to a generative sub-chart that carries no vendored chart.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
+    /// The per-instance values the umbrella scopes under the sub-chart's alias in the umbrella values.yaml, an author-ordered key set. Preserves author order so the payload is byte-identical across runs of identical input.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub values: BTreeMap<String, Box<RawValue>>,
+    /// The pristine bytes of the vendored chart's Chart.yaml, read from the local source at compile time, from which the umbrella draws the sub-chart dependency's name and version. Empty for a generative sub-chart that carries no vendored chart (base64 on the JSON wire).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub chart_yaml: String,
 }
 
 /// The payload a Provider guest returns from its assemble_boundary export: the serialized bytes of each assembled file, any diagnostics the guest raised while assembling, and whether the orchestrator nests each contributor's per-node files under a per-node sub-directory. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
