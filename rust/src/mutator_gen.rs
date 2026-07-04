@@ -27,8 +27,6 @@ pub struct MutatorOutput {
 /// Release-level metadata the mutator reads when deciding which compliance, FinOps, or governance rules apply to the build.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CompilationContext {
-    /// The boundary path or destination identifier the Release targets.
-    pub release_destination: String,
     /// The Release's metadata.name.
     pub release_name: String,
     /// The environment label the Release runs under (e.g., dev, staging, prod).

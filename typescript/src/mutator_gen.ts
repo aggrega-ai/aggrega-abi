@@ -31,8 +31,6 @@ export interface MutatorOutput {
 
 // Release-level metadata the mutator reads when deciding which compliance, FinOps, or governance rules apply to the build.
 export interface CompilationContext {
-  // The boundary path or destination identifier the Release targets.
-  release_destination: string;
   // The Release's metadata.name.
   release_name: string;
   // The environment label the Release runs under (e.g., dev, staging, prod).
@@ -78,7 +76,6 @@ export function decodeMutatorOutput(data: string): MutatorOutput {
 
 export function encodeCompilationContext(v: CompilationContext): string {
   const parts: string[] = [];
-  parts.push(`${jstr("release_destination")}:${jstr(v.release_destination)}`);
   parts.push(`${jstr("release_name")}:${jstr(v.release_name)}`);
   parts.push(`${jstr("environment")}:${jstr(v.environment)}`);
   return `{${parts.join(",")}}`;
