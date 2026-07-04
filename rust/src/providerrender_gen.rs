@@ -98,9 +98,6 @@ pub struct CatalogProjection {
     /// The FeatureRecipe entries the node transitively references, keyed by catalog URI.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub feature_recipes: BTreeMap<String, Box<RawValue>>,
-    /// The Provider entries the node transitively references, keyed by catalog URI.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub providers: BTreeMap<String, Box<RawValue>>,
     /// The MappingLibrary entries the node transitively references, keyed by catalog URI.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub mapping_libraries: BTreeMap<String, Box<RawValue>>,

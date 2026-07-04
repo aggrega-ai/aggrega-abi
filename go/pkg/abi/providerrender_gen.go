@@ -76,8 +76,6 @@ type CatalogProjection struct {
 	Recipes map[string]json.RawMessage `json:"recipes,omitempty" yaml:"recipes,omitempty"`
 	// FeatureRecipes The FeatureRecipe entries the node transitively references, keyed by catalog URI.
 	FeatureRecipes map[string]json.RawMessage `json:"feature_recipes,omitempty" yaml:"feature_recipes,omitempty"`
-	// Providers The Provider entries the node transitively references, keyed by catalog URI.
-	Providers map[string]json.RawMessage `json:"providers,omitempty" yaml:"providers,omitempty"`
 	// MappingLibraries The MappingLibrary entries the node transitively references, keyed by catalog URI.
 	MappingLibraries map[string]json.RawMessage `json:"mapping_libraries,omitempty" yaml:"mapping_libraries,omitempty"`
 }
@@ -802,31 +800,6 @@ func (t CatalogProjection) MarshalJSON() ([]byte, error) {
 			buf.WriteByte('}')
 		}
 	}
-	if len(t.Providers) != 0 {
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.WriteString("\"providers\":")
-		{
-			keys := make([]string, 0, len(t.Providers))
-			for k := range t.Providers {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Providers[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
-		}
-	}
 	if len(t.MappingLibraries) != 0 {
 		if !first {
 			buf.WriteByte(',')
@@ -950,27 +923,6 @@ func (t *CatalogProjection) UnmarshalJSON(data []byte) error {
 					mv = raw
 				}
 				t.FeatureRecipes[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
-			}
-		case "providers":
-			t.Providers = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
-				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
-					return err
-				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.Providers[mk] = mv
 			}
 			if err := expectDelim(dec, '}'); err != nil {
 				return err

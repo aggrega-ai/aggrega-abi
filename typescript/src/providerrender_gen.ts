@@ -78,8 +78,6 @@ export interface CatalogProjection {
   recipes?: Record<string, unknown>;
   // The FeatureRecipe entries the node transitively references, keyed by catalog URI.
   feature_recipes?: Record<string, unknown>;
-  // The Provider entries the node transitively references, keyed by catalog URI.
-  providers?: Record<string, unknown>;
   // The MappingLibrary entries the node transitively references, keyed by catalog URI.
   mapping_libraries?: Record<string, unknown>;
 }
@@ -235,7 +233,6 @@ export function encodeCatalogProjection(v: CatalogProjection): string {
   if (v.features !== undefined && Object.keys(v.features).length > 0) parts.push(`${jstr("features")}:${`{${Object.keys(v.features!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.features![k0])}`).join(",")}}`}`);
   if (v.recipes !== undefined && Object.keys(v.recipes).length > 0) parts.push(`${jstr("recipes")}:${`{${Object.keys(v.recipes!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.recipes![k0])}`).join(",")}}`}`);
   if (v.feature_recipes !== undefined && Object.keys(v.feature_recipes).length > 0) parts.push(`${jstr("feature_recipes")}:${`{${Object.keys(v.feature_recipes!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.feature_recipes![k0])}`).join(",")}}`}`);
-  if (v.providers !== undefined && Object.keys(v.providers).length > 0) parts.push(`${jstr("providers")}:${`{${Object.keys(v.providers!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.providers![k0])}`).join(",")}}`}`);
   if (v.mapping_libraries !== undefined && Object.keys(v.mapping_libraries).length > 0) parts.push(`${jstr("mapping_libraries")}:${`{${Object.keys(v.mapping_libraries!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.mapping_libraries![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
