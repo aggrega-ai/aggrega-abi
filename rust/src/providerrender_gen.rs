@@ -81,6 +81,12 @@ pub struct NodeProvenance {
     /// The environment name, stamped as the aggrega.ai/environment label when non-empty.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub environment: String,
+    /// The bare provider engine kind, stamped as the aggrega.ai/provider label when non-empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub provider_name: String,
+    /// The resolved provider-rendering plugin version, stamped as the aggrega.ai/provider-version label when non-empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub provider_version: String,
 }
 
 /// The pre-packaged catalog content a Provider guest renders against when the host supplies catalog entries in the payload rather than behind host functions. It is a closure walk outward from the IR node: only the catalog entries transitively referenced by the node being rendered are included, not the whole catalog. Each map is keyed by catalog URI and preserves key order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads each entry through the catalog entity's own wire contract.

@@ -66,6 +66,10 @@ export interface NodeProvenance {
   aggregate_name?: string;
   // The environment name, stamped as the aggrega.ai/environment label when non-empty.
   environment?: string;
+  // The bare provider engine kind, stamped as the aggrega.ai/provider label when non-empty.
+  provider_name?: string;
+  // The resolved provider-rendering plugin version, stamped as the aggrega.ai/provider-version label when non-empty.
+  provider_version?: string;
 }
 
 // The pre-packaged catalog content a Provider guest renders against when the host supplies catalog entries in the payload rather than behind host functions. It is a closure walk outward from the IR node: only the catalog entries transitively referenced by the node being rendered are included, not the whole catalog. Each map is keyed by catalog URI and preserves key order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads each entry through the catalog entity's own wire contract.
@@ -220,6 +224,8 @@ export function encodeNodeProvenance(v: NodeProvenance): string {
   if (v.compiler_version !== undefined && v.compiler_version !== "") parts.push(`${jstr("compiler_version")}:${jstr(v.compiler_version)}`);
   if (v.aggregate_name !== undefined && v.aggregate_name !== "") parts.push(`${jstr("aggregate_name")}:${jstr(v.aggregate_name)}`);
   if (v.environment !== undefined && v.environment !== "") parts.push(`${jstr("environment")}:${jstr(v.environment)}`);
+  if (v.provider_name !== undefined && v.provider_name !== "") parts.push(`${jstr("provider_name")}:${jstr(v.provider_name)}`);
+  if (v.provider_version !== undefined && v.provider_version !== "") parts.push(`${jstr("provider_version")}:${jstr(v.provider_version)}`);
   return `{${parts.join(",")}}`;
 }
 
