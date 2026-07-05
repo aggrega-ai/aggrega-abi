@@ -558,8 +558,12 @@ func (t *IRNodeProjection) UnmarshalJSON(data []byte) error {
 				var mv []string
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
-				} else if err := json.Unmarshal(raw, &mv); err != nil {
-					return err
+				} else {
+					dec2 := json.NewDecoder(bytes.NewReader(raw))
+					dec2.UseNumber()
+					if err := dec2.Decode(&mv); err != nil {
+						return err
+					}
 				}
 				t.Uses[mk] = mv
 			}
@@ -1350,8 +1354,12 @@ func (t *WorkloadProjection) UnmarshalJSON(data []byte) error {
 				var mv map[string]string
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
-				} else if err := json.Unmarshal(raw, &mv); err != nil {
-					return err
+				} else {
+					dec2 := json.NewDecoder(bytes.NewReader(raw))
+					dec2.UseNumber()
+					if err := dec2.Decode(&mv); err != nil {
+						return err
+					}
 				}
 				t.Secrets[mk] = mv
 			}

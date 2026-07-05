@@ -2020,8 +2020,12 @@ func (t *IRSpec) UnmarshalJSON(data []byte) error {
 				var mv map[string]IRFeatureEntry
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
-				} else if err := json.Unmarshal(raw, &mv); err != nil {
-					return err
+				} else {
+					dec2 := json.NewDecoder(bytes.NewReader(raw))
+					dec2.UseNumber()
+					if err := dec2.Decode(&mv); err != nil {
+						return err
+					}
 				}
 				t.FeatureValuesMapping[mk] = mv
 			}
@@ -2041,8 +2045,12 @@ func (t *IRSpec) UnmarshalJSON(data []byte) error {
 				var mv map[string]IRFeatureEntry
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
-				} else if err := json.Unmarshal(raw, &mv); err != nil {
-					return err
+				} else {
+					dec2 := json.NewDecoder(bytes.NewReader(raw))
+					dec2.UseNumber()
+					if err := dec2.Decode(&mv); err != nil {
+						return err
+					}
 				}
 				t.Secrets[mk] = mv
 			}
@@ -2062,8 +2070,12 @@ func (t *IRSpec) UnmarshalJSON(data []byte) error {
 				var mv map[string]IRBoundaryFeature
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
-				} else if err := json.Unmarshal(raw, &mv); err != nil {
-					return err
+				} else {
+					dec2 := json.NewDecoder(bytes.NewReader(raw))
+					dec2.UseNumber()
+					if err := dec2.Decode(&mv); err != nil {
+						return err
+					}
 				}
 				t.BoundaryFeatures[mk] = mv
 			}

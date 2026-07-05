@@ -720,8 +720,12 @@ func (t *JSONPatchOp) UnmarshalJSON(data []byte) error {
 		case "value":
 			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			} else if err := json.Unmarshal(raw, &t.Value); err != nil {
-				return err
+			} else {
+				dec2 := json.NewDecoder(bytes.NewReader(raw))
+				dec2.UseNumber()
+				if err := dec2.Decode(&t.Value); err != nil {
+					return err
+				}
 			}
 		case "from":
 			if s, err := readString(dec); err != nil {
