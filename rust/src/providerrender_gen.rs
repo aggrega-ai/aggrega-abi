@@ -23,12 +23,15 @@ pub struct RenderNodeInput {
     /// The pre-packaged catalog content the guest renders against when the host supplies catalog entries in the payload rather than behind host functions. Absent when the guest fetches catalog entries through the read-only host functions instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub catalog_projection: Option<Box<CatalogProjection>>,
-    /// The pre-packaged source content the host read at compile time from the local source and hands the guest, so the guest reconstructs the source in memory and touches no filesystem. Present for sourced providers; absent otherwise.
+    /// The generic enumeration of the acquired source the host hands the guest for a sourced provider: the source root, whether that root is a directory, and the sorted root-relative entries under it. The host reads no file content here — it lists names only. The guest applies its own resolution logic over the listing and asks the host to pack a chosen selection through the pack-source host function, so all per-provider source-resolution intelligence lives in the guest. Present for sourced providers; absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_projection: Option<Box<SourceProjection>>,
+    pub source_listing: Option<Box<SourceListing>>,
     /// The pre-evaluated workload the host hands the guest to synthesize provider-native manifests from; present when the bound Recipe declares a workload rather than a chart source, absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workload_projection: Option<Box<WorkloadProjection>>,
+    /// The pre-evaluated artifact set the host hands the guest to place into the node's output, present when the bound Recipe declares artifacts. The host has already read each entry's source, evaluated it as a Go template against the render context, and computed the build-provenance key sets; the guest decides the output format, the provenance placement, the on-disk path, and the final bytes. Absent when the node declares no artifacts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifacts_projection: Option<Box<ArtifactsProjection>>,
 }
 
 /// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, and build provenance. Source-file content is not carried here; it travels separately in the source projection. Values, features, and uses preserve author order so the wire payload is byte-identical across runs of identical input.
@@ -137,11 +140,70 @@ pub struct SourceFile {
     pub content: String,
 }
 
-/// The pre-packaged source content (e.g. a Helm chart's files, keyed by chart-root-relative path, in walk order) the host reads at compile time from the local source and hands the guest, so the guest reconstructs the source in memory and touches no filesystem. Present for sourced providers; absent otherwise.
+/// The packed source content (e.g. a Helm chart's files, keyed by source-root-relative path, in walk order) the host reads and returns to the guest in response to a pack-source request, so the guest reconstructs the selected source in memory and touches no filesystem. It is the pack-source host function's success payload.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SourceProjection {
     /// The source files, keyed by source-root-relative path, in the host's deterministic walk order.
     pub files: Vec<SourceFile>,
+}
+
+/// One entry of a source listing: its path relative to the source root, and whether it is a directory. The host lists names only and reads no content, so an entry carries no bytes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SourceEntry {
+    /// The entry's path relative to the source root, slash-separated (for example Chart.yaml or templates/deployment.yaml).
+    pub path: String,
+    /// Whether the entry is a directory. A guest that resolves a chart root or a single source file among the listing reads this to distinguish directories from files without touching the filesystem.
+    pub is_dir: bool,
+}
+
+/// The generic enumeration of an acquired source the host hands a sourced provider guest: the source root, whether that root is a directory, and the sorted root-relative entries under it. The host walks the acquired source with no domain knowledge and reads no file content — it lists names only. The guest applies its own resolution logic over the listing (locating a chart root, selecting a single compose document, vendoring a module tree) and asks the host to pack a chosen selection through the pack-source host function. Entries are sorted by path so the listing is byte-identical across runs of identical input.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SourceListing {
+    /// The acquired source location the host enumerated. The guest carries it into its own diagnostics when it cannot resolve the source, so a resolution halt names the source the author supplied.
+    pub root: String,
+    /// Whether the acquired source root is a directory. False for a single-file source (a lone compose document, a single module file, an archive), in which case entries is empty and the guest packs the root itself.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub root_is_dir: bool,
+    /// The root-relative entries under a directory source root, sorted by path. Empty for a single-file source root.
+    pub entries: Vec<SourceEntry>,
+}
+
+/// The selection a guest asks the host to pack from the acquired source through the pack-source host function. The op names the shape of the selection and the path names it relative to the source root; the host resolves the path under the source root, rejecting any escape above it, and returns the packed bytes as a SourceProjection.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SourcePackRequest {
+    /// The selection shape: file packs the single file at path; dir packs the immediate files of the directory at path; tree packs the whole subtree rooted at path, recursively, in the host's deterministic walk order.
+    pub op: String,
+    /// The selection location relative to the source root, slash-separated. The empty string (or ".") names the source root itself, so a single-file source is packed with an empty path.
+    pub path: String,
+}
+
+/// The pack-source host function's reply: on success the packed source, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a guest carries a sandbox rejection or a read failure into its own diagnostics as a deterministic render failure.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SourcePackResponse {
+    /// The packed source on success; absent on failure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_projection: Option<Box<SourceProjection>>,
+    /// The failure message on failure, naming the selection and the reason; absent on success.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+}
+
+/// The single-file content read a guest asks the host to perform through the read-source-file host function, for a guest whose resolution logic must inspect a file's content before choosing what to pack. The host resolves the path under the source root, rejecting any escape above it, and returns the file's bytes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SourceFileRequest {
+    /// The file location relative to the source root, slash-separated.
+    pub path: String,
+}
+
+/// The read-source-file host function's reply: on success the file's bytes, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a guest carries a sandbox rejection or a read failure into its own diagnostics as a deterministic render failure.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SourceFileResponse {
+    /// The file's raw bytes on success; absent on failure (base64 on the JSON wire).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub content: String,
+    /// The failure message on failure, naming the file and the reason; absent on success.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
 }
 
 /// The pre-evaluated workload content the host hands a Provider guest so the guest synthesizes provider-native manifests from it in memory, present when the bound Recipe declares a workload rather than a chart source. Determinism is the guest's responsibility: identical input must produce identical bytes.
@@ -152,6 +214,30 @@ pub struct WorkloadProjection {
     /// The per-slot secret provides the synthesis consumes, keyed by secret slot; each slot's provides carries the generated Secret's identity a workload secret reference resolves to.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub secrets: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+/// The pre-evaluated artifact set the host hands a Provider guest to place into the node's output. The host has already resolved each entry's source (inline content or an imported file it read), evaluated it as a Go template against the render context using the guest's declared artifact-template delimiter pair, and computed the build-provenance label and annotation key sets. The guest owns the format decision, the provenance placement, the on-disk path, and the final bytes. Entries preserve author order so the placed output is byte-identical across runs of identical input.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ArtifactsProjection {
+    /// The artifact entries the guest places, in author order.
+    pub entries: Vec<ArtifactProjectionEntry>,
+}
+
+/// One pre-evaluated artifact entry the host hands a Provider guest to place: its host-resolved output base name, its origin, the already-template-evaluated content bytes, and the build-provenance label and annotation key sets the host computed for the node. The guest decides how to place the provenance (splicing it into a manifest's metadata, prepending it as a comment, or emitting a companion file) and where the file lands.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ArtifactProjectionEntry {
+    /// The host-resolved output base name for the entry: the author-declared map key for an inline entry, or the imported file's base name for an imported entry. The guest places the entry at this name or under a provider-specific sub-path derived from it.
+    pub name: String,
+    /// Whether the entry was authored as inline content or as an imported file. A guest that rejects one form (an umbrella-chart provider rejects inline content) reads this to halt loudly.
+    pub origin: String,
+    /// The already-template-evaluated content bytes the host produced from the entry's inline content or imported file, evaluated against the render context using the guest's declared artifact-template delimiter pair (base64 on the JSON wire).
+    pub content: String,
+    /// The Kubernetes-label-safe build-provenance key set the host computed for the node, keyed by label name. A guest that stamps provenance into a manifest's metadata.labels splices these; a guest whose output is not Kubernetes YAML ignores them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub labels: BTreeMap<String, String>,
+    /// The build-provenance key set the host computed for the node that a Kubernetes label cannot represent, keyed by annotation name. A guest that stamps provenance into a manifest's metadata.annotations splices these; a guest whose output is not Kubernetes YAML ignores them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub annotations: BTreeMap<String, String>,
 }
 
 /// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs and their merged annotations, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
