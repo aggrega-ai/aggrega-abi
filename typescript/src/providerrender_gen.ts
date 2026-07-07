@@ -260,6 +260,56 @@ export interface AssembleBoundaryOutput {
   nest_per_node?: boolean;
 }
 
+// The payload a Provider guest receives on its optional carve export: one named output file the pipeline carves into addressable units before a FeatureRecipe step edits some of them. A provider whose output shape the stock YAML codec cannot carve directly (a templated chart, for instance) advertises carve and reassemble so its own output-shape knowledge lives in the guest; a provider that omits the exports borrows the host's stock YAML codec.
+export interface CarveInput {
+  // The output file's name, so the codec can apply any name-scoped carving rule.
+  name: string;
+  // The output file's bytes to carve into addressable units (base64 on the JSON wire).
+  body: string;
+  // The indentation width the codec uses when it must synthesize new structured text; carried so the guest's carving matches the render-wide indentation.
+  yaml_indent?: number;
+}
+
+// The payload a Provider guest returns from its carve export: the ordered addressable units it carved the file into. A structured unit carries a tree (a PATCH target); an opaque unit carries only its media type and bytes.
+export interface CarveOutput {
+  // The ordered addressable units the guest carved the file into.
+  units: unknown[];
+}
+
+// The payload a Provider guest receives on its optional reassemble export: the original file plus its carved units and the patched units a pipeline step produced, so the guest splices the changes back into the original bytes surgically. A token absent from the patched set is re-joined from its original bytes verbatim; a patched token has only its addressed byte-spans edited.
+export interface ReassembleInput {
+  // The output file's name, matching the name the same file was carved under.
+  name: string;
+  // The original file bytes the reassembly splices the patched units back into (base64 on the JSON wire).
+  body: string;
+  // The units the file was carved into, as carve returned them.
+  segs?: unknown[];
+  // The units a pipeline step changed, each carrying its token, patched tree, and the ops that produced the change.
+  patched?: unknown[];
+  // The indentation width the codec uses when an op must synthesize new structured text; carried so the reassembly matches the render-wide indentation.
+  yaml_indent?: number;
+}
+
+// The payload a Provider guest returns from its reassemble export: the file's bytes with the patched units spliced back in. Reassembly is byte-faithful — every byte the ops did not touch survives verbatim.
+export interface ReassembleOutput {
+  // The reassembled file bytes the host writes verbatim (base64 on the JSON wire).
+  body: string;
+}
+
+// The payload a Provider guest receives on its optional boundary_env_overrides export: a boundary's internal uses edges and the driving feature's resolved infra, from which the guest computes per-consumer environment overrides for the boundary-to-consumer env channel. A guest whose provider drives that channel (a compose guest bridging cross-network endpoints) advertises the export; a provider that drives no such channel omits it, and the host applies no overrides for it. The edges and infra are opaque at this schema layer — the guest reads their shapes through the template-context wire contract; the schema does not interpret them.
+export interface BoundaryEnvOverridesInput {
+  // The boundary's internal uses edges — the directed edges whose endpoints both live inside the boundary's subtree, each enriched with the producer's provides and the consumer's inject mapping. The guest reads them to decide which consumers need an env override and what value to write. Opaque at this schema layer; the guest reads the enriched-edge shape through the template-context wire contract.
+  internal_uses_edges?: unknown[];
+  // The driving feature's resolved infra, an author-ordered key set the guest reads for the channel's tunables (for a compose bridge, the listen-port base and the upstream host provides-field selector). Preserves author order so the payload is byte-identical across runs of identical input.
+  infra?: Record<string, unknown>;
+}
+
+// The payload a Provider guest returns from its boundary_env_overrides export: the per-consumer environment overrides the host applies to each named consumer's injected env after the per-node render pass. The values are opaque strings the host carries without interpretation; a consumer absent from the map is left untouched.
+export interface BoundaryEnvOverridesOutput {
+  // The per-consumer environment overrides, keyed by consumer node id to a map of environment-variable name to override value. An empty or absent map means the guest computed no overrides.
+  overrides?: Record<string, Record<string, string>>;
+}
+
 export function encodeRenderNodeInput(v: RenderNodeInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("node")}:${encodeIRNodeProjection(v.node)}`);
@@ -542,5 +592,72 @@ export function encodeAssembleBoundaryOutput(v: AssembleBoundaryOutput): string 
 
 export function decodeAssembleBoundaryOutput(data: string): AssembleBoundaryOutput {
   return JSON.parse(data) as AssembleBoundaryOutput;
+}
+
+export function encodeCarveInput(v: CarveInput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("body")}:${jstr(v.body)}`);
+  if (v.yaml_indent !== undefined && v.yaml_indent !== 0) parts.push(`${jstr("yaml_indent")}:${String(v.yaml_indent)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeCarveInput(data: string): CarveInput {
+  return JSON.parse(data) as CarveInput;
+}
+
+export function encodeCarveOutput(v: CarveOutput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("units")}:${`[${v.units!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeCarveOutput(data: string): CarveOutput {
+  return JSON.parse(data) as CarveOutput;
+}
+
+export function encodeReassembleInput(v: ReassembleInput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("body")}:${jstr(v.body)}`);
+  if (v.segs !== undefined && v.segs.length > 0) parts.push(`${jstr("segs")}:${`[${v.segs!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.patched !== undefined && v.patched.length > 0) parts.push(`${jstr("patched")}:${`[${v.patched!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.yaml_indent !== undefined && v.yaml_indent !== 0) parts.push(`${jstr("yaml_indent")}:${String(v.yaml_indent)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeReassembleInput(data: string): ReassembleInput {
+  return JSON.parse(data) as ReassembleInput;
+}
+
+export function encodeReassembleOutput(v: ReassembleOutput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("body")}:${jstr(v.body)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeReassembleOutput(data: string): ReassembleOutput {
+  return JSON.parse(data) as ReassembleOutput;
+}
+
+export function encodeBoundaryEnvOverridesInput(v: BoundaryEnvOverridesInput): string {
+  const parts: string[] = [];
+  if (v.internal_uses_edges !== undefined && v.internal_uses_edges.length > 0) parts.push(`${jstr("internal_uses_edges")}:${`[${v.internal_uses_edges!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.infra !== undefined && Object.keys(v.infra).length > 0) parts.push(`${jstr("infra")}:${`{${Object.keys(v.infra!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.infra![k0])}`).join(",")}}`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeBoundaryEnvOverridesInput(data: string): BoundaryEnvOverridesInput {
+  return JSON.parse(data) as BoundaryEnvOverridesInput;
+}
+
+export function encodeBoundaryEnvOverridesOutput(v: BoundaryEnvOverridesOutput): string {
+  const parts: string[] = [];
+  if (v.overrides !== undefined && Object.keys(v.overrides).length > 0) parts.push(`${jstr("overrides")}:${`{${Object.keys(v.overrides!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.overrides![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.overrides![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeBoundaryEnvOverridesOutput(data: string): BoundaryEnvOverridesOutput {
+  return JSON.parse(data) as BoundaryEnvOverridesOutput;
 }
 

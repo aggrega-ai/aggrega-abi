@@ -325,3 +325,66 @@ pub struct AssembleBoundaryOutput {
     pub nest_per_node: bool,
 }
 
+/// The payload a Provider guest receives on its optional carve export: one named output file the pipeline carves into addressable units before a FeatureRecipe step edits some of them. A provider whose output shape the stock YAML codec cannot carve directly (a templated chart, for instance) advertises carve and reassemble so its own output-shape knowledge lives in the guest; a provider that omits the exports borrows the host's stock YAML codec.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CarveInput {
+    /// The output file's name, so the codec can apply any name-scoped carving rule.
+    pub name: String,
+    /// The output file's bytes to carve into addressable units (base64 on the JSON wire).
+    pub body: String,
+    /// The indentation width the codec uses when it must synthesize new structured text; carried so the guest's carving matches the render-wide indentation.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub yaml_indent: i64,
+}
+
+/// The payload a Provider guest returns from its carve export: the ordered addressable units it carved the file into. A structured unit carries a tree (a PATCH target); an opaque unit carries only its media type and bytes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CarveOutput {
+    /// The ordered addressable units the guest carved the file into.
+    pub units: Vec<Box<RawValue>>,
+}
+
+/// The payload a Provider guest receives on its optional reassemble export: the original file plus its carved units and the patched units a pipeline step produced, so the guest splices the changes back into the original bytes surgically. A token absent from the patched set is re-joined from its original bytes verbatim; a patched token has only its addressed byte-spans edited.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReassembleInput {
+    /// The output file's name, matching the name the same file was carved under.
+    pub name: String,
+    /// The original file bytes the reassembly splices the patched units back into (base64 on the JSON wire).
+    pub body: String,
+    /// The units the file was carved into, as carve returned them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub segs: Vec<Box<RawValue>>,
+    /// The units a pipeline step changed, each carrying its token, patched tree, and the ops that produced the change.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub patched: Vec<Box<RawValue>>,
+    /// The indentation width the codec uses when an op must synthesize new structured text; carried so the reassembly matches the render-wide indentation.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub yaml_indent: i64,
+}
+
+/// The payload a Provider guest returns from its reassemble export: the file's bytes with the patched units spliced back in. Reassembly is byte-faithful — every byte the ops did not touch survives verbatim.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReassembleOutput {
+    /// The reassembled file bytes the host writes verbatim (base64 on the JSON wire).
+    pub body: String,
+}
+
+/// The payload a Provider guest receives on its optional boundary_env_overrides export: a boundary's internal uses edges and the driving feature's resolved infra, from which the guest computes per-consumer environment overrides for the boundary-to-consumer env channel. A guest whose provider drives that channel (a compose guest bridging cross-network endpoints) advertises the export; a provider that drives no such channel omits it, and the host applies no overrides for it. The edges and infra are opaque at this schema layer — the guest reads their shapes through the template-context wire contract; the schema does not interpret them.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BoundaryEnvOverridesInput {
+    /// The boundary's internal uses edges — the directed edges whose endpoints both live inside the boundary's subtree, each enriched with the producer's provides and the consumer's inject mapping. The guest reads them to decide which consumers need an env override and what value to write. Opaque at this schema layer; the guest reads the enriched-edge shape through the template-context wire contract.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub internal_uses_edges: Vec<Box<RawValue>>,
+    /// The driving feature's resolved infra, an author-ordered key set the guest reads for the channel's tunables (for a compose bridge, the listen-port base and the upstream host provides-field selector). Preserves author order so the payload is byte-identical across runs of identical input.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub infra: BTreeMap<String, Box<RawValue>>,
+}
+
+/// The payload a Provider guest returns from its boundary_env_overrides export: the per-consumer environment overrides the host applies to each named consumer's injected env after the per-node render pass. The values are opaque strings the host carries without interpretation; a consumer absent from the map is left untouched.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BoundaryEnvOverridesOutput {
+    /// The per-consumer environment overrides, keyed by consumer node id to a map of environment-variable name to override value. An empty or absent map means the guest computed no overrides.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub overrides: BTreeMap<String, BTreeMap<String, String>>,
+}
+
