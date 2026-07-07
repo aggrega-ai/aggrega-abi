@@ -96,6 +96,12 @@ export interface RenderNodeOutput {
   diagnostics?: unknown[];
 }
 
+// The payload a Provider guest returns from its optional validate_node_input export: the diagnostics raised by a structural check of the node's resolved input. The export consumes the same RenderNodeInput projection render_node receives and emits no files — it only reports diagnostics. An error-severity diagnostic halts the build loudly, naming the node and provider; a warning or info diagnostic surfaces to the build result without changing rendered output. An empty diagnostics list means the input passed the structural check.
+export interface ValidateNodeOutput {
+  // Diagnostics the guest raised while validating the node's input. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it. Empty when the input passed the structural check.
+  diagnostics?: unknown[];
+}
+
 // One output file a Provider guest emitted: its on-disk path relative to the node's output root, and its serialized bytes exactly as the guest produced them. The host writes these bytes verbatim and runs no serializer, so the on-disk output is byte-identical to what the guest emitted.
 export interface RenderedFile {
   // The output file's path relative to the node's output root (for example Chart.yaml or templates/deployment.yaml).
@@ -327,6 +333,16 @@ export function encodeRenderNodeOutput(v: RenderNodeOutput): string {
 
 export function decodeRenderNodeOutput(data: string): RenderNodeOutput {
   return JSON.parse(data) as RenderNodeOutput;
+}
+
+export function encodeValidateNodeOutput(v: ValidateNodeOutput): string {
+  const parts: string[] = [];
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeValidateNodeOutput(data: string): ValidateNodeOutput {
+  return JSON.parse(data) as ValidateNodeOutput;
 }
 
 export function encodeRenderedFile(v: RenderedFile): string {

@@ -122,6 +122,14 @@ pub struct RenderNodeOutput {
     pub diagnostics: Vec<Box<RawValue>>,
 }
 
+/// The payload a Provider guest returns from its optional validate_node_input export: the diagnostics raised by a structural check of the node's resolved input. The export consumes the same RenderNodeInput projection render_node receives and emits no files — it only reports diagnostics. An error-severity diagnostic halts the build loudly, naming the node and provider; a warning or info diagnostic surfaces to the build result without changing rendered output. An empty diagnostics list means the input passed the structural check.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ValidateNodeOutput {
+    /// Diagnostics the guest raised while validating the node's input. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it. Empty when the input passed the structural check.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Box<RawValue>>,
+}
+
 /// One output file a Provider guest emitted: its on-disk path relative to the node's output root, and its serialized bytes exactly as the guest produced them. The host writes these bytes verbatim and runs no serializer, so the on-disk output is byte-identical to what the guest emitted.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderedFile {

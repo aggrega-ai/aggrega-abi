@@ -94,6 +94,12 @@ type RenderNodeOutput struct {
 	Diagnostics []json.RawMessage `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
 }
 
+// ValidateNodeOutput The payload a Provider guest returns from its optional validate_node_input export: the diagnostics raised by a structural check of the node's resolved input. The export consumes the same RenderNodeInput projection render_node receives and emits no files — it only reports diagnostics. An error-severity diagnostic halts the build loudly, naming the node and provider; a warning or info diagnostic surfaces to the build result without changing rendered output. An empty diagnostics list means the input passed the structural check.
+type ValidateNodeOutput struct {
+	// Diagnostics Diagnostics the guest raised while validating the node's input. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it. Empty when the input passed the structural check.
+	Diagnostics []json.RawMessage `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+}
+
 // RenderedFile One output file a Provider guest emitted: its on-disk path relative to the node's output root, and its serialized bytes exactly as the guest produced them. The host writes these bytes verbatim and runs no serializer, so the on-disk output is byte-identical to what the guest emitted.
 type RenderedFile struct {
 	// Path The output file's path relative to the node's output root (for example Chart.yaml or templates/deployment.yaml).
@@ -1165,6 +1171,75 @@ func (t *RenderNodeOutput) UnmarshalJSON(data []byte) error {
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
 			}
+		case "diagnostics":
+			t.Diagnostics = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem json.RawMessage
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					elem = raw
+				}
+				t.Diagnostics = append(t.Diagnostics, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalJSON encodes ValidateNodeOutput in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t ValidateNodeOutput) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if len(t.Diagnostics) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"diagnostics\":")
+		buf.WriteByte('[')
+		for i := range t.Diagnostics {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.Diagnostics[i]
+			buf.Write(ev)
+		}
+		buf.WriteByte(']')
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes ValidateNodeOutput with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *ValidateNodeOutput) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
 		case "diagnostics":
 			t.Diagnostics = nil
 			if err := expectDelim(dec, '['); err != nil {
