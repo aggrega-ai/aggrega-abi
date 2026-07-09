@@ -310,6 +310,68 @@ export interface BoundaryEnvOverridesOutput {
   overrides?: Record<string, Record<string, string>>;
 }
 
+// One endpoint of a cross-boundary link: the node, the boundary path its rendered output assembles into, and the render target that rendered it. The two endpoints of a link name the consuming and consumed ends of a uses edge whose ends assemble into different dispatch groups.
+export interface LinkEndpoint {
+  // The endpoint node's absolute id within the topology graph.
+  node: string;
+  // The endpoint's boundary path — the dispatch group its rendered output assembles into.
+  boundary: string;
+  // The render target that rendered the endpoint (the provider engine name). Both endpoints of a wired link name the same render target; the host does not route a link whose endpoints name different targets.
+  provider: string;
+}
+
+// The generalized, domain-blind per-edge payload the host assembles for a uses edge whose consuming and consumed ends assemble into different dispatch groups. It carries both endpoints, the consumed endpoint's placement annotations as an opaque scalar map the host does not interpret, the consumed endpoint's provides output, and the socket and inject mapping the edge wires. A render target reads it to produce the provider-native cross-reference wiring the two ends need; the host assembles it and passes the annotation map as opaque scalars, inferring no meaning from any value.
+export interface LinkEdge {
+  // The consuming endpoint — the source end of the directed uses edge, whose assembled output the consumer-side wiring is injected into.
+  source: LinkEndpoint;
+  // The consumed endpoint — the target end the uses edge points at, whose assembled output the producer-side wiring publishes.
+  target: LinkEndpoint;
+  // The consumed (target) endpoint's placement annotations as an opaque scalar map, keyed by annotation name. The host assembles them from the target's resolved annotations and passes them verbatim; it infers no meaning from any value. A render target reads them to decide how to shape a cross-reference (for example whether the two ends share a placement or need a cross-placement reference). Keys serialize in sorted order so the payload is byte-identical across runs of identical input.
+  target_annotations?: Record<string, string>;
+  // The socket alias the uses edge is bound under.
+  socket: string;
+  // The consumed endpoint's provides output, an author-ordered key set exposing the target's declared outputs. Preserves author order so the payload is byte-identical across runs of identical input.
+  provides: Record<string, string>;
+  // The consuming endpoint's inject mapping, keyed by delivery mechanism to an author-ordered key set, describing how the consuming end receives the consumed endpoint's output. Preserves author order so the payload is byte-identical across runs of identical input.
+  inject: Record<string, Record<string, string>>;
+}
+
+// One per-file structural patch a render target returns as artifact wiring: the output file and the ordered structural operations to apply to it. A later host pass carves the named file, applies the operations, and reassembles it byte-faithfully. The operation shape is the shared pipeline patch-operation vocabulary; it is opaque at this schema layer, so a guest carries each operation verbatim while the host realizes the typed operation its pipeline applies.
+export interface LinkPatch {
+  // The output file the operations apply to, named as the render target emitted it.
+  file: string;
+  // The ordered structural operations to apply to the file, in application order.
+  ops: unknown[];
+}
+
+// The payload a render target receives on its link_publish export: one cross-boundary link whose consumed endpoint's output is referenced across a boundary. The export returns the published identity the consumer resolves against and any producer-side artifact wiring the consumed endpoint's output needs.
+export interface LinkPublishInput {
+  // The cross-boundary link being published, read from the consumed (target) endpoint's side.
+  edge: LinkEdge;
+}
+
+// The payload a render target returns from its link_publish export: the published identity handle the consumer resolves against, and the producer-side artifact wiring to apply to the consumed endpoint's assembled output.
+export interface LinkPublishOutput {
+  // The published identity the consumed endpoint exposes for the consumer to resolve against, an opaque deterministic-pointer string map keyed by field name (for example an export name, a stack name, a region, a role reference). The values are deterministic pointer strings the compiler pipes and never resolves; the runtime environment resolves them at deploy time. Keys serialize in sorted order so the payload is byte-identical across runs of identical input.
+  handle: Record<string, string>;
+  // The producer-side artifact wiring, one structural patch per consumed-endpoint output file the publish must edit. Empty when the consumed endpoint's output needs no change for the link.
+  patches?: LinkPatch[];
+}
+
+// The payload a render target receives on its link_resolve export: one cross-boundary link and the published identity handle its consumed endpoint exposed. The export returns the consumer-side artifact wiring that injects the reference into the consuming endpoint's assembled output.
+export interface LinkResolveInput {
+  // The cross-boundary link being resolved, read from the consuming (source) endpoint's side.
+  edge: LinkEdge;
+  // The published identity handle the consumed endpoint's link_publish returned, which the consumer resolves its reference against. Opaque deterministic-pointer strings keyed by field name; the compiler pipes them and never resolves them. Keys serialize in sorted order so the payload is byte-identical across runs of identical input.
+  handle: Record<string, string>;
+}
+
+// The payload a render target returns from its link_resolve export: the consumer-side artifact wiring to apply to the consuming endpoint's assembled output, injecting the reference to the consumed endpoint's published identity.
+export interface LinkResolveOutput {
+  // The consumer-side artifact wiring, one structural patch per consuming-endpoint output file the resolve must edit.
+  patches: LinkPatch[];
+}
+
 export function encodeRenderNodeInput(v: RenderNodeInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("node")}:${encodeIRNodeProjection(v.node)}`);
@@ -659,5 +721,85 @@ export function encodeBoundaryEnvOverridesOutput(v: BoundaryEnvOverridesOutput):
 
 export function decodeBoundaryEnvOverridesOutput(data: string): BoundaryEnvOverridesOutput {
   return JSON.parse(data) as BoundaryEnvOverridesOutput;
+}
+
+export function encodeLinkEndpoint(v: LinkEndpoint): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("node")}:${jstr(v.node)}`);
+  parts.push(`${jstr("boundary")}:${jstr(v.boundary)}`);
+  parts.push(`${jstr("provider")}:${jstr(v.provider)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeLinkEndpoint(data: string): LinkEndpoint {
+  return JSON.parse(data) as LinkEndpoint;
+}
+
+export function encodeLinkEdge(v: LinkEdge): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("source")}:${encodeLinkEndpoint(v.source)}`);
+  parts.push(`${jstr("target")}:${encodeLinkEndpoint(v.target)}`);
+  if (v.target_annotations !== undefined && Object.keys(v.target_annotations).length > 0) parts.push(`${jstr("target_annotations")}:${`{${Object.keys(v.target_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.target_annotations![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("socket")}:${jstr(v.socket)}`);
+  parts.push(`${jstr("provides")}:${`{${Object.keys(v.provides!).sort().map((k0) => `${jstr(k0)}:${jstr(v.provides![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("inject")}:${`{${Object.keys(v.inject!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.inject![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.inject![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeLinkEdge(data: string): LinkEdge {
+  return JSON.parse(data) as LinkEdge;
+}
+
+export function encodeLinkPatch(v: LinkPatch): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("file")}:${jstr(v.file)}`);
+  parts.push(`${jstr("ops")}:${`[${v.ops!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeLinkPatch(data: string): LinkPatch {
+  return JSON.parse(data) as LinkPatch;
+}
+
+export function encodeLinkPublishInput(v: LinkPublishInput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("edge")}:${encodeLinkEdge(v.edge)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeLinkPublishInput(data: string): LinkPublishInput {
+  return JSON.parse(data) as LinkPublishInput;
+}
+
+export function encodeLinkPublishOutput(v: LinkPublishOutput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("handle")}:${`{${Object.keys(v.handle!).sort().map((k0) => `${jstr(k0)}:${jstr(v.handle![k0])}`).join(",")}}`}`);
+  if (v.patches !== undefined && v.patches.length > 0) parts.push(`${jstr("patches")}:${`[${v.patches!.map((e0) => encodeLinkPatch(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeLinkPublishOutput(data: string): LinkPublishOutput {
+  return JSON.parse(data) as LinkPublishOutput;
+}
+
+export function encodeLinkResolveInput(v: LinkResolveInput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("edge")}:${encodeLinkEdge(v.edge)}`);
+  parts.push(`${jstr("handle")}:${`{${Object.keys(v.handle!).sort().map((k0) => `${jstr(k0)}:${jstr(v.handle![k0])}`).join(",")}}`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeLinkResolveInput(data: string): LinkResolveInput {
+  return JSON.parse(data) as LinkResolveInput;
+}
+
+export function encodeLinkResolveOutput(v: LinkResolveOutput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("patches")}:${`[${v.patches!.map((e0) => encodeLinkPatch(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeLinkResolveOutput(data: string): LinkResolveOutput {
+  return JSON.parse(data) as LinkResolveOutput;
 }
 
