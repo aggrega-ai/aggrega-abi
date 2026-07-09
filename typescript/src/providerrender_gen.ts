@@ -358,12 +358,14 @@ export interface LinkPublishOutput {
   patches?: LinkPatch[];
 }
 
-// The payload a render target receives on its link_resolve export: one cross-boundary link and the published identity handle its consumed endpoint exposed. The export returns the consumer-side artifact wiring that injects the reference into the consuming endpoint's assembled output.
+// The payload a render target receives on its link_resolve export: one cross-boundary link, the published identity handle its consumed endpoint exposed, and the consuming endpoint's assembled files. The export returns the consumer-side artifact wiring that injects the reference into the consuming endpoint's assembled output.
 export interface LinkResolveInput {
   // The cross-boundary link being resolved, read from the consuming (source) endpoint's side.
   edge: LinkEdge;
   // The published identity handle the consumed endpoint's link_publish returned, which the consumer resolves its reference against. Opaque deterministic-pointer strings keyed by field name; the compiler pipes them and never resolves them. Keys serialize in sorted order so the payload is byte-identical across runs of identical input.
   handle: Record<string, string>;
+  // The consuming endpoint's assembled files, so the render target can locate the placeholder the host stamped into the consuming output and author its replacement at the placeholder's real path. Each names its on-disk path and carries the assembled bytes. Absent when the host has no assembled consumer output to hand the resolve; a render target that needs no document to author its wiring ignores it.
+  consumer_files?: RenderedFile[];
 }
 
 // The payload a render target returns from its link_resolve export: the consumer-side artifact wiring to apply to the consuming endpoint's assembled output, injecting the reference to the consumed endpoint's published identity.
@@ -786,6 +788,7 @@ export function encodeLinkResolveInput(v: LinkResolveInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("edge")}:${encodeLinkEdge(v.edge)}`);
   parts.push(`${jstr("handle")}:${`{${Object.keys(v.handle!).sort().map((k0) => `${jstr(k0)}:${jstr(v.handle![k0])}`).join(",")}}`}`);
+  if (v.consumer_files !== undefined && v.consumer_files.length > 0) parts.push(`${jstr("consumer_files")}:${`[${v.consumer_files!.map((e0) => encodeRenderedFile(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
