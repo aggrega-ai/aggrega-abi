@@ -322,7 +322,7 @@ export interface LinkEndpoint {
   deployment?: string;
 }
 
-// The generalized, domain-blind per-edge payload the host assembles for a uses edge whose consuming and consumed ends assemble into different dispatch groups. It carries both endpoints, the consumed endpoint's placement annotations as an opaque scalar map the host does not interpret, the consumed endpoint's provides output, and the socket and inject mapping the edge wires. A render target reads it to produce the provider-native cross-reference wiring the two ends need; the host assembles it and passes the annotation map as opaque scalars, inferring no meaning from any value.
+// The generalized, domain-blind per-edge payload the host assembles for a uses edge whose consuming and consumed ends assemble into different dispatch groups. It carries both endpoints, both endpoints' placement annotations as opaque scalar maps the host does not interpret, the consumed endpoint's provides output, and the socket and inject mapping the edge wires. A render target reads it to produce the provider-native cross-reference wiring the two ends need; the host assembles it and passes the annotation map as opaque scalars, inferring no meaning from any value.
 export interface LinkEdge {
   // The consuming endpoint — the source end of the directed uses edge, whose assembled output the consumer-side wiring is injected into.
   source: LinkEndpoint;
@@ -330,6 +330,8 @@ export interface LinkEdge {
   target: LinkEndpoint;
   // The consumed (target) endpoint's placement annotations as an opaque scalar map, keyed by annotation name. The host assembles them from the target's resolved annotations and passes them verbatim; it infers no meaning from any value. A render target reads them to decide how to shape a cross-reference (for example whether the two ends share a placement or need a cross-placement reference). Keys serialize in sorted order so the payload is byte-identical across runs of identical input.
   target_annotations?: Record<string, string>;
+  // The consuming (source) endpoint's placement annotations as an opaque scalar map, keyed by annotation name. The host assembles them from the source's resolved annotations and passes them verbatim; it infers no meaning from any value. A render target reads them to compare the two ends' placement — for example whether the source and target share a placement or sit in different ones. Keys serialize in sorted order so the payload is byte-identical across runs of identical input.
+  source_annotations?: Record<string, string>;
   // The socket alias the uses edge is bound under.
   socket: string;
   // The consumed endpoint's provides output, an author-ordered key set exposing the target's declared outputs. Preserves author order so the payload is byte-identical across runs of identical input.
@@ -745,6 +747,7 @@ export function encodeLinkEdge(v: LinkEdge): string {
   parts.push(`${jstr("source")}:${encodeLinkEndpoint(v.source)}`);
   parts.push(`${jstr("target")}:${encodeLinkEndpoint(v.target)}`);
   if (v.target_annotations !== undefined && Object.keys(v.target_annotations).length > 0) parts.push(`${jstr("target_annotations")}:${`{${Object.keys(v.target_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.target_annotations![k0])}`).join(",")}}`}`);
+  if (v.source_annotations !== undefined && Object.keys(v.source_annotations).length > 0) parts.push(`${jstr("source_annotations")}:${`{${Object.keys(v.source_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.source_annotations![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("socket")}:${jstr(v.socket)}`);
   parts.push(`${jstr("provides")}:${`{${Object.keys(v.provides!).sort().map((k0) => `${jstr(k0)}:${jstr(v.provides![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("inject")}:${`{${Object.keys(v.inject!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.inject![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.inject![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
