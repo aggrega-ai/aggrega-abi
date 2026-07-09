@@ -318,6 +318,8 @@ export interface LinkEndpoint {
   boundary: string;
   // The render target that rendered the endpoint (the provider engine name). Both endpoints of a wired link name the same render target; the host does not route a link whose endpoints name different targets.
   provider: string;
+  // The deployment identity the endpoint's rendered output belongs to — the scope its assembled artifacts are named within. The host assembles it from the build's deployment identity and passes it verbatim; it infers no meaning from the value. A render target reads it to scope a cross-reference name to the deployment. An absent value is the empty string, which a render target treats as an unscoped name.
+  deployment?: string;
 }
 
 // The generalized, domain-blind per-edge payload the host assembles for a uses edge whose consuming and consumed ends assemble into different dispatch groups. It carries both endpoints, the consumed endpoint's placement annotations as an opaque scalar map the host does not interpret, the consumed endpoint's provides output, and the socket and inject mapping the edge wires. A render target reads it to produce the provider-native cross-reference wiring the two ends need; the host assembles it and passes the annotation map as opaque scalars, inferring no meaning from any value.
@@ -730,6 +732,7 @@ export function encodeLinkEndpoint(v: LinkEndpoint): string {
   parts.push(`${jstr("node")}:${jstr(v.node)}`);
   parts.push(`${jstr("boundary")}:${jstr(v.boundary)}`);
   parts.push(`${jstr("provider")}:${jstr(v.provider)}`);
+  if (v.deployment !== undefined && v.deployment !== "") parts.push(`${jstr("deployment")}:${jstr(v.deployment)}`);
   return `{${parts.join(",")}}`;
 }
 
