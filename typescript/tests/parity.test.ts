@@ -22,6 +22,10 @@ import { dirname, join } from "node:path";
 import {
   encodeCLIRunInput,
   decodeCLIRunInput,
+  encodeFRPStepInput,
+  decodeFRPStepInput,
+  encodeFRPStepOutput,
+  decodeFRPStepOutput,
   encodeSearchInput,
   decodeSearchInput,
   encodeSearchOutput,
@@ -51,6 +55,16 @@ function golden(name: string): string {
 test("CLIRunInput wire parity", () => {
   const want = golden("CLIRunInput.golden.json");
   assert.equal(encodeCLIRunInput(decodeCLIRunInput(want)), want);
+});
+
+test("FRPStepInput wire parity", () => {
+  const want = golden("FRPStepInput.golden.json");
+  assert.equal(encodeFRPStepInput(decodeFRPStepInput(want)), want);
+});
+
+test("FRPStepOutput wire parity", () => {
+  const want = golden("FRPStepOutput.golden.json");
+  assert.equal(encodeFRPStepOutput(decodeFRPStepOutput(want)), want);
 });
 
 test("SearchInput wire parity", () => {

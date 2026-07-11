@@ -14,8 +14,8 @@
 //! type, re-serialize, and assert byte-identical output.
 
 use aggrega_abi::{
-    CLIRunInput, IRGraph, LinterInput, LinterOutput, MutatorInput, MutatorOutput,
-    PolicyValidatorInput, PolicyValidatorOutput, SearchInput, SearchOutput,
+    CLIRunInput, FRPStepInput, FRPStepOutput, IRGraph, LinterInput, LinterOutput, MutatorInput,
+    MutatorOutput, PolicyValidatorInput, PolicyValidatorOutput, SearchInput, SearchOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
@@ -41,6 +41,16 @@ fn round_trip<T: Serialize + DeserializeOwned>(name: &str) {
 #[test]
 fn cli_run_input_parity() {
     round_trip::<CLIRunInput>("CLIRunInput.golden.json");
+}
+
+#[test]
+fn frp_step_input_parity() {
+    round_trip::<FRPStepInput>("FRPStepInput.golden.json");
+}
+
+#[test]
+fn frp_step_output_parity() {
+    round_trip::<FRPStepOutput>("FRPStepOutput.golden.json");
 }
 
 #[test]

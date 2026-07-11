@@ -15,6 +15,7 @@
 //! Contract floor: `v1alpha1`.
 
 mod cli_gen;
+mod frp_gen;
 mod ir_gen;
 mod linter_gen;
 mod mutator_gen;
@@ -23,6 +24,7 @@ mod providerrender_gen;
 mod search_gen;
 
 pub use cli_gen::*;
+pub use frp_gen::*;
 pub use ir_gen::*;
 pub use linter_gen::*;
 pub use mutator_gen::*;
