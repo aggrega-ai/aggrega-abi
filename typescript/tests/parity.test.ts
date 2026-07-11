@@ -22,6 +22,10 @@ import { dirname, join } from "node:path";
 import {
   encodeCLIRunInput,
   decodeCLIRunInput,
+  encodeSearchInput,
+  decodeSearchInput,
+  encodeSearchOutput,
+  decodeSearchOutput,
   encodeMutatorInput,
   decodeMutatorInput,
   encodeMutatorOutput,
@@ -47,6 +51,16 @@ function golden(name: string): string {
 test("CLIRunInput wire parity", () => {
   const want = golden("CLIRunInput.golden.json");
   assert.equal(encodeCLIRunInput(decodeCLIRunInput(want)), want);
+});
+
+test("SearchInput wire parity", () => {
+  const want = golden("SearchInput.golden.json");
+  assert.equal(encodeSearchInput(decodeSearchInput(want)), want);
+});
+
+test("SearchOutput wire parity", () => {
+  const want = golden("SearchOutput.golden.json");
+  assert.equal(encodeSearchOutput(decodeSearchOutput(want)), want);
 });
 
 test("MutatorInput wire parity", () => {

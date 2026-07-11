@@ -15,7 +15,7 @@
 
 use aggrega_abi::{
     CLIRunInput, IRGraph, LinterInput, LinterOutput, MutatorInput, MutatorOutput,
-    PolicyValidatorInput, PolicyValidatorOutput,
+    PolicyValidatorInput, PolicyValidatorOutput, SearchInput, SearchOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
@@ -41,6 +41,16 @@ fn round_trip<T: Serialize + DeserializeOwned>(name: &str) {
 #[test]
 fn cli_run_input_parity() {
     round_trip::<CLIRunInput>("CLIRunInput.golden.json");
+}
+
+#[test]
+fn search_input_parity() {
+    round_trip::<SearchInput>("SearchInput.golden.json");
+}
+
+#[test]
+fn search_output_parity() {
+    round_trip::<SearchOutput>("SearchOutput.golden.json");
 }
 
 #[test]

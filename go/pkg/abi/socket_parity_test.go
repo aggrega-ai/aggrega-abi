@@ -42,6 +42,16 @@ func TestSocketParity_CLIRunInput(t *testing.T) {
 	roundTripGolden[abi.CLIRunInput](t, "CLIRunInput.golden.json")
 }
 
+func TestSocketParity_SearchInput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.SearchInput](t, "SearchInput.golden.json")
+}
+
+func TestSocketParity_SearchOutput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.SearchOutput](t, "SearchOutput.golden.json")
+}
+
 func TestSocketParity_MutatorInput(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.MutatorInput](t, "MutatorInput.golden.json")
