@@ -44,6 +44,22 @@ import {
   decodePolicyValidatorInput,
   encodePolicyValidatorOutput,
   decodePolicyValidatorOutput,
+  encodeRenderNodeInput,
+  decodeRenderNodeInput,
+  encodeRenderNodeOutput,
+  decodeRenderNodeOutput,
+  encodeAssembleBoundaryInput,
+  decodeAssembleBoundaryInput,
+  encodeAssembleBoundaryOutput,
+  decodeAssembleBoundaryOutput,
+  encodeLinkPublishInput,
+  decodeLinkPublishInput,
+  encodeLinkPublishOutput,
+  decodeLinkPublishOutput,
+  encodeLinkResolveInput,
+  decodeLinkResolveInput,
+  encodeLinkResolveOutput,
+  decodeLinkResolveOutput,
 } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -110,4 +126,44 @@ test("PolicyValidatorInput wire parity", () => {
 test("PolicyValidatorOutput wire parity", () => {
   const want = golden("PolicyValidatorOutput.golden.json");
   assert.equal(encodePolicyValidatorOutput(decodePolicyValidatorOutput(want)), want);
+});
+
+test("RenderNodeInput wire parity", () => {
+  const want = golden("RenderNodeInput.golden.json");
+  assert.equal(encodeRenderNodeInput(decodeRenderNodeInput(want)), want);
+});
+
+test("RenderNodeOutput wire parity", () => {
+  const want = golden("RenderNodeOutput.golden.json");
+  assert.equal(encodeRenderNodeOutput(decodeRenderNodeOutput(want)), want);
+});
+
+test("AssembleBoundaryInput wire parity", () => {
+  const want = golden("AssembleBoundaryInput.golden.json");
+  assert.equal(encodeAssembleBoundaryInput(decodeAssembleBoundaryInput(want)), want);
+});
+
+test("AssembleBoundaryOutput wire parity", () => {
+  const want = golden("AssembleBoundaryOutput.golden.json");
+  assert.equal(encodeAssembleBoundaryOutput(decodeAssembleBoundaryOutput(want)), want);
+});
+
+test("LinkPublishInput wire parity", () => {
+  const want = golden("LinkPublishInput.golden.json");
+  assert.equal(encodeLinkPublishInput(decodeLinkPublishInput(want)), want);
+});
+
+test("LinkPublishOutput wire parity", () => {
+  const want = golden("LinkPublishOutput.golden.json");
+  assert.equal(encodeLinkPublishOutput(decodeLinkPublishOutput(want)), want);
+});
+
+test("LinkResolveInput wire parity", () => {
+  const want = golden("LinkResolveInput.golden.json");
+  assert.equal(encodeLinkResolveInput(decodeLinkResolveInput(want)), want);
+});
+
+test("LinkResolveOutput wire parity", () => {
+  const want = golden("LinkResolveOutput.golden.json");
+  assert.equal(encodeLinkResolveOutput(decodeLinkResolveOutput(want)), want);
 });

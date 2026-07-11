@@ -106,3 +106,23 @@ func TestSocketParity_AssembleBoundaryOutput(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.AssembleBoundaryOutput](t, "AssembleBoundaryOutput.golden.json")
 }
+
+func TestSocketParity_LinkPublishInput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.LinkPublishInput](t, "LinkPublishInput.golden.json")
+}
+
+func TestSocketParity_LinkPublishOutput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.LinkPublishOutput](t, "LinkPublishOutput.golden.json")
+}
+
+func TestSocketParity_LinkResolveInput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.LinkResolveInput](t, "LinkResolveInput.golden.json")
+}
+
+func TestSocketParity_LinkResolveOutput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.LinkResolveOutput](t, "LinkResolveOutput.golden.json")
+}

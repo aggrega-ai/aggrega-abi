@@ -14,8 +14,10 @@
 //! type, re-serialize, and assert byte-identical output.
 
 use aggrega_abi::{
-    CLIRunInput, FRPStepInput, FRPStepOutput, IRGraph, LinterInput, LinterOutput, MutatorInput,
-    MutatorOutput, PolicyValidatorInput, PolicyValidatorOutput, SearchInput, SearchOutput,
+    AssembleBoundaryInput, AssembleBoundaryOutput, CLIRunInput, FRPStepInput, FRPStepOutput,
+    IRGraph, LinkPublishInput, LinkPublishOutput, LinkResolveInput, LinkResolveOutput, LinterInput,
+    LinterOutput, MutatorInput, MutatorOutput, PolicyValidatorInput, PolicyValidatorOutput,
+    RenderNodeInput, RenderNodeOutput, SearchInput, SearchOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
@@ -96,4 +98,44 @@ fn policy_validator_input_parity() {
 #[test]
 fn policy_validator_output_parity() {
     round_trip::<PolicyValidatorOutput>("PolicyValidatorOutput.golden.json");
+}
+
+#[test]
+fn render_node_input_parity() {
+    round_trip::<RenderNodeInput>("RenderNodeInput.golden.json");
+}
+
+#[test]
+fn render_node_output_parity() {
+    round_trip::<RenderNodeOutput>("RenderNodeOutput.golden.json");
+}
+
+#[test]
+fn assemble_boundary_input_parity() {
+    round_trip::<AssembleBoundaryInput>("AssembleBoundaryInput.golden.json");
+}
+
+#[test]
+fn assemble_boundary_output_parity() {
+    round_trip::<AssembleBoundaryOutput>("AssembleBoundaryOutput.golden.json");
+}
+
+#[test]
+fn link_publish_input_parity() {
+    round_trip::<LinkPublishInput>("LinkPublishInput.golden.json");
+}
+
+#[test]
+fn link_publish_output_parity() {
+    round_trip::<LinkPublishOutput>("LinkPublishOutput.golden.json");
+}
+
+#[test]
+fn link_resolve_input_parity() {
+    round_trip::<LinkResolveInput>("LinkResolveInput.golden.json");
+}
+
+#[test]
+fn link_resolve_output_parity() {
+    round_trip::<LinkResolveOutput>("LinkResolveOutput.golden.json");
 }
