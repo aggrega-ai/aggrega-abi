@@ -66,6 +66,11 @@ fn search_output_parity() {
 }
 
 #[test]
+fn search_output_int_score_parity() {
+    round_trip::<SearchOutput>("SearchOutputIntScore.golden.json");
+}
+
+#[test]
 fn mutator_input_parity() {
     round_trip::<MutatorInput>("MutatorInput.golden.json");
 }

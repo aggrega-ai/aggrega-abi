@@ -93,6 +93,11 @@ test("SearchOutput wire parity", () => {
   assert.equal(encodeSearchOutput(decodeSearchOutput(want)), want);
 });
 
+test("SearchOutput integer-score wire parity", () => {
+  const want = golden("SearchOutputIntScore.golden.json");
+  assert.equal(encodeSearchOutput(decodeSearchOutput(want)), want);
+});
+
 test("MutatorInput wire parity", () => {
   const want = golden("MutatorInput.golden.json");
   assert.equal(encodeMutatorInput(decodeMutatorInput(want)), want);

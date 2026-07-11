@@ -13,6 +13,17 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
 }
 
+fn serialize_f64<S>(v: &f64, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    if v.is_finite() && v.fract() == 0.0 && *v >= i64::MIN as f64 && *v <= i64::MAX as f64 {
+        s.serialize_i64(*v as i64)
+    } else {
+        s.serialize_f64(*v)
+    }
+}
+
 /// The payload the host hands a search plugin on its search export: the query string, an optional cap on how many results to return, and an optional set of field filters that narrow the search. The guest interprets the query and the filters against its own index; the host does not parse them.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SearchInput {
@@ -40,6 +51,7 @@ pub struct SearchResult {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub snippet: String,
     /// The relevance score the guest assigned this result. Higher is more relevant; the scale is the guest's own. The host orders nothing by it — the guest returns results already ranked — but carries it so a consumer can display or threshold on relevance.
+    #[serde(serialize_with = "serialize_f64")]
     pub score: f64,
 }
 
