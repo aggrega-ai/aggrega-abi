@@ -14,8 +14,8 @@
 //! type, re-serialize, and assert byte-identical output.
 
 use aggrega_abi::{
-    IRGraph, LinterInput, LinterOutput, MutatorInput, MutatorOutput, PolicyValidatorInput,
-    PolicyValidatorOutput,
+    CLIRunInput, IRGraph, LinterInput, LinterOutput, MutatorInput, MutatorOutput,
+    PolicyValidatorInput, PolicyValidatorOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
@@ -36,6 +36,11 @@ fn round_trip<T: Serialize + DeserializeOwned>(name: &str) {
     let v: T = serde_json::from_str(&want).expect("deserialize golden");
     let got = serde_json::to_string(&v).expect("serialize");
     assert_eq!(want, got, "{name} wire not byte-identical to golden");
+}
+
+#[test]
+fn cli_run_input_parity() {
+    round_trip::<CLIRunInput>("CLIRunInput.golden.json");
 }
 
 #[test]

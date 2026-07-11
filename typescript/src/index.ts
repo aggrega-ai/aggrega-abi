@@ -16,6 +16,7 @@
  * Contract floor: v1alpha1.
  */
 
+export * from "./cli_gen.ts";
 export * from "./mutator_gen.ts";
 export * from "./linter_gen.ts";
 export * from "./ir_gen.ts";

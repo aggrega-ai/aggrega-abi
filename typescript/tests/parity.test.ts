@@ -20,6 +20,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import {
+  encodeCLIRunInput,
+  decodeCLIRunInput,
   encodeMutatorInput,
   decodeMutatorInput,
   encodeMutatorOutput,
@@ -41,6 +43,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 function golden(name: string): string {
   return readFileSync(join(here, "..", "testdata", name), "utf8").trim();
 }
+
+test("CLIRunInput wire parity", () => {
+  const want = golden("CLIRunInput.golden.json");
+  assert.equal(encodeCLIRunInput(decodeCLIRunInput(want)), want);
+});
 
 test("MutatorInput wire parity", () => {
   const want = golden("MutatorInput.golden.json");

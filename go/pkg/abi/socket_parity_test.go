@@ -37,6 +37,11 @@ func roundTripGolden[T any](t *testing.T, name string) {
 	}
 }
 
+func TestSocketParity_CLIRunInput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.CLIRunInput](t, "CLIRunInput.golden.json")
+}
+
 func TestSocketParity_MutatorInput(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.MutatorInput](t, "MutatorInput.golden.json")
