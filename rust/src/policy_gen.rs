@@ -7,6 +7,7 @@
 // aggrega-cli checkout.
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use crate::IRGraph;
 
 /// The payload Step 4 hands to the policy-validator socket: the full IR graph (the same shape the Topology Builder emits) plus the precalculated routing paths the analyzer enumerates alongside.
@@ -16,6 +17,12 @@ pub struct PolicyValidatorInput {
     pub graph: IRGraph,
     /// Routing paths the analyzer pre-enumerated so policies can reason about reachability without re-walking the graph.
     pub precalculated_paths: Vec<PrecalculatedPath>,
+    /// Definition files the host reads at compile time and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<PolicySource>,
+    /// A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<Box<RawValue>>,
 }
 
 /// The response shape the policy-validator plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
@@ -30,6 +37,12 @@ pub struct PolicyValidatorOutput {
 pub struct RenderPolicyValidatorInput {
     /// The rendered output files the policy reasons over, as an ordered list sorted by path so the wire is byte-identical across runs of identical input.
     pub artifacts: Vec<RenderedArtifact>,
+    /// Definition files the host reads at compile time and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<PolicySource>,
+    /// A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<Box<RawValue>>,
 }
 
 /// One rendered output file: its path and the rendered content at that path.
@@ -38,6 +51,15 @@ pub struct RenderedArtifact {
     /// The output path of the rendered file, relative to the render root.
     pub path: String,
     /// The rendered content at this path.
+    pub content: String,
+}
+
+/// One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PolicySource {
+    /// The base name of the source file. The host supplies the base name only, never an absolute host path, so the wire is portable and deterministic.
+    pub path: String,
+    /// The source file's content, carried verbatim as an opaque string.
     pub content: String,
 }
 

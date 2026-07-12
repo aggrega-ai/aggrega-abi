@@ -19,6 +19,10 @@ type PolicyValidatorInput struct {
 	Graph IRGraph `json:"graph" yaml:"graph"`
 	// PrecalculatedPaths Routing paths the analyzer pre-enumerated so policies can reason about reachability without re-walking the graph.
 	PrecalculatedPaths []PrecalculatedPath `json:"precalculated_paths" yaml:"precalculated_paths"`
+	// Sources Definition files the host reads at compile time and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
+	Sources []PolicySource `json:"sources,omitempty" yaml:"sources,omitempty"`
+	// Settings A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
+	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty"`
 }
 
 // PolicyValidatorOutput The response shape the policy-validator plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
@@ -31,6 +35,10 @@ type PolicyValidatorOutput struct {
 type RenderPolicyValidatorInput struct {
 	// Artifacts The rendered output files the policy reasons over, as an ordered list sorted by path so the wire is byte-identical across runs of identical input.
 	Artifacts []RenderedArtifact `json:"artifacts" yaml:"artifacts"`
+	// Sources Definition files the host reads at compile time and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
+	Sources []PolicySource `json:"sources,omitempty" yaml:"sources,omitempty"`
+	// Settings A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
+	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty"`
 }
 
 // RenderedArtifact One rendered output file: its path and the rendered content at that path.
@@ -38,6 +46,14 @@ type RenderedArtifact struct {
 	// Path The output path of the rendered file, relative to the render root.
 	Path string `json:"path" yaml:"path"`
 	// Content The rendered content at this path.
+	Content string `json:"content" yaml:"content"`
+}
+
+// PolicySource One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
+type PolicySource struct {
+	// Path The base name of the source file. The host supplies the base name only, never an absolute host path, so the wire is portable and deterministic.
+	Path string `json:"path" yaml:"path"`
+	// Content The source file's content, carried verbatim as an opaque string.
 	Content string `json:"content" yaml:"content"`
 }
 
@@ -93,6 +109,34 @@ func (t PolicyValidatorInput) MarshalJSON() ([]byte, error) {
 		}
 	}
 	buf.WriteByte(']')
+	if len(t.Sources) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"sources\":")
+		buf.WriteByte('[')
+		for i := range t.Sources {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.Sources[i]
+			if enc, err := ev.MarshalJSON(); err != nil {
+				return nil, err
+			} else {
+				buf.Write(enc)
+			}
+		}
+		buf.WriteByte(']')
+	}
+	if len(t.Settings) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"settings\":")
+		buf.Write(t.Settings)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -137,6 +181,31 @@ func (t *PolicyValidatorInput) UnmarshalJSON(data []byte) error {
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
+			}
+		case "sources":
+			t.Sources = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem PolicySource
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
+				}
+				t.Sources = append(t.Sources, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
+		case "settings":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				t.Settings = raw
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -247,6 +316,34 @@ func (t RenderPolicyValidatorInput) MarshalJSON() ([]byte, error) {
 		}
 	}
 	buf.WriteByte(']')
+	if len(t.Sources) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"sources\":")
+		buf.WriteByte('[')
+		for i := range t.Sources {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.Sources[i]
+			if enc, err := ev.MarshalJSON(); err != nil {
+				return nil, err
+			} else {
+				buf.Write(enc)
+			}
+		}
+		buf.WriteByte(']')
+	}
+	if len(t.Settings) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"settings\":")
+		buf.Write(t.Settings)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -283,6 +380,31 @@ func (t *RenderPolicyValidatorInput) UnmarshalJSON(data []byte) error {
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
+			}
+		case "sources":
+			t.Sources = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem PolicySource
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
+				}
+				t.Sources = append(t.Sources, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
+		case "settings":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				t.Settings = raw
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -322,6 +444,66 @@ func (t RenderedArtifact) MarshalJSON() ([]byte, error) {
 // into composite fields by direct call to each nested type's generated
 // UnmarshalJSON, dispatch-free. Unknown keys are skipped.
 func (t *RenderedArtifact) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "content":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Content = s
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalJSON encodes PolicySource in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t PolicySource) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"path\":")
+	writeJSONString(&buf, t.Path)
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"content\":")
+	writeJSONString(&buf, t.Content)
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes PolicySource with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *PolicySource) UnmarshalJSON(data []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	if err := expectDelim(dec, '{'); err != nil {
 		return err

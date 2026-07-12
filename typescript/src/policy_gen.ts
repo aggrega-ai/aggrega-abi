@@ -25,6 +25,10 @@ export interface PolicyValidatorInput {
   graph: IRGraph;
   // Routing paths the analyzer pre-enumerated so policies can reason about reachability without re-walking the graph.
   precalculated_paths: PrecalculatedPath[];
+  // Definition files the host reads at compile time and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
+  sources?: PolicySource[];
+  // A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
+  settings?: unknown;
 }
 
 // The response shape the policy-validator plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
@@ -37,6 +41,10 @@ export interface PolicyValidatorOutput {
 export interface RenderPolicyValidatorInput {
   // The rendered output files the policy reasons over, as an ordered list sorted by path so the wire is byte-identical across runs of identical input.
   artifacts: RenderedArtifact[];
+  // Definition files the host reads at compile time and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
+  sources?: PolicySource[];
+  // A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
+  settings?: unknown;
 }
 
 // One rendered output file: its path and the rendered content at that path.
@@ -44,6 +52,14 @@ export interface RenderedArtifact {
   // The output path of the rendered file, relative to the render root.
   path: string;
   // The rendered content at this path.
+  content: string;
+}
+
+// One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
+export interface PolicySource {
+  // The base name of the source file. The host supplies the base name only, never an absolute host path, so the wire is portable and deterministic.
+  path: string;
+  // The source file's content, carried verbatim as an opaque string.
   content: string;
 }
 
@@ -69,6 +85,8 @@ export function encodePolicyValidatorInput(v: PolicyValidatorInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("graph")}:${encodeIRGraph(v.graph)}`);
   parts.push(`${jstr("precalculated_paths")}:${`[${v.precalculated_paths!.map((e0) => encodePrecalculatedPath(e0)).join(",")}]`}`);
+  if (v.sources !== undefined && v.sources.length > 0) parts.push(`${jstr("sources")}:${`[${v.sources!.map((e0) => encodePolicySource(e0)).join(",")}]`}`);
+  if (v.settings !== undefined && v.settings !== null) parts.push(`${jstr("settings")}:${encodeOpaque(v.settings)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -89,6 +107,8 @@ export function decodePolicyValidatorOutput(data: string): PolicyValidatorOutput
 export function encodeRenderPolicyValidatorInput(v: RenderPolicyValidatorInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("artifacts")}:${`[${v.artifacts!.map((e0) => encodeRenderedArtifact(e0)).join(",")}]`}`);
+  if (v.sources !== undefined && v.sources.length > 0) parts.push(`${jstr("sources")}:${`[${v.sources!.map((e0) => encodePolicySource(e0)).join(",")}]`}`);
+  if (v.settings !== undefined && v.settings !== null) parts.push(`${jstr("settings")}:${encodeOpaque(v.settings)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -105,6 +125,17 @@ export function encodeRenderedArtifact(v: RenderedArtifact): string {
 
 export function decodeRenderedArtifact(data: string): RenderedArtifact {
   return JSON.parse(data) as RenderedArtifact;
+}
+
+export function encodePolicySource(v: PolicySource): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("path")}:${jstr(v.path)}`);
+  parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodePolicySource(data: string): PolicySource {
+  return JSON.parse(data) as PolicySource;
 }
 
 export function encodePrecalculatedPath(v: PrecalculatedPath): string {
