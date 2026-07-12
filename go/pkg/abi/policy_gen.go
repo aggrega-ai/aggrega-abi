@@ -21,10 +21,24 @@ type PolicyValidatorInput struct {
 	PrecalculatedPaths []PrecalculatedPath `json:"precalculated_paths" yaml:"precalculated_paths"`
 }
 
-// PolicyValidatorOutput The response shape the policy-validator plugin emits: one PolicyResult per evaluated rule. An empty results array signals 'no policy rules ran' (distinct from 'all rules passed', which is an array of pass=true results).
+// PolicyValidatorOutput The response shape the policy-validator plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
 type PolicyValidatorOutput struct {
-	// Results One verdict per evaluated policy rule.
+	// Results The fired verdicts, one PolicyResult each, in the order the plugin emits them. Empty when no verdict fired.
 	Results []PolicyResult `json:"results" yaml:"results"`
+}
+
+// RenderPolicyValidatorInput The payload the render stage hands to a policy-validator socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
+type RenderPolicyValidatorInput struct {
+	// Artifacts The rendered output files the policy reasons over, as an ordered list sorted by path so the wire is byte-identical across runs of identical input.
+	Artifacts []RenderedArtifact `json:"artifacts" yaml:"artifacts"`
+}
+
+// RenderedArtifact One rendered output file: its path and the rendered content at that path.
+type RenderedArtifact struct {
+	// Path The output path of the rendered file, relative to the render root.
+	Path string `json:"path" yaml:"path"`
+	// Content The rendered content at this path.
+	Content string `json:"content" yaml:"content"`
 }
 
 // PrecalculatedPath One pre-enumerated routing path the analyzer materializes so policy rules can reason about reachability without re-walking the graph.
@@ -37,11 +51,11 @@ type PrecalculatedPath struct {
 	AttachedFeatures []string `json:"attached_features" yaml:"attached_features"`
 }
 
-// PolicyResult One rule's verdict. Pass=false halts the build with Message surfaced as a build-time diagnostic; Pass=true is informational and does not affect build outcome.
+// PolicyResult One fired policy verdict: its severity and a human-readable message. Only fired verdicts appear in the output; an allowing rule emits no result. Severity governs the build outcome: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the outcome.
 type PolicyResult struct {
-	// Pass True when the rule's verdict permits the build to proceed; false halts the build.
-	Pass bool `json:"pass" yaml:"pass"`
-	// Message Human-readable diagnostic. Always populated. On pass=false the message surfaces as the build-time error; on pass=true it is informational.
+	// Severity The verdict's severity: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the build outcome.
+	Severity string `json:"severity" yaml:"severity"`
+	// Message Human-readable diagnostic for the fired verdict, surfaced to the operator.
 	Message string `json:"message" yaml:"message"`
 }
 
@@ -209,6 +223,139 @@ func (t *PolicyValidatorOutput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes RenderPolicyValidatorInput in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t RenderPolicyValidatorInput) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"artifacts\":")
+	buf.WriteByte('[')
+	for i := range t.Artifacts {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		ev := t.Artifacts[i]
+		if enc, err := ev.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
+		}
+	}
+	buf.WriteByte(']')
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes RenderPolicyValidatorInput with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *RenderPolicyValidatorInput) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "artifacts":
+			t.Artifacts = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem RenderedArtifact
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
+				}
+				t.Artifacts = append(t.Artifacts, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalJSON encodes RenderedArtifact in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t RenderedArtifact) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"path\":")
+	writeJSONString(&buf, t.Path)
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"content\":")
+	writeJSONString(&buf, t.Content)
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes RenderedArtifact with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *RenderedArtifact) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "content":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Content = s
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
 // MarshalJSON encodes PrecalculatedPath in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t PrecalculatedPath) MarshalJSON() ([]byte, error) {
@@ -329,12 +476,8 @@ func (t PolicyResult) MarshalJSON() ([]byte, error) {
 		buf.WriteByte(',')
 	}
 	first = false
-	buf.WriteString("\"pass\":")
-	if t.Pass {
-		buf.WriteString("true")
-	} else {
-		buf.WriteString("false")
-	}
+	buf.WriteString("\"severity\":")
+	writeJSONString(&buf, t.Severity)
 	if !first {
 		buf.WriteByte(',')
 	}
@@ -359,11 +502,11 @@ func (t *PolicyResult) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		switch key {
-		case "pass":
-			if v, err := readBool(dec); err != nil {
+		case "severity":
+			if s, err := readString(dec); err != nil {
 				return err
 			} else {
-				t.Pass = v
+				t.Severity = s
 			}
 		case "message":
 			if s, err := readString(dec); err != nil {

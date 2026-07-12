@@ -1,1 +1,1 @@
-{"results":[{"pass":true,"message":"ok"},{"pass":false,"message":"halt"}]}
+{"results":[{"severity":"deny","message":"halt"},{"severity":"audit","message":"ok"}]}

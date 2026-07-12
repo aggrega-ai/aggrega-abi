@@ -27,10 +27,24 @@ export interface PolicyValidatorInput {
   precalculated_paths: PrecalculatedPath[];
 }
 
-// The response shape the policy-validator plugin emits: one PolicyResult per evaluated rule. An empty results array signals 'no policy rules ran' (distinct from 'all rules passed', which is an array of pass=true results).
+// The response shape the policy-validator plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
 export interface PolicyValidatorOutput {
-  // One verdict per evaluated policy rule.
+  // The fired verdicts, one PolicyResult each, in the order the plugin emits them. Empty when no verdict fired.
   results: PolicyResult[];
+}
+
+// The payload the render stage hands to a policy-validator socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
+export interface RenderPolicyValidatorInput {
+  // The rendered output files the policy reasons over, as an ordered list sorted by path so the wire is byte-identical across runs of identical input.
+  artifacts: RenderedArtifact[];
+}
+
+// One rendered output file: its path and the rendered content at that path.
+export interface RenderedArtifact {
+  // The output path of the rendered file, relative to the render root.
+  path: string;
+  // The rendered content at this path.
+  content: string;
 }
 
 // One pre-enumerated routing path the analyzer materializes so policy rules can reason about reachability without re-walking the graph.
@@ -43,11 +57,11 @@ export interface PrecalculatedPath {
   attached_features: string[];
 }
 
-// One rule's verdict. Pass=false halts the build with Message surfaced as a build-time diagnostic; Pass=true is informational and does not affect build outcome.
+// One fired policy verdict: its severity and a human-readable message. Only fired verdicts appear in the output; an allowing rule emits no result. Severity governs the build outcome: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the outcome.
 export interface PolicyResult {
-  // True when the rule's verdict permits the build to proceed; false halts the build.
-  pass: boolean;
-  // Human-readable diagnostic. Always populated. On pass=false the message surfaces as the build-time error; on pass=true it is informational.
+  // The verdict's severity: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the build outcome.
+  severity: string;
+  // Human-readable diagnostic for the fired verdict, surfaced to the operator.
   message: string;
 }
 
@@ -72,6 +86,27 @@ export function decodePolicyValidatorOutput(data: string): PolicyValidatorOutput
   return JSON.parse(data) as PolicyValidatorOutput;
 }
 
+export function encodeRenderPolicyValidatorInput(v: RenderPolicyValidatorInput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("artifacts")}:${`[${v.artifacts!.map((e0) => encodeRenderedArtifact(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeRenderPolicyValidatorInput(data: string): RenderPolicyValidatorInput {
+  return JSON.parse(data) as RenderPolicyValidatorInput;
+}
+
+export function encodeRenderedArtifact(v: RenderedArtifact): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("path")}:${jstr(v.path)}`);
+  parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeRenderedArtifact(data: string): RenderedArtifact {
+  return JSON.parse(data) as RenderedArtifact;
+}
+
 export function encodePrecalculatedPath(v: PrecalculatedPath): string {
   const parts: string[] = [];
   parts.push(`${jstr("path_id")}:${jstr(v.path_id)}`);
@@ -86,7 +121,7 @@ export function decodePrecalculatedPath(data: string): PrecalculatedPath {
 
 export function encodePolicyResult(v: PolicyResult): string {
   const parts: string[] = [];
-  parts.push(`${jstr("pass")}:${String(v.pass)}`);
+  parts.push(`${jstr("severity")}:${jstr(v.severity)}`);
   parts.push(`${jstr("message")}:${jstr(v.message)}`);
   return `{${parts.join(",")}}`;
 }

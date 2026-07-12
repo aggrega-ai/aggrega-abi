@@ -18,11 +18,27 @@ pub struct PolicyValidatorInput {
     pub precalculated_paths: Vec<PrecalculatedPath>,
 }
 
-/// The response shape the policy-validator plugin emits: one PolicyResult per evaluated rule. An empty results array signals 'no policy rules ran' (distinct from 'all rules passed', which is an array of pass=true results).
+/// The response shape the policy-validator plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PolicyValidatorOutput {
-    /// One verdict per evaluated policy rule.
+    /// The fired verdicts, one PolicyResult each, in the order the plugin emits them. Empty when no verdict fired.
     pub results: Vec<PolicyResult>,
+}
+
+/// The payload the render stage hands to a policy-validator socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RenderPolicyValidatorInput {
+    /// The rendered output files the policy reasons over, as an ordered list sorted by path so the wire is byte-identical across runs of identical input.
+    pub artifacts: Vec<RenderedArtifact>,
+}
+
+/// One rendered output file: its path and the rendered content at that path.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RenderedArtifact {
+    /// The output path of the rendered file, relative to the render root.
+    pub path: String,
+    /// The rendered content at this path.
+    pub content: String,
 }
 
 /// One pre-enumerated routing path the analyzer materializes so policy rules can reason about reachability without re-walking the graph.
@@ -36,12 +52,12 @@ pub struct PrecalculatedPath {
     pub attached_features: Vec<String>,
 }
 
-/// One rule's verdict. Pass=false halts the build with Message surfaced as a build-time diagnostic; Pass=true is informational and does not affect build outcome.
+/// One fired policy verdict: its severity and a human-readable message. Only fired verdicts appear in the output; an allowing rule emits no result. Severity governs the build outcome: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the outcome.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PolicyResult {
-    /// True when the rule's verdict permits the build to proceed; false halts the build.
-    pub pass: bool,
-    /// Human-readable diagnostic. Always populated. On pass=false the message surfaces as the build-time error; on pass=true it is informational.
+    /// The verdict's severity: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the build outcome.
+    pub severity: String,
+    /// Human-readable diagnostic for the fired verdict, surfaced to the operator.
     pub message: String,
 }
 
