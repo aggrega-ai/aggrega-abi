@@ -1,1 +1,1 @@
-{"args":["render","./app.agg.yaml","--set","replicas=3","--out","dist"]}
+{"command":"render","args":["./app.agg.yaml","--set","replicas=3","--out","dist"]}

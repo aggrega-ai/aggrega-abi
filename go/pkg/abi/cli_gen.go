@@ -15,6 +15,8 @@ import (
 
 // CLIRunInput The payload the host hands a CLI plugin on each invocation: the argument vector following the resolved subcommand name. The guest parses these tokens as its own flags and positional arguments, exactly as a standalone command-line program reads the arguments after its name.
 type CLIRunInput struct {
+	// Command The resolved subcommand name the host dispatched to this invocation. A plugin that contributes several commands routes on this name to select the behavior to run; a single-command plugin receives its own command name here. The host resolves the name from the command line before invoking the guest and carries it verbatim.
+	Command string `json:"command" yaml:"command"`
 	// Args The argument vector the guest receives, in invocation order — the tokens that follow the resolved subcommand name on the command line. Order is preserved so the payload is byte-identical across runs of identical input.
 	Args []string `json:"args" yaml:"args"`
 }
@@ -25,6 +27,12 @@ func (t CLIRunInput) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteByte('{')
 	first := true
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"command\":")
+	writeJSONString(&buf, t.Command)
 	if !first {
 		buf.WriteByte(',')
 	}
@@ -57,6 +65,12 @@ func (t *CLIRunInput) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		switch key {
+		case "command":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Command = s
+			}
 		case "args":
 			t.Args = nil
 			if err := expectDelim(dec, '['); err != nil {

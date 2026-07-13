@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 /// The payload the host hands a CLI plugin on each invocation: the argument vector following the resolved subcommand name. The guest parses these tokens as its own flags and positional arguments, exactly as a standalone command-line program reads the arguments after its name.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CLIRunInput {
+    /// The resolved subcommand name the host dispatched to this invocation. A plugin that contributes several commands routes on this name to select the behavior to run; a single-command plugin receives its own command name here. The host resolves the name from the command line before invoking the guest and carries it verbatim.
+    pub command: String,
     /// The argument vector the guest receives, in invocation order — the tokens that follow the resolved subcommand name on the command line. Order is preserved so the payload is byte-identical across runs of identical input.
     pub args: Vec<String>,
 }

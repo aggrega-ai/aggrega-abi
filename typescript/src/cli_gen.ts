@@ -19,12 +19,15 @@ function encodeOpaque(v: unknown): string {
 
 // The payload the host hands a CLI plugin on each invocation: the argument vector following the resolved subcommand name. The guest parses these tokens as its own flags and positional arguments, exactly as a standalone command-line program reads the arguments after its name.
 export interface CLIRunInput {
+  // The resolved subcommand name the host dispatched to this invocation. A plugin that contributes several commands routes on this name to select the behavior to run; a single-command plugin receives its own command name here. The host resolves the name from the command line before invoking the guest and carries it verbatim.
+  command: string;
   // The argument vector the guest receives, in invocation order — the tokens that follow the resolved subcommand name on the command line. Order is preserved so the payload is byte-identical across runs of identical input.
   args: string[];
 }
 
 export function encodeCLIRunInput(v: CLIRunInput): string {
   const parts: string[] = [];
+  parts.push(`${jstr("command")}:${jstr(v.command)}`);
   parts.push(`${jstr("args")}:${`[${v.args!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
