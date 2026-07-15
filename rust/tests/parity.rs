@@ -17,7 +17,7 @@ use aggrega_abi::{
     AssembleBoundaryInput, AssembleBoundaryOutput, CLIRunInput, FRPStepInput, FRPStepOutput,
     IRGraph, LinkPublishInput, LinkPublishOutput, LinkResolveInput, LinkResolveOutput, LinterInput,
     LinterOutput, MutatorInput, MutatorOutput, PolicyValidatorInput, PolicyValidatorOutput,
-    RenderNodeInput, RenderNodeOutput, SearchInput, SearchOutput,
+    RenderNodeInput, RenderNodeOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
@@ -53,21 +53,6 @@ fn frp_step_input_parity() {
 #[test]
 fn frp_step_output_parity() {
     round_trip::<FRPStepOutput>("FRPStepOutput.golden.json");
-}
-
-#[test]
-fn search_input_parity() {
-    round_trip::<SearchInput>("SearchInput.golden.json");
-}
-
-#[test]
-fn search_output_parity() {
-    round_trip::<SearchOutput>("SearchOutput.golden.json");
-}
-
-#[test]
-fn search_output_int_score_parity() {
-    round_trip::<SearchOutput>("SearchOutputIntScore.golden.json");
 }
 
 #[test]

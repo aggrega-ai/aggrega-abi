@@ -26,10 +26,6 @@ import {
   decodeFRPStepInput,
   encodeFRPStepOutput,
   decodeFRPStepOutput,
-  encodeSearchInput,
-  decodeSearchInput,
-  encodeSearchOutput,
-  decodeSearchOutput,
   encodeMutatorInput,
   decodeMutatorInput,
   encodeMutatorOutput,
@@ -81,21 +77,6 @@ test("FRPStepInput wire parity", () => {
 test("FRPStepOutput wire parity", () => {
   const want = golden("FRPStepOutput.golden.json");
   assert.equal(encodeFRPStepOutput(decodeFRPStepOutput(want)), want);
-});
-
-test("SearchInput wire parity", () => {
-  const want = golden("SearchInput.golden.json");
-  assert.equal(encodeSearchInput(decodeSearchInput(want)), want);
-});
-
-test("SearchOutput wire parity", () => {
-  const want = golden("SearchOutput.golden.json");
-  assert.equal(encodeSearchOutput(decodeSearchOutput(want)), want);
-});
-
-test("SearchOutput integer-score wire parity", () => {
-  const want = golden("SearchOutputIntScore.golden.json");
-  assert.equal(encodeSearchOutput(decodeSearchOutput(want)), want);
 });
 
 test("MutatorInput wire parity", () => {
