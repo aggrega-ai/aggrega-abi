@@ -67,14 +67,14 @@ func TestSocketParity_IRGraph(t *testing.T) {
 	roundTripGolden[abi.IRGraph](t, "IRGraph.golden.json")
 }
 
-func TestSocketParity_PolicyValidatorInput(t *testing.T) {
+func TestSocketParity_PolicyInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.PolicyValidatorInput](t, "PolicyValidatorInput.golden.json")
+	roundTripGolden[abi.PolicyInput](t, "PolicyInput.golden.json")
 }
 
-func TestSocketParity_PolicyValidatorOutput(t *testing.T) {
+func TestSocketParity_PolicyOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.PolicyValidatorOutput](t, "PolicyValidatorOutput.golden.json")
+	roundTripGolden[abi.PolicyOutput](t, "PolicyOutput.golden.json")
 }
 
 func TestSocketParity_RenderNodeInput(t *testing.T) {

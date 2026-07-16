@@ -16,7 +16,7 @@
 use aggrega_abi::{
     AssembleBoundaryInput, AssembleBoundaryOutput, CLIRunInput, FRPStepInput, FRPStepOutput,
     IRGraph, LinkPublishInput, LinkPublishOutput, LinkResolveInput, LinkResolveOutput, LinterInput,
-    LinterOutput, MutatorInput, MutatorOutput, PolicyValidatorInput, PolicyValidatorOutput,
+    LinterOutput, MutatorInput, MutatorOutput, PolicyInput, PolicyOutput,
     RenderNodeInput, RenderNodeOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -81,13 +81,13 @@ fn ir_graph_parity() {
 }
 
 #[test]
-fn policy_validator_input_parity() {
-    round_trip::<PolicyValidatorInput>("PolicyValidatorInput.golden.json");
+fn policy_input_parity() {
+    round_trip::<PolicyInput>("PolicyInput.golden.json");
 }
 
 #[test]
-fn policy_validator_output_parity() {
-    round_trip::<PolicyValidatorOutput>("PolicyValidatorOutput.golden.json");
+fn policy_output_parity() {
+    round_trip::<PolicyOutput>("PolicyOutput.golden.json");
 }
 
 #[test]

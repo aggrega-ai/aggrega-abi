@@ -36,10 +36,10 @@ import {
   decodeLinterOutput,
   encodeIRGraph,
   decodeIRGraph,
-  encodePolicyValidatorInput,
-  decodePolicyValidatorInput,
-  encodePolicyValidatorOutput,
-  decodePolicyValidatorOutput,
+  encodePolicyInput,
+  decodePolicyInput,
+  encodePolicyOutput,
+  decodePolicyOutput,
   encodeRenderNodeInput,
   decodeRenderNodeInput,
   encodeRenderNodeOutput,
@@ -104,14 +104,14 @@ test("IRGraph wire parity", () => {
   assert.equal(encodeIRGraph(decodeIRGraph(want)), want);
 });
 
-test("PolicyValidatorInput wire parity", () => {
-  const want = golden("PolicyValidatorInput.golden.json");
-  assert.equal(encodePolicyValidatorInput(decodePolicyValidatorInput(want)), want);
+test("PolicyInput wire parity", () => {
+  const want = golden("PolicyInput.golden.json");
+  assert.equal(encodePolicyInput(decodePolicyInput(want)), want);
 });
 
-test("PolicyValidatorOutput wire parity", () => {
-  const want = golden("PolicyValidatorOutput.golden.json");
-  assert.equal(encodePolicyValidatorOutput(decodePolicyValidatorOutput(want)), want);
+test("PolicyOutput wire parity", () => {
+  const want = golden("PolicyOutput.golden.json");
+  assert.equal(encodePolicyOutput(decodePolicyOutput(want)), want);
 });
 
 test("RenderNodeInput wire parity", () => {
