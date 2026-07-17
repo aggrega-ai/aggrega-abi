@@ -17,6 +17,7 @@
  */
 
 export * from "./cli_gen.ts";
+export * from "./describe_gen.ts";
 export * from "./frp_gen.ts";
 export * from "./mutator_gen.ts";
 export * from "./linter_gen.ts";

@@ -116,3 +116,40 @@ func TestSocketParity_LinkResolveOutput(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.LinkResolveOutput](t, "LinkResolveOutput.golden.json")
 }
+
+// The two describe goldens are both the PluginDescriptor wire — the shape every
+// plugin returns from describe(). One exercises a CLI descriptor with commands
+// and per-command flags (the surface unique to CLI plugins), the other a
+// provider descriptor carrying a full render-behavior contract (input kinds,
+// boundary assembly, artifact delimiters, source filter, the assembly-name
+// annotation, and the cross-boundary-linking claim) plus an opaque settings
+// schema — so the byte-compare pins both the command/flag surface and the whole
+// contract block across the three codecs.
+
+func TestSocketParity_PluginDescriptorCLI(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorCLI.golden.json")
+}
+
+func TestSocketParity_PluginDescriptorProvider(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorProvider.golden.json")
+}
+
+// PluginDescriptorMinimal is a descriptor that declares none of the optional
+// nested objects — no render-behavior contract, no authorship metadata, and so
+// (transitively) no artifact-delimiter pair and no assembly-name annotation.
+// The byte-compare pins that all three codecs omit every absent optional object
+// identically rather than emitting an empty placeholder. PluginDescriptorMoo is
+// the wire a real CLI plugin (moo) produces: no contract, but metadata present —
+// the case the codec must reproduce without inventing a contract key.
+
+func TestSocketParity_PluginDescriptorMinimal(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorMinimal.golden.json")
+}
+
+func TestSocketParity_PluginDescriptorMoo(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorMoo.golden.json")
+}

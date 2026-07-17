@@ -56,6 +56,8 @@ import {
   decodeLinkResolveInput,
   encodeLinkResolveOutput,
   decodeLinkResolveOutput,
+  encodePluginDescriptor,
+  decodePluginDescriptor,
 } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -152,4 +154,27 @@ test("LinkResolveInput wire parity", () => {
 test("LinkResolveOutput wire parity", () => {
   const want = golden("LinkResolveOutput.golden.json");
   assert.equal(encodeLinkResolveOutput(decodeLinkResolveOutput(want)), want);
+});
+
+test("PluginDescriptor CLI wire parity", () => {
+  const want = golden("PluginDescriptorCLI.golden.json");
+  assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
+});
+
+test("PluginDescriptor provider wire parity", () => {
+  const want = golden("PluginDescriptorProvider.golden.json");
+  assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
+});
+
+// A descriptor declaring none of the optional nested objects: the codec must omit
+// every absent optional rather than emit an empty placeholder.
+test("PluginDescriptor minimal wire parity", () => {
+  const want = golden("PluginDescriptorMinimal.golden.json");
+  assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
+});
+
+// The wire a real CLI plugin (moo) produces: no contract, metadata present.
+test("PluginDescriptor moo wire parity", () => {
+  const want = golden("PluginDescriptorMoo.golden.json");
+  assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
 });

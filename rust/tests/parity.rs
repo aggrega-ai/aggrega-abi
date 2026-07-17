@@ -16,7 +16,7 @@
 use aggrega_abi::{
     AssembleBoundaryInput, AssembleBoundaryOutput, CLIRunInput, FRPStepInput, FRPStepOutput,
     IRGraph, LinkPublishInput, LinkPublishOutput, LinkResolveInput, LinkResolveOutput, LinterInput,
-    LinterOutput, MutatorInput, MutatorOutput, PolicyInput, PolicyOutput,
+    LinterOutput, MutatorInput, MutatorOutput, PluginDescriptor, PolicyInput, PolicyOutput,
     RenderNodeInput, RenderNodeOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -128,4 +128,27 @@ fn link_resolve_input_parity() {
 #[test]
 fn link_resolve_output_parity() {
     round_trip::<LinkResolveOutput>("LinkResolveOutput.golden.json");
+}
+
+#[test]
+fn plugin_descriptor_cli_parity() {
+    round_trip::<PluginDescriptor>("PluginDescriptorCLI.golden.json");
+}
+
+#[test]
+fn plugin_descriptor_provider_parity() {
+    round_trip::<PluginDescriptor>("PluginDescriptorProvider.golden.json");
+}
+
+// A descriptor declaring none of the optional nested objects: the codec must omit
+// every absent optional rather than emit an empty placeholder.
+#[test]
+fn plugin_descriptor_minimal_parity() {
+    round_trip::<PluginDescriptor>("PluginDescriptorMinimal.golden.json");
+}
+
+// The wire a real CLI plugin (moo) produces: no contract, metadata present.
+#[test]
+fn plugin_descriptor_moo_parity() {
+    round_trip::<PluginDescriptor>("PluginDescriptorMoo.golden.json");
 }
