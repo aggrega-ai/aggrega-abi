@@ -21,6 +21,10 @@ function encodeOpaque(v: unknown): string {
 export interface MutatorInput {
   compilation_context: CompilationContext;
   graph: MutatorGraph;
+  // Definition files the host reads and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
+  sources?: MutatorSource[];
+  // A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
+  settings?: unknown;
 }
 
 // The response shape the mutator plugin emits: a list of opaque JSON Patch documents the host applies to the topology graph. Patches stay opaque at the schema layer so the host need not duplicate the JSON Patch parser the guest already implements.
@@ -53,10 +57,20 @@ export interface MutatorNode {
   labels: Record<string, string>;
 }
 
+// One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
+export interface MutatorSource {
+  // The base name of the source file. The host supplies the base name only, never an absolute host path, so the wire is portable and deterministic.
+  path: string;
+  // The source file's content, carried verbatim as an opaque string.
+  content: string;
+}
+
 export function encodeMutatorInput(v: MutatorInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("compilation_context")}:${encodeCompilationContext(v.compilation_context)}`);
   parts.push(`${jstr("graph")}:${encodeMutatorGraph(v.graph)}`);
+  if (v.sources !== undefined && v.sources.length > 0) parts.push(`${jstr("sources")}:${`[${v.sources!.map((e0) => encodeMutatorSource(e0)).join(",")}]`}`);
+  if (v.settings !== undefined && v.settings !== null) parts.push(`${jstr("settings")}:${encodeOpaque(v.settings)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -105,5 +119,16 @@ export function encodeMutatorNode(v: MutatorNode): string {
 
 export function decodeMutatorNode(data: string): MutatorNode {
   return JSON.parse(data) as MutatorNode;
+}
+
+export function encodeMutatorSource(v: MutatorSource): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("path")}:${jstr(v.path)}`);
+  parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeMutatorSource(data: string): MutatorSource {
+  return JSON.parse(data) as MutatorSource;
 }
 

@@ -15,6 +15,12 @@ use std::collections::BTreeMap;
 pub struct MutatorInput {
     pub compilation_context: CompilationContext,
     pub graph: MutatorGraph,
+    /// Definition files the host reads and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<MutatorSource>,
+    /// A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<Box<RawValue>>,
 }
 
 /// The response shape the mutator plugin emits: a list of opaque JSON Patch documents the host applies to the topology graph. Patches stay opaque at the schema layer so the host need not duplicate the JSON Patch parser the guest already implements.
@@ -49,5 +55,14 @@ pub struct MutatorNode {
     pub resolved_version: String,
     /// The node's duck-typing and ontology labels.
     pub labels: BTreeMap<String, String>,
+}
+
+/// One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MutatorSource {
+    /// The base name of the source file. The host supplies the base name only, never an absolute host path, so the wire is portable and deterministic.
+    pub path: String,
+    /// The source file's content, carried verbatim as an opaque string.
+    pub content: String,
 }
 
