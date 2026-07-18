@@ -58,6 +58,10 @@ import {
   decodeLinkResolveOutput,
   encodePluginDescriptor,
   decodePluginDescriptor,
+  encodeParseInput,
+  decodeParseInput,
+  encodeParseOutput,
+  decodeParseOutput,
 } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -177,4 +181,22 @@ test("PluginDescriptor minimal wire parity", () => {
 test("PluginDescriptor moo wire parity", () => {
   const want = golden("PluginDescriptorMoo.golden.json");
   assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
+});
+
+test("ParseInput wire parity", () => {
+  const want = golden("ParseInput.golden.json");
+  assert.equal(encodeParseInput(decodeParseInput(want)), want);
+});
+
+test("ParseOutput wire parity", () => {
+  const want = golden("ParseOutput.golden.json");
+  assert.equal(encodeParseOutput(decodeParseOutput(want)), want);
+});
+
+// A parser output that omits every optional (no diagnostics, no spans) and
+// carries a top-level-array tree: the codec must omit absent optionals and
+// carry a non-object tree verbatim.
+test("ParseOutput bare wire parity", () => {
+  const want = golden("ParseOutputBare.golden.json");
+  assert.equal(encodeParseOutput(decodeParseOutput(want)), want);
 });

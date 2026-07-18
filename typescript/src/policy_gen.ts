@@ -53,6 +53,8 @@ export interface RenderedArtifact {
   path: string;
   // The rendered content at this path.
   content: string;
+  // The parsed structured tree of this artifact, present when the host parsed the content before handing it to the plugin — the canonical JSON view of a source format the plugin does not read natively (an HCL artifact parsed to JSON, for example). The top level may be an object, an array, or a scalar, matching the parsed document's own shape. Absent when the host did not parse the artifact, in which case the plugin reads the native content directly. The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
+  tree?: unknown;
 }
 
 // One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -120,6 +122,7 @@ export function encodeRenderedArtifact(v: RenderedArtifact): string {
   const parts: string[] = [];
   parts.push(`${jstr("path")}:${jstr(v.path)}`);
   parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  if (v.tree !== undefined && v.tree !== null) parts.push(`${jstr("tree")}:${encodeOpaque(v.tree)}`);
   return `{${parts.join(",")}}`;
 }
 

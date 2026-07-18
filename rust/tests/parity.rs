@@ -16,8 +16,8 @@
 use aggrega_abi::{
     AssembleBoundaryInput, AssembleBoundaryOutput, CLIRunInput, FRPStepInput, FRPStepOutput,
     IRGraph, LinkPublishInput, LinkPublishOutput, LinkResolveInput, LinkResolveOutput, LinterInput,
-    LinterOutput, MutatorInput, MutatorOutput, PluginDescriptor, PolicyInput, PolicyOutput,
-    RenderNodeInput, RenderNodeOutput,
+    LinterOutput, MutatorInput, MutatorOutput, ParseInput, ParseOutput, PluginDescriptor,
+    PolicyInput, PolicyOutput, RenderNodeInput, RenderNodeOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
@@ -151,4 +151,22 @@ fn plugin_descriptor_minimal_parity() {
 #[test]
 fn plugin_descriptor_moo_parity() {
     round_trip::<PluginDescriptor>("PluginDescriptorMoo.golden.json");
+}
+
+#[test]
+fn parse_input_parity() {
+    round_trip::<ParseInput>("ParseInput.golden.json");
+}
+
+#[test]
+fn parse_output_parity() {
+    round_trip::<ParseOutput>("ParseOutput.golden.json");
+}
+
+// A parser output that omits every optional (no diagnostics, no spans) and
+// carries a top-level-array tree: the codec must omit absent optionals and
+// carry a non-object tree verbatim.
+#[test]
+fn parse_output_bare_parity() {
+    round_trip::<ParseOutput>("ParseOutputBare.golden.json");
 }

@@ -153,3 +153,26 @@ func TestSocketParity_PluginDescriptorMoo(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorMoo.golden.json")
 }
+
+// The parse goldens are the parser socket wire — a ParseInput a parser guest
+// receives and the ParseOutput it returns. ParseInput carries base64 source
+// bytes and an opaque options document; ParseOutput carries the opaque tree
+// plus diagnostics and node spans. ParseOutputBare is an output that omits
+// every optional (no diagnostics, no spans) and carries a top-level-array tree,
+// so the byte-compare pins that the codec omits absent optionals and carries a
+// non-object tree verbatim.
+
+func TestSocketParity_ParseInput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.ParseInput](t, "ParseInput.golden.json")
+}
+
+func TestSocketParity_ParseOutput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.ParseOutput](t, "ParseOutput.golden.json")
+}
+
+func TestSocketParity_ParseOutputBare(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.ParseOutput](t, "ParseOutputBare.golden.json")
+}

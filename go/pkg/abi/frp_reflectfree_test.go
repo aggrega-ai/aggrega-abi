@@ -19,7 +19,7 @@ import (
 // an actual import line or a reflect.Symbol reference.
 func TestGeneratedCodec_ReflectFree(t *testing.T) {
 	t.Parallel()
-	for _, file := range []string{"frp_gen.go", "cli_gen.go", "describe_gen.go", "mutator_gen.go", "linter_gen.go", "ir_gen.go", "policy_gen.go"} {
+	for _, file := range []string{"frp_gen.go", "cli_gen.go", "describe_gen.go", "mutator_gen.go", "linter_gen.go", "ir_gen.go", "policy_gen.go", "parse_gen.go"} {
 		src, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatalf("read generated codec %s: %v", file, err)

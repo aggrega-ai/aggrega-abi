@@ -47,6 +47,8 @@ type RenderedArtifact struct {
 	Path string `json:"path" yaml:"path"`
 	// Content The rendered content at this path.
 	Content string `json:"content" yaml:"content"`
+	// Tree The parsed structured tree of this artifact, present when the host parsed the content before handing it to the plugin — the canonical JSON view of a source format the plugin does not read natively (an HCL artifact parsed to JSON, for example). The top level may be an object, an array, or a scalar, matching the parsed document's own shape. Absent when the host did not parse the artifact, in which case the plugin reads the native content directly. The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
+	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty"`
 }
 
 // PolicySource One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -436,6 +438,14 @@ func (t RenderedArtifact) MarshalJSON() ([]byte, error) {
 	first = false
 	buf.WriteString("\"content\":")
 	writeJSONString(&buf, t.Content)
+	if len(t.Tree) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"tree\":")
+		buf.Write(t.Tree)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -465,6 +475,12 @@ func (t *RenderedArtifact) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.Content = s
+			}
+		case "tree":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				t.Tree = raw
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
