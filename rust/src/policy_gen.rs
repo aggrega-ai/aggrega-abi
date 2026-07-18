@@ -55,6 +55,9 @@ pub struct RenderedArtifact {
     /// The parsed structured tree of this artifact, present when the host parsed the content before handing it to the plugin — the canonical JSON view of a source format the plugin does not read natively (an HCL artifact parsed to JSON, for example). The top level may be an object, an array, or a scalar, matching the parsed document's own shape. Absent when the host did not parse the artifact, in which case the plugin reads the native content directly. The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tree: Option<Box<RawValue>>,
+    /// The format the artifact was rendered in, present when the producing provider declared it. Absent when the producing provider declared no format.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub format: String,
 }
 
 /// One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.

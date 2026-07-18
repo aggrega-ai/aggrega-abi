@@ -108,6 +108,8 @@ export interface RenderedFile {
   path: string;
   // The file's serialized bytes exactly as the guest produced them; the host writes these bytes verbatim and runs no serializer, so output is byte-identical to what the guest emitted (base64 on the JSON wire).
   content: string;
+  // The format the guest declares the emitted file was rendered in, so the host can route the file to a matching parser. Absent when the guest declares no format, in which case the host infers the format from the file extension.
+  format?: string;
 }
 
 // One file of a pre-packaged source projection: its chart-root-relative path and its raw bytes, exactly as the host read them from the local source at compile time.
@@ -467,6 +469,7 @@ export function encodeRenderedFile(v: RenderedFile): string {
   const parts: string[] = [];
   parts.push(`${jstr("path")}:${jstr(v.path)}`);
   parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  if (v.format !== undefined && v.format !== "") parts.push(`${jstr("format")}:${jstr(v.format)}`);
   return `{${parts.join(",")}}`;
 }
 

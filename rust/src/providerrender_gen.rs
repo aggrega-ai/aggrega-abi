@@ -137,6 +137,9 @@ pub struct RenderedFile {
     pub path: String,
     /// The file's serialized bytes exactly as the guest produced them; the host writes these bytes verbatim and runs no serializer, so output is byte-identical to what the guest emitted (base64 on the JSON wire).
     pub content: String,
+    /// The format the guest declares the emitted file was rendered in, so the host can route the file to a matching parser. Absent when the guest declares no format, in which case the host infers the format from the file extension.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub format: String,
 }
 
 /// One file of a pre-packaged source projection: its chart-root-relative path and its raw bytes, exactly as the host read them from the local source at compile time.
