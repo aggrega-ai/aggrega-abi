@@ -38,6 +38,8 @@ export interface FRPStepOutput {
   side_effects?: SideEffect[];
   // Diagnostics the guest raised. The element shape is intentionally opaque at this schema layer for now; a structured diagnostic definition is a follow-on for when a guest needs to emit structured diagnostics. Each element carries the shared Wasm-plugin diagnostic shape.
   diagnostics?: unknown;
+  // The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
+  outputs?: Record<string, unknown>;
 }
 
 // The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and is blind to its content; the guest selects the documents it targets by content and addresses its patches by key.
@@ -124,6 +126,7 @@ export function encodeFRPStepOutput(v: FRPStepOutput): string {
   if (v.patches !== undefined && v.patches.length > 0) parts.push(`${jstr("patches")}:${`[${v.patches!.map((e0) => encodeJSONPatchOp(e0)).join(",")}]`}`);
   if (v.side_effects !== undefined && v.side_effects.length > 0) parts.push(`${jstr("side_effects")}:${`[${v.side_effects!.map((e0) => encodeSideEffect(e0)).join(",")}]`}`);
   if (v.diagnostics !== undefined && v.diagnostics !== null) parts.push(`${jstr("diagnostics")}:${encodeOpaque(v.diagnostics)}`);
+  if (v.outputs !== undefined && Object.keys(v.outputs).length > 0) parts.push(`${jstr("outputs")}:${`{${Object.keys(v.outputs!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.outputs![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
 

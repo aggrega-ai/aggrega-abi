@@ -71,6 +71,12 @@ pub struct PluginExport {
     /// A free-form, human-readable description of what the export acts on. It is documentation for catalog readers; the host neither validates its content nor acts on it.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub selector: String,
+    /// An optional JSON Schema document a step export declares to type the step-local input a pipeline entry supplies through its with block. When present, it describes the shape a step's with input satisfies; when absent, the export declares no input contract. The schema is the export's own free-form declaration of the input surface a pipeline author targets for this export.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<Box<RawValue>>,
+    /// An optional JSON Schema document a step export declares to type the outputs it returns for one step — the shape of the addressable outputs a step contributes for a later step or a template to read. When present, it describes the shape of those returned outputs; when absent, the export declares no output contract. The schema is the export's own free-form declaration of the output surface this export produces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<Box<RawValue>>,
 }
 
 /// One top-level aggrega command verb a CLI plugin contributes, as declared in describe(). The host registers one command per entry and routes the resolved command name back to the guest at invocation, so a single guest may back several commands and select its behavior on the name.

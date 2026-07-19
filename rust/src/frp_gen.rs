@@ -38,6 +38,9 @@ pub struct FRPStepOutput {
     /// Diagnostics the guest raised. The element shape is intentionally opaque at this schema layer for now; a structured diagnostic definition is a follow-on for when a guest needs to emit structured diagnostics. Each element carries the shared Wasm-plugin diagnostic shape.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<Box<RawValue>>,
+    /// The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub outputs: BTreeMap<String, Box<RawValue>>,
 }
 
 /// The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and is blind to its content; the guest selects the documents it targets by content and addresses its patches by key.

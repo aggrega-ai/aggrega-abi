@@ -39,6 +39,8 @@ type FRPStepOutput struct {
 	SideEffects []SideEffect `json:"side_effects,omitempty" yaml:"side_effects,omitempty"`
 	// Diagnostics Diagnostics the guest raised. The element shape is intentionally opaque at this schema layer for now; a structured diagnostic definition is a follow-on for when a guest needs to emit structured diagnostics. Each element carries the shared Wasm-plugin diagnostic shape.
 	Diagnostics json.RawMessage `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	// Outputs The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
+	Outputs map[string]json.RawMessage `json:"outputs,omitempty" yaml:"outputs,omitempty"`
 }
 
 // DocumentSet The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and is blind to its content; the guest selects the documents it targets by content and addresses its patches by key.
@@ -323,6 +325,31 @@ func (t FRPStepOutput) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"diagnostics\":")
 		buf.Write(t.Diagnostics)
 	}
+	if len(t.Outputs) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"outputs\":")
+		{
+			keys := make([]string, 0, len(t.Outputs))
+			for k := range t.Outputs {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			buf.WriteByte('{')
+			for i, k := range keys {
+				if i > 0 {
+					buf.WriteByte(',')
+				}
+				writeJSONString(&buf, k)
+				buf.WriteByte(':')
+				mv := t.Outputs[k]
+				buf.Write(mv)
+			}
+			buf.WriteByte('}')
+		}
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -384,6 +411,27 @@ func (t *FRPStepOutput) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.Diagnostics = raw
+			}
+		case "outputs":
+			t.Outputs = make(map[string]json.RawMessage)
+			if err := expectDelim(dec, '{'); err != nil {
+				return err
+			}
+			for dec.More() {
+				mk, err := readKey(dec)
+				if err != nil {
+					return err
+				}
+				var mv json.RawMessage
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					mv = raw
+				}
+				t.Outputs[mk] = mv
+			}
+			if err := expectDelim(dec, '}'); err != nil {
+				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {

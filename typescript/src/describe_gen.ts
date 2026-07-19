@@ -59,6 +59,10 @@ export interface PluginExport {
   scope?: string;
   // A free-form, human-readable description of what the export acts on. It is documentation for catalog readers; the host neither validates its content nor acts on it.
   selector?: string;
+  // An optional JSON Schema document a step export declares to type the step-local input a pipeline entry supplies through its with block. When present, it describes the shape a step's with input satisfies; when absent, the export declares no input contract. The schema is the export's own free-form declaration of the input surface a pipeline author targets for this export.
+  input?: unknown;
+  // An optional JSON Schema document a step export declares to type the outputs it returns for one step — the shape of the addressable outputs a step contributes for a later step or a template to read. When present, it describes the shape of those returned outputs; when absent, the export declares no output contract. The schema is the export's own free-form declaration of the output surface this export produces.
+  output?: unknown;
 }
 
 // One top-level aggrega command verb a CLI plugin contributes, as declared in describe(). The host registers one command per entry and routes the resolved command name back to the guest at invocation, so a single guest may back several commands and select its behavior on the name.
@@ -172,6 +176,8 @@ export function encodePluginExport(v: PluginExport): string {
   if (v.operates !== undefined && v.operates !== "") parts.push(`${jstr("operates")}:${jstr(v.operates)}`);
   if (v.scope !== undefined && v.scope !== "") parts.push(`${jstr("scope")}:${jstr(v.scope)}`);
   if (v.selector !== undefined && v.selector !== "") parts.push(`${jstr("selector")}:${jstr(v.selector)}`);
+  if (v.input !== undefined && v.input !== null) parts.push(`${jstr("input")}:${encodeOpaque(v.input)}`);
+  if (v.output !== undefined && v.output !== null) parts.push(`${jstr("output")}:${encodeOpaque(v.output)}`);
   return `{${parts.join(",")}}`;
 }
 
