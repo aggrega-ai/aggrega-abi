@@ -72,3 +72,14 @@ pub struct SourceSpan {
     pub end_column: i64,
 }
 
+/// The parse-source host function's reply: on success the canonical structured tree the resolved parser produced, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a consumer guest carries a no-parser or a parse failure into its own diagnostics as a deterministic failure. This is the envelope a consumer socket receives when it asks the host to run a producer through the host; the request payload is a ParseInput.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ParseSourceResponse {
+    /// The canonical structured tree the resolved parser produced on success, as a JSON document carried verbatim; absent on failure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tree: Option<Box<RawValue>>,
+    /// The failure message on failure, naming the format and the reason; absent on success.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+}
+

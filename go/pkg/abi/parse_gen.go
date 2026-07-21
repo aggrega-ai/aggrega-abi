@@ -68,6 +68,14 @@ type SourceSpan struct {
 	EndColumn int `json:"end_column" yaml:"end_column"`
 }
 
+// ParseSourceResponse The parse-source host function's reply: on success the canonical structured tree the resolved parser produced, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a consumer guest carries a no-parser or a parse failure into its own diagnostics as a deterministic failure. This is the envelope a consumer socket receives when it asks the host to run a producer through the host; the request payload is a ParseInput.
+type ParseSourceResponse struct {
+	// Tree The canonical structured tree the resolved parser produced on success, as a JSON document carried verbatim; absent on failure.
+	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty"`
+	// Error The failure message on failure, naming the format and the reason; absent on success.
+	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+}
+
 // MarshalJSON encodes ParseInput in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t ParseInput) MarshalJSON() ([]byte, error) {
@@ -511,6 +519,70 @@ func (t *SourceSpan) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.EndColumn = int(n)
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalJSON encodes ParseSourceResponse in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t ParseSourceResponse) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if len(t.Tree) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"tree\":")
+		buf.Write(t.Tree)
+	}
+	if t.Error != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"error\":")
+		writeJSONString(&buf, t.Error)
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes ParseSourceResponse with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *ParseSourceResponse) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "tree":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				t.Tree = raw
+			}
+		case "error":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Error = s
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {

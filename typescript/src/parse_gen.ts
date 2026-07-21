@@ -71,6 +71,14 @@ export interface SourceSpan {
   end_column: number;
 }
 
+// The parse-source host function's reply: on success the canonical structured tree the resolved parser produced, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a consumer guest carries a no-parser or a parse failure into its own diagnostics as a deterministic failure. This is the envelope a consumer socket receives when it asks the host to run a producer through the host; the request payload is a ParseInput.
+export interface ParseSourceResponse {
+  // The canonical structured tree the resolved parser produced on success, as a JSON document carried verbatim; absent on failure.
+  tree?: unknown;
+  // The failure message on failure, naming the format and the reason; absent on success.
+  error?: string;
+}
+
 export function encodeParseInput(v: ParseInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("format")}:${jstr(v.format)}`);
@@ -131,5 +139,16 @@ export function encodeSourceSpan(v: SourceSpan): string {
 
 export function decodeSourceSpan(data: string): SourceSpan {
   return JSON.parse(data) as SourceSpan;
+}
+
+export function encodeParseSourceResponse(v: ParseSourceResponse): string {
+  const parts: string[] = [];
+  if (v.tree !== undefined && v.tree !== null) parts.push(`${jstr("tree")}:${encodeOpaque(v.tree)}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeParseSourceResponse(data: string): ParseSourceResponse {
+  return JSON.parse(data) as ParseSourceResponse;
 }
 

@@ -176,3 +176,41 @@ func TestSocketParity_ParseOutputBare(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.ParseOutput](t, "ParseOutputBare.golden.json")
 }
+
+// The import goldens are the importer socket wire — an ImportInput an importer
+// guest receives and the ImportOutput it returns. ImportInput carries base64
+// primary bytes, named multi-file sources, and an opaque settings document;
+// ImportOutput carries a reference-mode entity and a draft-mode entity, a
+// mapping decision with a full per-signal candidate breakdown, a diagnostic,
+// and a scaffold file. The byte-compare pins the float-signal formatting, the
+// omitted optional fields, and the verbatim opaque settings carry across the
+// three codecs.
+
+func TestSocketParity_ImportInput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.ImportInput](t, "ImportInput.golden.json")
+}
+
+func TestSocketParity_ImportOutput(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.ImportOutput](t, "ImportOutput.golden.json")
+}
+
+// TestImportOutputUnknownKind proves the emitted-entity kind is an open string:
+// an ImportOutput whose entity kind is a value the current emission surface does
+// not produce decodes without error and preserves the kind verbatim, so a
+// consumer built against today's kinds tolerates a kind a later importer emits.
+func TestImportOutputUnknownKind(t *testing.T) {
+	t.Parallel()
+	const wire = `{"entities":[{"kind":"Feature","name":"tls","mode":"draft","body":"kind: Feature\n"}]}`
+	var out abi.ImportOutput
+	if err := json.Unmarshal([]byte(wire), &out); err != nil {
+		t.Fatalf("decode ImportOutput with unrecognized entity kind: %v", err)
+	}
+	if len(out.Entities) != 1 {
+		t.Fatalf("got %d entities; want 1", len(out.Entities))
+	}
+	if got := out.Entities[0].Kind; got != "Feature" {
+		t.Errorf("entity kind = %q; want the unrecognized value carried verbatim as %q", got, "Feature")
+	}
+}

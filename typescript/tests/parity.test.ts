@@ -62,6 +62,10 @@ import {
   decodeParseInput,
   encodeParseOutput,
   decodeParseOutput,
+  encodeImportInput,
+  decodeImportInput,
+  encodeImportOutput,
+  decodeImportOutput,
 } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -199,4 +203,14 @@ test("ParseOutput wire parity", () => {
 test("ParseOutput bare wire parity", () => {
   const want = golden("ParseOutputBare.golden.json");
   assert.equal(encodeParseOutput(decodeParseOutput(want)), want);
+});
+
+test("ImportInput wire parity", () => {
+  const want = golden("ImportInput.golden.json");
+  assert.equal(encodeImportInput(decodeImportInput(want)), want);
+});
+
+test("ImportOutput wire parity", () => {
+  const want = golden("ImportOutput.golden.json");
+  assert.equal(encodeImportOutput(decodeImportOutput(want)), want);
 });

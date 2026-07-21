@@ -15,9 +15,9 @@
 
 use aggrega_abi::{
     AssembleBoundaryInput, AssembleBoundaryOutput, CLIRunInput, FRPStepInput, FRPStepOutput,
-    IRGraph, LinkPublishInput, LinkPublishOutput, LinkResolveInput, LinkResolveOutput, LinterInput,
-    LinterOutput, MutatorInput, MutatorOutput, ParseInput, ParseOutput, PluginDescriptor,
-    PolicyInput, PolicyOutput, RenderNodeInput, RenderNodeOutput,
+    ImportInput, ImportOutput, IRGraph, LinkPublishInput, LinkPublishOutput, LinkResolveInput,
+    LinkResolveOutput, LinterInput, LinterOutput, MutatorInput, MutatorOutput, ParseInput,
+    ParseOutput, PluginDescriptor, PolicyInput, PolicyOutput, RenderNodeInput, RenderNodeOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
@@ -169,4 +169,14 @@ fn parse_output_parity() {
 #[test]
 fn parse_output_bare_parity() {
     round_trip::<ParseOutput>("ParseOutputBare.golden.json");
+}
+
+#[test]
+fn import_input_parity() {
+    round_trip::<ImportInput>("ImportInput.golden.json");
+}
+
+#[test]
+fn import_output_parity() {
+    round_trip::<ImportOutput>("ImportOutput.golden.json");
 }
