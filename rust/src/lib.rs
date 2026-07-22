@@ -17,6 +17,7 @@
 mod cli_gen;
 mod describe_gen;
 mod frp_gen;
+mod hostfunc_error_enums_gen;
 mod import_gen;
 mod ir_gen;
 mod linter_gen;
@@ -28,6 +29,7 @@ mod providerrender_gen;
 pub use cli_gen::*;
 pub use describe_gen::*;
 pub use frp_gen::*;
+pub use hostfunc_error_enums_gen::*;
 pub use import_gen::*;
 pub use ir_gen::*;
 pub use linter_gen::*;

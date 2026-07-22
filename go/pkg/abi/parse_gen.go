@@ -74,6 +74,8 @@ type ParseSourceResponse struct {
 	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty"`
 	// Error The failure message on failure, naming the format and the reason; absent on success.
 	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	// ErrorCode The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+	ErrorCode string `json:"error_code,omitempty" yaml:"error_code,omitempty"`
 }
 
 // MarshalJSON encodes ParseInput in field-declaration order, omitting
@@ -554,6 +556,14 @@ func (t ParseSourceResponse) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"error\":")
 		writeJSONString(&buf, t.Error)
 	}
+	if t.ErrorCode != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"error_code\":")
+		writeJSONString(&buf, t.ErrorCode)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -583,6 +593,12 @@ func (t *ParseSourceResponse) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.Error = s
+			}
+		case "error_code":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.ErrorCode = s
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {

@@ -158,6 +158,8 @@ export interface SourcePackResponse {
   source_projection?: SourceProjection;
   // The failure message on failure, naming the selection and the reason; absent on success.
   error?: string;
+  // The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+  error_code?: string;
 }
 
 // The single-file content read a guest asks the host to perform through the read-source-file host function, for a guest whose resolution logic must inspect a file's content before choosing what to pack. The host resolves the path under the source root, rejecting any escape above it, and returns the file's bytes.
@@ -172,6 +174,18 @@ export interface SourceFileResponse {
   content?: string;
   // The failure message on failure, naming the file and the reason; absent on success.
   error?: string;
+  // The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+  error_code?: string;
+}
+
+// The fetch-external-input host function's reply: on success the fetched content, on failure an error message. Exactly one of content or error is populated. Failure is delivered in-band rather than by trapping, so a guest carries an unresolvable URL or a fetch failure into its own diagnostics as a deterministic render failure. The request is a bare URL string rather than a JSON payload, so only the reply has a wire shape.
+export interface FetchExternalInputResponse {
+  // The fetched content on success (base64 on the JSON wire); absent on failure. A pointer so a zero-length payload still emits the content key and stays distinguishable from a failure.
+  content?: string;
+  // The failure message on failure, naming the URL and the remedy; absent on success.
+  error?: string;
+  // The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+  error_code?: string;
 }
 
 // The pre-evaluated workload content the host hands a Provider guest so the guest synthesizes provider-native manifests from it in memory, present when the bound Recipe declares a workload rather than a chart source. Determinism is the guest's responsibility: identical input must produce identical bytes.
@@ -536,6 +550,7 @@ export function encodeSourcePackResponse(v: SourcePackResponse): string {
   const parts: string[] = [];
   if (v.source_projection !== undefined && v.source_projection !== null) parts.push(`${jstr("source_projection")}:${encodeSourceProjection(v.source_projection)}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -557,11 +572,24 @@ export function encodeSourceFileResponse(v: SourceFileResponse): string {
   const parts: string[] = [];
   if (v.content !== undefined && v.content !== "") parts.push(`${jstr("content")}:${jstr(v.content)}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeSourceFileResponse(data: string): SourceFileResponse {
   return JSON.parse(data) as SourceFileResponse;
+}
+
+export function encodeFetchExternalInputResponse(v: FetchExternalInputResponse): string {
+  const parts: string[] = [];
+  if (v.content !== undefined && v.content !== null) parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeFetchExternalInputResponse(data: string): FetchExternalInputResponse {
+  return JSON.parse(data) as FetchExternalInputResponse;
 }
 
 export function encodeWorkloadProjection(v: WorkloadProjection): string {

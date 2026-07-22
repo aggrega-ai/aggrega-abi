@@ -77,6 +77,8 @@ export interface ParseSourceResponse {
   tree?: unknown;
   // The failure message on failure, naming the format and the reason; absent on success.
   error?: string;
+  // The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+  error_code?: string;
 }
 
 export function encodeParseInput(v: ParseInput): string {
@@ -145,6 +147,7 @@ export function encodeParseSourceResponse(v: ParseSourceResponse): string {
   const parts: string[] = [];
   if (v.tree !== undefined && v.tree !== null) parts.push(`${jstr("tree")}:${encodeOpaque(v.tree)}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
   return `{${parts.join(",")}}`;
 }
 

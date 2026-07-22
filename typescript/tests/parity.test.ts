@@ -66,6 +66,10 @@ import {
   decodeImportInput,
   encodeImportOutput,
   decodeImportOutput,
+  encodeParseSourceResponse,
+  decodeParseSourceResponse,
+  encodeFetchExternalInputResponse,
+  decodeFetchExternalInputResponse,
 } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -213,4 +217,30 @@ test("ImportInput wire parity", () => {
 test("ImportOutput wire parity", () => {
   const want = golden("ImportOutput.golden.json");
   assert.equal(encodeImportOutput(decodeImportOutput(want)), want);
+});
+
+// The host-function reply goldens carry a failure envelope: the free-form error
+// message plus the machine-matchable error_code, proving the code crosses the
+// wire byte-identically across the three codecs.
+test("ParseSourceResponse wire parity", () => {
+  const want = golden("ParseSourceResponse.golden.json");
+  assert.equal(encodeParseSourceResponse(decodeParseSourceResponse(want)), want);
+});
+
+test("FetchExternalInputResponse wire parity", () => {
+  const want = golden("FetchExternalInputResponse.golden.json");
+  assert.equal(
+    encodeFetchExternalInputResponse(decodeFetchExternalInputResponse(want)),
+    want,
+  );
+});
+
+// The content golden is the success path: the pointer-to-scalar content field
+// round-trips a base64 content string across the three codecs.
+test("FetchExternalInputResponse content wire parity", () => {
+  const want = golden("FetchExternalInputResponseContent.golden.json");
+  assert.equal(
+    encodeFetchExternalInputResponse(decodeFetchExternalInputResponse(want)),
+    want,
+  );
 });

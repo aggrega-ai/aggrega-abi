@@ -214,3 +214,27 @@ func TestImportOutputUnknownKind(t *testing.T) {
 		t.Errorf("entity kind = %q; want the unrecognized value carried verbatim as %q", got, "Feature")
 	}
 }
+
+// The two host-function reply goldens below carry a failure envelope: the
+// free-form error message plus the machine-matchable error_code. A byte-match
+// proves the code field crosses the wire byte-identically across the three
+// codecs, so a guest matches on the code without parsing the message.
+
+func TestSocketParity_ParseSourceResponse(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.ParseSourceResponse](t, "ParseSourceResponse.golden.json")
+}
+
+func TestSocketParity_FetchExternalInputResponse(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponse.golden.json")
+}
+
+// The content golden is the success path: a base64 content string carried
+// through the pointer-to-scalar content field, proving the field round-trips
+// across the three codecs (a zero-length payload stays distinguishable from a
+// failure because the content key is still present).
+func TestSocketParity_FetchExternalInputResponseContent(t *testing.T) {
+	t.Parallel()
+	roundTripGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponseContent.golden.json")
+}

@@ -14,10 +14,11 @@
 //! type, re-serialize, and assert byte-identical output.
 
 use aggrega_abi::{
-    AssembleBoundaryInput, AssembleBoundaryOutput, CLIRunInput, FRPStepInput, FRPStepOutput,
-    ImportInput, ImportOutput, IRGraph, LinkPublishInput, LinkPublishOutput, LinkResolveInput,
-    LinkResolveOutput, LinterInput, LinterOutput, MutatorInput, MutatorOutput, ParseInput,
-    ParseOutput, PluginDescriptor, PolicyInput, PolicyOutput, RenderNodeInput, RenderNodeOutput,
+    AssembleBoundaryInput, AssembleBoundaryOutput, CLIRunInput, FetchExternalInputResponse,
+    FRPStepInput, FRPStepOutput, ImportInput, ImportOutput, IRGraph, LinkPublishInput,
+    LinkPublishOutput, LinkResolveInput, LinkResolveOutput, LinterInput, LinterOutput, MutatorInput,
+    MutatorOutput, ParseInput, ParseOutput, ParseSourceResponse, PluginDescriptor, PolicyInput,
+    PolicyOutput, RenderNodeInput, RenderNodeOutput,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
@@ -179,4 +180,24 @@ fn import_input_parity() {
 #[test]
 fn import_output_parity() {
     round_trip::<ImportOutput>("ImportOutput.golden.json");
+}
+
+// The host-function reply goldens carry a failure envelope: the free-form error
+// message plus the machine-matchable error_code, proving the code crosses the
+// wire byte-identically across the three codecs.
+#[test]
+fn parse_source_response_parity() {
+    round_trip::<ParseSourceResponse>("ParseSourceResponse.golden.json");
+}
+
+#[test]
+fn fetch_external_input_response_parity() {
+    round_trip::<FetchExternalInputResponse>("FetchExternalInputResponse.golden.json");
+}
+
+// The content golden is the success path: the pointer-to-scalar content field
+// round-trips a base64 content string across the three codecs.
+#[test]
+fn fetch_external_input_response_content_parity() {
+    round_trip::<FetchExternalInputResponse>("FetchExternalInputResponseContent.golden.json");
 }

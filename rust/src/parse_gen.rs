@@ -81,5 +81,8 @@ pub struct ParseSourceResponse {
     /// The failure message on failure, naming the format and the reason; absent on success.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
+    /// The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
 }
 

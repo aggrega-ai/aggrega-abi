@@ -197,6 +197,9 @@ pub struct SourcePackResponse {
     /// The failure message on failure, naming the selection and the reason; absent on success.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
+    /// The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
 }
 
 /// The single-file content read a guest asks the host to perform through the read-source-file host function, for a guest whose resolution logic must inspect a file's content before choosing what to pack. The host resolves the path under the source root, rejecting any escape above it, and returns the file's bytes.
@@ -215,6 +218,23 @@ pub struct SourceFileResponse {
     /// The failure message on failure, naming the file and the reason; absent on success.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
+    /// The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
+}
+
+/// The fetch-external-input host function's reply: on success the fetched content, on failure an error message. Exactly one of content or error is populated. Failure is delivered in-band rather than by trapping, so a guest carries an unresolvable URL or a fetch failure into its own diagnostics as a deterministic render failure. The request is a bare URL string rather than a JSON payload, so only the reply has a wire shape.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FetchExternalInputResponse {
+    /// The fetched content on success (base64 on the JSON wire); absent on failure. A pointer so a zero-length payload still emits the content key and stays distinguishable from a failure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    /// The failure message on failure, naming the URL and the remedy; absent on success.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+    /// The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
 }
 
 /// The pre-evaluated workload content the host hands a Provider guest so the guest synthesizes provider-native manifests from it in memory, present when the bound Recipe declares a workload rather than a chart source. Determinism is the guest's responsibility: identical input must produce identical bytes.
