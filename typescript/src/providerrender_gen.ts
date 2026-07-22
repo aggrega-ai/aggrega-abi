@@ -56,6 +56,8 @@ export interface IRNodeProjection {
   recipe_version?: string;
   // The Kubernetes-safe component identity. When non-empty it overrides the node id as the app.kubernetes.io/name and aggrega.ai/component-id label value, for resources whose node id carries marker syntax that needs sanitization; empty means the node id is already label-valid and is used directly.
   label_component_id?: string;
+  // The recipe-author-declared output labels (recipe.spec.outputLabels) the guest stamps onto every emitted manifest alongside the build-identity provenance, keyed by label name. Disjoint from the provenance keyspace by load-time validation (no aggrega.ai/ or app.kubernetes.io/ key), so stamping never collides with a provenance label. A guest whose output is not Kubernetes YAML translates them onto its own label surface (Compose service labels) or ignores them.
+  output_labels?: Record<string, string>;
   // The build-identity provenance the guest stamps onto every emitted manifest as aggrega.ai labels.
   provenance: NodeProvenance;
 }
@@ -422,6 +424,7 @@ export function encodeIRNodeProjection(v: IRNodeProjection): string {
   if (v.recipe_name !== undefined && v.recipe_name !== "") parts.push(`${jstr("recipe_name")}:${jstr(v.recipe_name)}`);
   if (v.recipe_version !== undefined && v.recipe_version !== "") parts.push(`${jstr("recipe_version")}:${jstr(v.recipe_version)}`);
   if (v.label_component_id !== undefined && v.label_component_id !== "") parts.push(`${jstr("label_component_id")}:${jstr(v.label_component_id)}`);
+  if (v.output_labels !== undefined && Object.keys(v.output_labels).length > 0) parts.push(`${jstr("output_labels")}:${`{${Object.keys(v.output_labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.output_labels![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("provenance")}:${encodeNodeProvenance(v.provenance)}`);
   return `{${parts.join(",")}}`;
 }

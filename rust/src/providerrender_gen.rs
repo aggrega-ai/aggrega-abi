@@ -68,6 +68,9 @@ pub struct IRNodeProjection {
     /// The Kubernetes-safe component identity. When non-empty it overrides the node id as the app.kubernetes.io/name and aggrega.ai/component-id label value, for resources whose node id carries marker syntax that needs sanitization; empty means the node id is already label-valid and is used directly.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub label_component_id: String,
+    /// The recipe-author-declared output labels (recipe.spec.outputLabels) the guest stamps onto every emitted manifest alongside the build-identity provenance, keyed by label name. Disjoint from the provenance keyspace by load-time validation (no aggrega.ai/ or app.kubernetes.io/ key), so stamping never collides with a provenance label. A guest whose output is not Kubernetes YAML translates them onto its own label surface (Compose service labels) or ignores them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub output_labels: BTreeMap<String, String>,
     /// The build-identity provenance the guest stamps onto every emitted manifest as aggrega.ai labels.
     pub provenance: NodeProvenance,
 }
