@@ -18,7 +18,7 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
 pub struct PluginDescriptor {
     /// The plugin ABI the guest binds against. The host accepts exactly this version; a guest built against any other ABI is refused at load rather than mis-invoked at dispatch.
     pub abi_version: String,
-    /// The plugin's kind. It selects the minimum-export rule the host validates and, together with the export name, the default input-delivery pattern.
+    /// The plugin's kind. It selects the minimum-export rule the host validates and, together with the export name, the default input-delivery pattern. A governance plugin serves the build-pipeline transform and verdict roles; the role it is attached at — not its kind — fixes what it may emit.
     pub plugin_type: String,
     /// What the plugin serves, interpreted per plugin type: for a provider, the render-engine capability names (such as helm or compose) whose output shape it renders; for a feature-recipe-pipeline step, the provider capabilities its step is compatible with. The cross-cutting sockets leave it empty. Entries are in declared order and are an explicit, tested-compatibility claim. An absent or empty list declares no capability claim.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -34,9 +34,6 @@ pub struct PluginDescriptor {
     /// The top-level aggrega command verbs a CLI plugin contributes, each with its own short-help line. One CLI plugin may contribute several commands; the host registers one command per entry and routes the resolved command name to the guest at invocation. A non-CLI plugin leaves it empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<PluginCLICommand>,
-    /// The compilation stage a policy plugin evaluates at: ir evaluates the provider-agnostic IR graph, render evaluates the rendered provider-native artifacts. It is meaningful for the policy plugin type only; an absent stage defaults to ir. Other plugin types leave it empty.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub stage: String,
     /// An optional JSON Schema document a plugin declares to type the operator-supplied settings its attachment carries. When present, the host compiles it at load and validates the attachment's settings against it at dispatch before invoking the plugin; settings that do not conform halt the build. When absent, the plugin declares no shape and settings pass through verbatim. The schema is the plugin's own free-form declaration; the host runs generic JSON Schema validation against it and does not interpret the settings' meaning.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings_schema: Option<Box<RawValue>>,
