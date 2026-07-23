@@ -42,6 +42,8 @@ export interface FRPStepOutput {
   diagnostics?: Diagnostic[];
   // The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
   outputs?: Record<string, unknown>;
+  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+  error?: string;
 }
 
 // The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and is blind to its content; the guest selects the documents it targets by content and addresses its patches by key.
@@ -129,6 +131,7 @@ export function encodeFRPStepOutput(v: FRPStepOutput): string {
   if (v.side_effects !== undefined && v.side_effects.length > 0) parts.push(`${jstr("side_effects")}:${`[${v.side_effects!.map((e0) => encodeSideEffect(e0)).join(",")}]`}`);
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   if (v.outputs !== undefined && Object.keys(v.outputs).length > 0) parts.push(`${jstr("outputs")}:${`{${Object.keys(v.outputs!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.outputs![k0])}`).join(",")}}`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   return `{${parts.join(",")}}`;
 }
 

@@ -36,6 +36,8 @@ export interface PolicyInput {
 export interface PolicyOutput {
   // The fired verdicts, one diagnostic each, in the order the plugin emits them. Empty when no verdict fired.
   results: Diagnostic[];
+  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+  error?: string;
 }
 
 // The payload the render stage hands to a policy socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
@@ -94,6 +96,7 @@ export function decodePolicyInput(data: string): PolicyInput {
 export function encodePolicyOutput(v: PolicyOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("results")}:${`[${v.results!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   return `{${parts.join(",")}}`;
 }
 

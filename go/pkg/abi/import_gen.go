@@ -44,6 +44,8 @@ type ImportOutput struct {
 	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
 	// Files Scaffold files the import produced alongside the entities, such as a starter aggregate or a readme. Absent when the import produced no files.
 	Files []ScaffoldFile `json:"files,omitempty" yaml:"files,omitempty"`
+	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+	Error string `json:"error,omitempty" yaml:"error,omitempty"`
 }
 
 // EmittedEntity One entity the import produced: its kind, its name, and how it is emitted — a reference to an existing catalog entity or a newly drafted entity body.
@@ -393,6 +395,14 @@ func (t ImportOutput) MarshalJSON() ([]byte, error) {
 		}
 		buf.WriteByte(']')
 	}
+	if t.Error != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"error\":")
+		writeJSONString(&buf, t.Error)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -486,6 +496,12 @@ func (t *ImportOutput) UnmarshalJSON(data []byte) error {
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
+			}
+		case "error":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Error = s
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {

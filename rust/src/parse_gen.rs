@@ -33,6 +33,9 @@ pub struct ParseOutput {
     /// Source spans locating tree nodes back to their position in the original bytes, so a consumer can map a finding on a tree node to a source location. Absent when the parser reports no spans.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spans: Vec<NodeSpan>,
+    /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
 }
 
 /// A source span for one tree node: an RFC 6901 JSON Pointer addressing the node within the tree, paired with the span locating it in the original bytes.

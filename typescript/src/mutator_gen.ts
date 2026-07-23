@@ -31,6 +31,8 @@ export interface MutatorInput {
 export interface MutatorOutput {
   // Opaque JSON Patch documents to apply to the topology graph, in order.
   patches: unknown[];
+  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+  error?: string;
 }
 
 // Release-level metadata the mutator reads when deciding which compliance, FinOps, or governance rules apply to the build.
@@ -81,6 +83,7 @@ export function decodeMutatorInput(data: string): MutatorInput {
 export function encodeMutatorOutput(v: MutatorOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("patches")}:${`[${v.patches!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   return `{${parts.join(",")}}`;
 }
 

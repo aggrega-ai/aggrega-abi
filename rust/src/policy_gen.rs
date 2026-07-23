@@ -31,6 +31,9 @@ pub struct PolicyInput {
 pub struct PolicyOutput {
     /// The fired verdicts, one diagnostic each, in the order the plugin emits them. Empty when no verdict fired.
     pub results: Vec<Diagnostic>,
+    /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
 }
 
 /// The payload the render stage hands to a policy socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.

@@ -37,6 +37,8 @@ export interface ParseOutput {
   diagnostics?: Diagnostic[];
   // Source spans locating tree nodes back to their position in the original bytes, so a consumer can map a finding on a tree node to a source location. Absent when the parser reports no spans.
   spans?: NodeSpan[];
+  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+  error?: string;
 }
 
 // A source span for one tree node: an RFC 6901 JSON Pointer addressing the node within the tree, paired with the span locating it in the original bytes.
@@ -90,6 +92,7 @@ export function encodeParseOutput(v: ParseOutput): string {
   parts.push(`${jstr("tree")}:${encodeOpaque(v.tree)}`);
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   if (v.spans !== undefined && v.spans.length > 0) parts.push(`${jstr("spans")}:${`[${v.spans!.map((e0) => encodeNodeSpan(e0)).join(",")}]`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   return `{${parts.join(",")}}`;
 }
 

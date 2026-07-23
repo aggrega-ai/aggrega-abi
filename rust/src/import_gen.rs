@@ -61,6 +61,9 @@ pub struct ImportOutput {
     /// Scaffold files the import produced alongside the entities, such as a starter aggregate or a readme. Absent when the import produced no files.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<ScaffoldFile>,
+    /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
 }
 
 /// One entity the import produced: its kind, its name, and how it is emitted — a reference to an existing catalog entity or a newly drafted entity body.

@@ -32,6 +32,8 @@ type ParseOutput struct {
 	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
 	// Spans Source spans locating tree nodes back to their position in the original bytes, so a consumer can map a finding on a tree node to a source location. Absent when the parser reports no spans.
 	Spans []NodeSpan `json:"spans,omitempty" yaml:"spans,omitempty"`
+	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+	Error string `json:"error,omitempty" yaml:"error,omitempty"`
 }
 
 // NodeSpan A source span for one tree node: an RFC 6901 JSON Pointer addressing the node within the tree, paired with the span locating it in the original bytes.
@@ -194,6 +196,14 @@ func (t ParseOutput) MarshalJSON() ([]byte, error) {
 		}
 		buf.WriteByte(']')
 	}
+	if t.Error != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"error\":")
+		writeJSONString(&buf, t.Error)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -255,6 +265,12 @@ func (t *ParseOutput) UnmarshalJSON(data []byte) error {
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
+			}
+		case "error":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Error = s
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {

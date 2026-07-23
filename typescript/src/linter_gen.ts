@@ -41,6 +41,8 @@ export interface LinterInput {
 export interface LinterOutput {
   // Per-rule findings produced by the plugin invocation, in plugin emit order.
   findings: Diagnostic[];
+  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+  error?: string;
 }
 
 // Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.
@@ -91,6 +93,7 @@ export function decodeLinterInput(data: string): LinterInput {
 export function encodeLinterOutput(v: LinterOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("findings")}:${`[${v.findings!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   return `{${parts.join(",")}}`;
 }
 

@@ -33,6 +33,8 @@ export interface AnnotationTransformInput {
 export interface AnnotationTransformOutput {
   // Annotation injections to apply, in order. Each names an existing target coordinate and the annotation key and string value to add there.
   injections: AnnotationInjection[];
+  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+  error?: string;
 }
 
 // One resolved injection target the plugin may inject annotations onto: its boundary path and component name, and the annotation set the component already carries.
@@ -81,6 +83,7 @@ export function decodeAnnotationTransformInput(data: string): AnnotationTransfor
 export function encodeAnnotationTransformOutput(v: AnnotationTransformOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("injections")}:${`[${v.injections!.map((e0) => encodeAnnotationInjection(e0)).join(",")}]`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   return `{${parts.join(",")}}`;
 }
 

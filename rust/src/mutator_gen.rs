@@ -28,6 +28,9 @@ pub struct MutatorInput {
 pub struct MutatorOutput {
     /// Opaque JSON Patch documents to apply to the topology graph, in order.
     pub patches: Vec<Box<RawValue>>,
+    /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
 }
 
 /// Release-level metadata the mutator reads when deciding which compliance, FinOps, or governance rules apply to the build.
