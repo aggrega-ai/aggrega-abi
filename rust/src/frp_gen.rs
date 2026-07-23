@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::collections::BTreeMap;
+use crate::Diagnostic;
 
 /// The payload a feature-recipe-pipeline guest receives for one pipeline step: the keyed document set the host hands whole, the step-local input the Recipe declared for this step, the render-time context, the step's position in the pipeline, and a record of the steps that already ran.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,9 +36,9 @@ pub struct FRPStepOutput {
     /// The effects this step produced beyond patching an existing document (for example emitting a CRD or writing a file).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub side_effects: Vec<SideEffect>,
-    /// Diagnostics the guest raised. The element shape is intentionally opaque at this schema layer for now; a structured diagnostic definition is a follow-on for when a guest needs to emit structured diagnostics. Each element carries the shared Wasm-plugin diagnostic shape.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub diagnostics: Option<Box<RawValue>>,
+    /// Diagnostics the guest raised. Each element is the shared Wasm-plugin diagnostic shape.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Diagnostic>,
     /// The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub outputs: BTreeMap<String, Box<RawValue>>,

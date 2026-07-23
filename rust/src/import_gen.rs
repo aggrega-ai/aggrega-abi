@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::collections::BTreeMap;
+use crate::Diagnostic;
 
 fn serialize_f64<S>(v: &f64, s: S) -> Result<S::Ok, S::Error>
 where
@@ -165,21 +166,6 @@ pub struct DecisionChoice {
     pub mode: String,
     /// The match tier of the chosen target.
     pub tier: String,
-}
-
-/// One diagnostic the import raised: a severity, an optional stable code, a human-readable message, and an optional reference to the source node it concerns.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Diagnostic {
-    /// The diagnostic's severity: error, warning, or info.
-    pub severity: String,
-    /// A short stable code identifying the diagnostic class, for programmatic handling. Absent when the importer attaches no code.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub code: String,
-    /// The human-readable diagnostic message.
-    pub message: String,
-    /// A reference to the source node the diagnostic concerns. Absent when the diagnostic is not tied to a specific node.
-    #[serde(rename = "sourceRef", default, skip_serializing_if = "String::is_empty")]
-    pub source_ref: String,
 }
 
 /// One scaffold file the import produced: a path relative to the import output root and the file's content.

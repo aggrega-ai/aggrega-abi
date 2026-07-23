@@ -6,6 +6,8 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -94,14 +96,14 @@ export interface CatalogProjection {
 export interface RenderNodeOutput {
   // The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
   files: RenderedFile[];
-  // Diagnostics the guest raised while rendering. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it.
-  diagnostics?: unknown[];
+  // Diagnostics the guest raised while rendering. Each element is the shared Wasm-plugin diagnostic shape.
+  diagnostics?: Diagnostic[];
 }
 
 // The payload a Provider guest returns from its optional validate_node_input export: the diagnostics raised by a structural check of the node's resolved input. The export consumes the same RenderNodeInput projection render_node receives and emits no files — it only reports diagnostics. An error-severity diagnostic halts the build loudly, naming the node and provider; a warning or info diagnostic surfaces to the build result without changing rendered output. An empty diagnostics list means the input passed the structural check.
 export interface ValidateNodeOutput {
-  // Diagnostics the guest raised while validating the node's input. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it. Empty when the input passed the structural check.
-  diagnostics?: unknown[];
+  // Diagnostics the guest raised while validating the node's input. Each element is the shared Wasm-plugin diagnostic shape. Empty when the input passed the structural check.
+  diagnostics?: Diagnostic[];
 }
 
 // One output file a Provider guest emitted: its on-disk path relative to the node's output root, and its serialized bytes exactly as the guest produced them. The host writes these bytes verbatim and runs no serializer, so the on-disk output is byte-identical to what the guest emitted.
@@ -272,8 +274,8 @@ export interface SubChart {
 export interface AssembleBoundaryOutput {
   // The assembled output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
   files: RenderedFile[];
-  // Diagnostics the guest raised while assembling. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it.
-  diagnostics?: unknown[];
+  // Diagnostics the guest raised while assembling. Each element is the shared Wasm-plugin diagnostic shape.
+  diagnostics?: Diagnostic[];
   // Whether the orchestrator nests each contributor's per-node files under charts/<nodeID>/ rather than emitting them flat; the assembler signals this per provider (compose emits flat, so false; an umbrella-chart assembler nests, so true).
   nest_per_node?: boolean;
 }
@@ -464,7 +466,7 @@ export function decodeCatalogProjection(data: string): CatalogProjection {
 export function encodeRenderNodeOutput(v: RenderNodeOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => encodeRenderedFile(e0)).join(",")}]`}`);
-  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -474,7 +476,7 @@ export function decodeRenderNodeOutput(data: string): RenderNodeOutput {
 
 export function encodeValidateNodeOutput(v: ValidateNodeOutput): string {
   const parts: string[] = [];
-  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -687,7 +689,7 @@ export function decodeSubChart(data: string): SubChart {
 export function encodeAssembleBoundaryOutput(v: AssembleBoundaryOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => encodeRenderedFile(e0)).join(",")}]`}`);
-  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   if (v.nest_per_node !== undefined && v.nest_per_node !== false) parts.push(`${jstr("nest_per_node")}:${String(v.nest_per_node)}`);
   return `{${parts.join(",")}}`;
 }

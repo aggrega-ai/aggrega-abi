@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
+use crate::Diagnostic;
 
 /// The payload a parser guest receives: the format name that selects how to read the bytes, the source bytes to parse, and an optional opaque options document the consumer supplies for parser-specific behavior.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -28,22 +29,10 @@ pub struct ParseOutput {
     pub tree: Box<RawValue>,
     /// Diagnostics the parse raised — for example a syntax error or a warning. Absent when the parse produced none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub diagnostics: Vec<ParseDiagnostic>,
+    pub diagnostics: Vec<Diagnostic>,
     /// Source spans locating tree nodes back to their position in the original bytes, so a consumer can map a finding on a tree node to a source location. Absent when the parser reports no spans.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spans: Vec<NodeSpan>,
-}
-
-/// One diagnostic the parse raised: a severity, a human-readable message, and an optional source span locating the diagnostic in the original bytes.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ParseDiagnostic {
-    /// The diagnostic's severity — for example error or warning. An open string so a parser can report its own severity vocabulary.
-    pub severity: String,
-    /// The human-readable diagnostic message.
-    pub message: String,
-    /// The source span locating the diagnostic in the original bytes. Absent when the parser attaches no location to the diagnostic.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub span: Option<Box<SourceSpan>>,
 }
 
 /// A source span for one tree node: an RFC 6901 JSON Pointer addressing the node within the tree, paired with the span locating it in the original bytes.

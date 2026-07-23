@@ -7,6 +7,7 @@
 // aggrega-cli checkout.
 
 import { type IRGraph, encodeIRGraph } from "./ir_gen.ts";
+import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
 
 function jstr(s: string): string {
   return JSON.stringify(s);
@@ -31,10 +32,10 @@ export interface PolicyInput {
   settings?: unknown;
 }
 
-// The response shape the policy plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
+// The response shape the policy plugin emits: the verdicts that fired during evaluation, one diagnostic per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
 export interface PolicyOutput {
-  // The fired verdicts, one PolicyResult each, in the order the plugin emits them. Empty when no verdict fired.
-  results: PolicyResult[];
+  // The fired verdicts, one diagnostic each, in the order the plugin emits them. Empty when no verdict fired.
+  results: Diagnostic[];
 }
 
 // The payload the render stage hands to a policy socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
@@ -77,14 +78,6 @@ export interface PrecalculatedPath {
   attached_features: string[];
 }
 
-// One fired policy verdict: its severity and a human-readable message. Only fired verdicts appear in the output; an allowing rule emits no result. Severity governs the build outcome: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the outcome.
-export interface PolicyResult {
-  // The verdict's severity: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the build outcome.
-  severity: string;
-  // Human-readable diagnostic for the fired verdict, surfaced to the operator.
-  message: string;
-}
-
 export function encodePolicyInput(v: PolicyInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("graph")}:${encodeIRGraph(v.graph)}`);
@@ -100,7 +93,7 @@ export function decodePolicyInput(data: string): PolicyInput {
 
 export function encodePolicyOutput(v: PolicyOutput): string {
   const parts: string[] = [];
-  parts.push(`${jstr("results")}:${`[${v.results!.map((e0) => encodePolicyResult(e0)).join(",")}]`}`);
+  parts.push(`${jstr("results")}:${`[${v.results!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -154,16 +147,5 @@ export function encodePrecalculatedPath(v: PrecalculatedPath): string {
 
 export function decodePrecalculatedPath(data: string): PrecalculatedPath {
   return JSON.parse(data) as PrecalculatedPath;
-}
-
-export function encodePolicyResult(v: PolicyResult): string {
-  const parts: string[] = [];
-  parts.push(`${jstr("severity")}:${jstr(v.severity)}`);
-  parts.push(`${jstr("message")}:${jstr(v.message)}`);
-  return `{${parts.join(",")}}`;
-}
-
-export function decodePolicyResult(data: string): PolicyResult {
-  return JSON.parse(data) as PolicyResult;
 }
 

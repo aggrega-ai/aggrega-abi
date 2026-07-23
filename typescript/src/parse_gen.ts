@@ -6,6 +6,8 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -32,19 +34,9 @@ export interface ParseOutput {
   // The canonical structured view of the parsed source, as a JSON document. The top level may be an object, an array, or a scalar, matching the parsed document's own shape (a JSON file, for example, may parse to any of these). The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
   tree: unknown;
   // Diagnostics the parse raised — for example a syntax error or a warning. Absent when the parse produced none.
-  diagnostics?: ParseDiagnostic[];
+  diagnostics?: Diagnostic[];
   // Source spans locating tree nodes back to their position in the original bytes, so a consumer can map a finding on a tree node to a source location. Absent when the parser reports no spans.
   spans?: NodeSpan[];
-}
-
-// One diagnostic the parse raised: a severity, a human-readable message, and an optional source span locating the diagnostic in the original bytes.
-export interface ParseDiagnostic {
-  // The diagnostic's severity — for example error or warning. An open string so a parser can report its own severity vocabulary.
-  severity: string;
-  // The human-readable diagnostic message.
-  message: string;
-  // The source span locating the diagnostic in the original bytes. Absent when the parser attaches no location to the diagnostic.
-  span?: SourceSpan;
 }
 
 // A source span for one tree node: an RFC 6901 JSON Pointer addressing the node within the tree, paired with the span locating it in the original bytes.
@@ -96,25 +88,13 @@ export function decodeParseInput(data: string): ParseInput {
 export function encodeParseOutput(v: ParseOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("tree")}:${encodeOpaque(v.tree)}`);
-  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeParseDiagnostic(e0)).join(",")}]`}`);
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   if (v.spans !== undefined && v.spans.length > 0) parts.push(`${jstr("spans")}:${`[${v.spans!.map((e0) => encodeNodeSpan(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeParseOutput(data: string): ParseOutput {
   return JSON.parse(data) as ParseOutput;
-}
-
-export function encodeParseDiagnostic(v: ParseDiagnostic): string {
-  const parts: string[] = [];
-  parts.push(`${jstr("severity")}:${jstr(v.severity)}`);
-  parts.push(`${jstr("message")}:${jstr(v.message)}`);
-  if (v.span !== undefined && v.span !== null) parts.push(`${jstr("span")}:${encodeSourceSpan(v.span)}`);
-  return `{${parts.join(",")}}`;
-}
-
-export function decodeParseDiagnostic(data: string): ParseDiagnostic {
-  return JSON.parse(data) as ParseDiagnostic;
 }
 
 export function encodeNodeSpan(v: NodeSpan): string {

@@ -126,18 +126,6 @@ type DecisionChoice struct {
 	Tier string `json:"tier" yaml:"tier"`
 }
 
-// Diagnostic One diagnostic the import raised: a severity, an optional stable code, a human-readable message, and an optional reference to the source node it concerns.
-type Diagnostic struct {
-	// Severity The diagnostic's severity: error, warning, or info.
-	Severity string `json:"severity" yaml:"severity"`
-	// Code A short stable code identifying the diagnostic class, for programmatic handling. Absent when the importer attaches no code.
-	Code string `json:"code,omitempty" yaml:"code,omitempty"`
-	// Message The human-readable diagnostic message.
-	Message string `json:"message" yaml:"message"`
-	// SourceRef A reference to the source node the diagnostic concerns. Absent when the diagnostic is not tied to a specific node.
-	SourceRef string `json:"sourceRef,omitempty" yaml:"sourceRef,omitempty"`
-}
-
 // ScaffoldFile One scaffold file the import produced: a path relative to the import output root and the file's content.
 type ScaffoldFile struct {
 	// Path The path of the scaffold file, relative to the import output root.
@@ -1189,94 +1177,6 @@ func (t *DecisionChoice) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.Tier = s
-			}
-		default:
-			if _, err := readRaw(dec, data); err != nil {
-				return err
-			}
-		}
-	}
-	if err := expectDelim(dec, '}'); err != nil {
-		return err
-	}
-	return nil
-}
-
-// MarshalJSON encodes Diagnostic in field-declaration order, omitting
-// empty non-required fields, dispatch-free.
-func (t Diagnostic) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	buf.WriteByte('{')
-	first := true
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
-	buf.WriteString("\"severity\":")
-	writeJSONString(&buf, t.Severity)
-	if t.Code != "" {
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.WriteString("\"code\":")
-		writeJSONString(&buf, t.Code)
-	}
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
-	buf.WriteString("\"message\":")
-	writeJSONString(&buf, t.Message)
-	if t.SourceRef != "" {
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.WriteString("\"sourceRef\":")
-		writeJSONString(&buf, t.SourceRef)
-	}
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
-}
-
-// UnmarshalJSON decodes Diagnostic with a streaming token walk, descending
-// into composite fields by direct call to each nested type's generated
-// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
-func (t *Diagnostic) UnmarshalJSON(data []byte) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := expectDelim(dec, '{'); err != nil {
-		return err
-	}
-	for dec.More() {
-		key, err := readKey(dec)
-		if err != nil {
-			return err
-		}
-		switch key {
-		case "severity":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.Severity = s
-			}
-		case "code":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.Code = s
-			}
-		case "message":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.Message = s
-			}
-		case "sourceRef":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.SourceRef = s
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {

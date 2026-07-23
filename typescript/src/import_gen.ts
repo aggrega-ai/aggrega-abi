@@ -6,6 +6,8 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -127,18 +129,6 @@ export interface DecisionChoice {
   mode: string;
   // The match tier of the chosen target.
   tier: string;
-}
-
-// One diagnostic the import raised: a severity, an optional stable code, a human-readable message, and an optional reference to the source node it concerns.
-export interface Diagnostic {
-  // The diagnostic's severity: error, warning, or info.
-  severity: string;
-  // A short stable code identifying the diagnostic class, for programmatic handling. Absent when the importer attaches no code.
-  code?: string;
-  // The human-readable diagnostic message.
-  message: string;
-  // A reference to the source node the diagnostic concerns. Absent when the diagnostic is not tied to a specific node.
-  sourceRef?: string;
 }
 
 // One scaffold file the import produced: a path relative to the import output root and the file's content.
@@ -266,19 +256,6 @@ export function encodeDecisionChoice(v: DecisionChoice): string {
 
 export function decodeDecisionChoice(data: string): DecisionChoice {
   return JSON.parse(data) as DecisionChoice;
-}
-
-export function encodeDiagnostic(v: Diagnostic): string {
-  const parts: string[] = [];
-  parts.push(`${jstr("severity")}:${jstr(v.severity)}`);
-  if (v.code !== undefined && v.code !== "") parts.push(`${jstr("code")}:${jstr(v.code)}`);
-  parts.push(`${jstr("message")}:${jstr(v.message)}`);
-  if (v.sourceRef !== undefined && v.sourceRef !== "") parts.push(`${jstr("sourceRef")}:${jstr(v.sourceRef)}`);
-  return `{${parts.join(",")}}`;
-}
-
-export function decodeDiagnostic(data: string): Diagnostic {
-  return JSON.parse(data) as Diagnostic;
 }
 
 export function encodeScaffoldFile(v: ScaffoldFile): string {

@@ -1,1 +1,1 @@
-{"findings":[{"rule_id":"schema-evolution","severity":"error","classification":"MAJOR","message":"breaking"},{"rule_id":"name_shape","severity":"warning","message":"ok"}]}
+{"findings":[{"severity":"error","message":"breaking","rule_id":"schema-evolution","classification":"MAJOR"},{"severity":"warning","message":"ok","rule_id":"name_shape"}]}

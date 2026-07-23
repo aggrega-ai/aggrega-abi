@@ -25,10 +25,10 @@ type PolicyInput struct {
 	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty"`
 }
 
-// PolicyOutput The response shape the policy plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
+// PolicyOutput The response shape the policy plugin emits: the verdicts that fired during evaluation, one diagnostic per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
 type PolicyOutput struct {
-	// Results The fired verdicts, one PolicyResult each, in the order the plugin emits them. Empty when no verdict fired.
-	Results []PolicyResult `json:"results" yaml:"results"`
+	// Results The fired verdicts, one diagnostic each, in the order the plugin emits them. Empty when no verdict fired.
+	Results []Diagnostic `json:"results" yaml:"results"`
 }
 
 // RenderPolicyInput The payload the render stage hands to a policy socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
@@ -69,14 +69,6 @@ type PrecalculatedPath struct {
 	Nodes []string `json:"nodes" yaml:"nodes"`
 	// AttachedFeatures Alphabetically sorted union of Feature type URIs attached to any node along the path. Set-membership semantics: a Feature appears once even if multiple nodes carry it. Empty when no node along the path carries any Feature attachment.
 	AttachedFeatures []string `json:"attached_features" yaml:"attached_features"`
-}
-
-// PolicyResult One fired policy verdict: its severity and a human-readable message. Only fired verdicts appear in the output; an allowing rule emits no result. Severity governs the build outcome: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the outcome.
-type PolicyResult struct {
-	// Severity The verdict's severity: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the build outcome.
-	Severity string `json:"severity" yaml:"severity"`
-	// Message Human-readable diagnostic for the fired verdict, surfaced to the operator.
-	Message string `json:"message" yaml:"message"`
 }
 
 // MarshalJSON encodes PolicyInput in field-declaration order, omitting
@@ -271,7 +263,7 @@ func (t *PolicyOutput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			for dec.More() {
-				var elem PolicyResult
+				var elem Diagnostic
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
 				} else {
@@ -667,66 +659,6 @@ func (t *PrecalculatedPath) UnmarshalJSON(data []byte) error {
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
-			}
-		default:
-			if _, err := readRaw(dec, data); err != nil {
-				return err
-			}
-		}
-	}
-	if err := expectDelim(dec, '}'); err != nil {
-		return err
-	}
-	return nil
-}
-
-// MarshalJSON encodes PolicyResult in field-declaration order, omitting
-// empty non-required fields, dispatch-free.
-func (t PolicyResult) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	buf.WriteByte('{')
-	first := true
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
-	buf.WriteString("\"severity\":")
-	writeJSONString(&buf, t.Severity)
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
-	buf.WriteString("\"message\":")
-	writeJSONString(&buf, t.Message)
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
-}
-
-// UnmarshalJSON decodes PolicyResult with a streaming token walk, descending
-// into composite fields by direct call to each nested type's generated
-// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
-func (t *PolicyResult) UnmarshalJSON(data []byte) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := expectDelim(dec, '{'); err != nil {
-		return err
-	}
-	for dec.More() {
-		key, err := readKey(dec)
-		if err != nil {
-			return err
-		}
-		switch key {
-		case "severity":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.Severity = s
-			}
-		case "message":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.Message = s
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {

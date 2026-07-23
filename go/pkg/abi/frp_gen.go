@@ -37,8 +37,8 @@ type FRPStepOutput struct {
 	Patches []JSONPatchOp `json:"patches,omitempty" yaml:"patches,omitempty"`
 	// SideEffects The effects this step produced beyond patching an existing document (for example emitting a CRD or writing a file).
 	SideEffects []SideEffect `json:"side_effects,omitempty" yaml:"side_effects,omitempty"`
-	// Diagnostics Diagnostics the guest raised. The element shape is intentionally opaque at this schema layer for now; a structured diagnostic definition is a follow-on for when a guest needs to emit structured diagnostics. Each element carries the shared Wasm-plugin diagnostic shape.
-	Diagnostics json.RawMessage `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	// Diagnostics Diagnostics the guest raised. Each element is the shared Wasm-plugin diagnostic shape.
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
 	// Outputs The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
 	Outputs map[string]json.RawMessage `json:"outputs,omitempty" yaml:"outputs,omitempty"`
 }
@@ -323,7 +323,19 @@ func (t FRPStepOutput) MarshalJSON() ([]byte, error) {
 		}
 		first = false
 		buf.WriteString("\"diagnostics\":")
-		buf.Write(t.Diagnostics)
+		buf.WriteByte('[')
+		for i := range t.Diagnostics {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.Diagnostics[i]
+			if enc, err := ev.MarshalJSON(); err != nil {
+				return nil, err
+			} else {
+				buf.Write(enc)
+			}
+		}
+		buf.WriteByte(']')
 	}
 	if len(t.Outputs) != 0 {
 		if !first {
@@ -407,10 +419,23 @@ func (t *FRPStepOutput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 		case "diagnostics":
-			if raw, err := readRaw(dec, data); err != nil {
+			t.Diagnostics = nil
+			if err := expectDelim(dec, '['); err != nil {
 				return err
-			} else {
-				t.Diagnostics = raw
+			}
+			for dec.More() {
+				var elem Diagnostic
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
+				}
+				t.Diagnostics = append(t.Diagnostics, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
 			}
 		case "outputs":
 			t.Outputs = make(map[string]json.RawMessage)

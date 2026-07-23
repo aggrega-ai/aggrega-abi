@@ -92,14 +92,14 @@ type CatalogProjection struct {
 type RenderNodeOutput struct {
 	// Files The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
 	Files []RenderedFile `json:"files" yaml:"files"`
-	// Diagnostics Diagnostics the guest raised while rendering. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it.
-	Diagnostics []json.RawMessage `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	// Diagnostics Diagnostics the guest raised while rendering. Each element is the shared Wasm-plugin diagnostic shape.
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
 }
 
 // ValidateNodeOutput The payload a Provider guest returns from its optional validate_node_input export: the diagnostics raised by a structural check of the node's resolved input. The export consumes the same RenderNodeInput projection render_node receives and emits no files — it only reports diagnostics. An error-severity diagnostic halts the build loudly, naming the node and provider; a warning or info diagnostic surfaces to the build result without changing rendered output. An empty diagnostics list means the input passed the structural check.
 type ValidateNodeOutput struct {
-	// Diagnostics Diagnostics the guest raised while validating the node's input. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it. Empty when the input passed the structural check.
-	Diagnostics []json.RawMessage `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	// Diagnostics Diagnostics the guest raised while validating the node's input. Each element is the shared Wasm-plugin diagnostic shape. Empty when the input passed the structural check.
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
 }
 
 // RenderedFile One output file a Provider guest emitted: its on-disk path relative to the node's output root, and its serialized bytes exactly as the guest produced them. The host writes these bytes verbatim and runs no serializer, so the on-disk output is byte-identical to what the guest emitted.
@@ -270,8 +270,8 @@ type SubChart struct {
 type AssembleBoundaryOutput struct {
 	// Files The assembled output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
 	Files []RenderedFile `json:"files" yaml:"files"`
-	// Diagnostics Diagnostics the guest raised while assembling. Each element carries the shared Wasm-plugin diagnostic shape; the element shape is opaque at this schema layer so a guest emits the shared diagnostic without the provider socket schema rebinding it.
-	Diagnostics []json.RawMessage `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	// Diagnostics Diagnostics the guest raised while assembling. Each element is the shared Wasm-plugin diagnostic shape.
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
 	// NestPerNode Whether the orchestrator nests each contributor's per-node files under charts/<nodeID>/ rather than emitting them flat; the assembler signals this per provider (compose emits flat, so false; an umbrella-chart assembler nests, so true).
 	NestPerNode bool `json:"nest_per_node,omitempty" yaml:"nest_per_node,omitempty"`
 }
@@ -1312,7 +1312,11 @@ func (t RenderNodeOutput) MarshalJSON() ([]byte, error) {
 				buf.WriteByte(',')
 			}
 			ev := t.Diagnostics[i]
-			buf.Write(ev)
+			if enc, err := ev.MarshalJSON(); err != nil {
+				return nil, err
+			} else {
+				buf.Write(enc)
+			}
 		}
 		buf.WriteByte(']')
 	}
@@ -1359,11 +1363,13 @@ func (t *RenderNodeOutput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			for dec.More() {
-				var elem json.RawMessage
+				var elem Diagnostic
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
 				} else {
-					elem = raw
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
 				}
 				t.Diagnostics = append(t.Diagnostics, elem)
 			}
@@ -1400,7 +1406,11 @@ func (t ValidateNodeOutput) MarshalJSON() ([]byte, error) {
 				buf.WriteByte(',')
 			}
 			ev := t.Diagnostics[i]
-			buf.Write(ev)
+			if enc, err := ev.MarshalJSON(); err != nil {
+				return nil, err
+			} else {
+				buf.Write(enc)
+			}
 		}
 		buf.WriteByte(']')
 	}
@@ -1428,11 +1438,13 @@ func (t *ValidateNodeOutput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			for dec.More() {
-				var elem json.RawMessage
+				var elem Diagnostic
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
 				} else {
-					elem = raw
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
 				}
 				t.Diagnostics = append(t.Diagnostics, elem)
 			}
@@ -3094,7 +3106,11 @@ func (t AssembleBoundaryOutput) MarshalJSON() ([]byte, error) {
 				buf.WriteByte(',')
 			}
 			ev := t.Diagnostics[i]
-			buf.Write(ev)
+			if enc, err := ev.MarshalJSON(); err != nil {
+				return nil, err
+			} else {
+				buf.Write(enc)
+			}
 		}
 		buf.WriteByte(']')
 	}
@@ -3153,11 +3169,13 @@ func (t *AssembleBoundaryOutput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			for dec.More() {
-				var elem json.RawMessage
+				var elem Diagnostic
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
 				} else {
-					elem = raw
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
 				}
 				t.Diagnostics = append(t.Diagnostics, elem)
 			}

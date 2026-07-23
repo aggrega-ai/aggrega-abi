@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
+use crate::Diagnostic;
 
 fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
@@ -40,21 +41,7 @@ pub struct LinterInput {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LinterOutput {
     /// Per-rule findings produced by the plugin invocation, in plugin emit order.
-    pub findings: Vec<LinterFinding>,
-}
-
-/// One rule's verdict. rule_id names the rule that produced it. severity distinguishes errors (publish-time halt) from warnings (informational). classification carries the PATCH/MINOR/MAJOR verdict for the schema-evolution rule; omitted for rules whose finding does not carry a classification (structural rules typically). message carries the human-readable diagnostic surfaced in CLI output.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct LinterFinding {
-    /// The rule that emitted the finding. For the schema-evolution rule the value is 'schema-evolution'. Unknown rule_ids requested via LinterInput.rule_id produce a finding with rule_id 'unknown_rule'.
-    pub rule_id: String,
-    /// Diagnostic severity. 'error' halts the publish-time gate; 'warning' is informational and does not affect the gate.
-    pub severity: String,
-    /// PATCH / MINOR / MAJOR verdict from the schema-evolution rule. Omitted for rules that do not carry a classification.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub classification: String,
-    /// Human-readable diagnostic surfaced in CLI output. Names the offending field(s) for evolution findings; names the policy condition for structural findings.
-    pub message: String,
+    pub findings: Vec<Diagnostic>,
 }
 
 /// Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.

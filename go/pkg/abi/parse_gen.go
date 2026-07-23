@@ -29,19 +29,9 @@ type ParseOutput struct {
 	// Tree The canonical structured view of the parsed source, as a JSON document. The top level may be an object, an array, or a scalar, matching the parsed document's own shape (a JSON file, for example, may parse to any of these). The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
 	Tree json.RawMessage `json:"tree" yaml:"tree"`
 	// Diagnostics Diagnostics the parse raised — for example a syntax error or a warning. Absent when the parse produced none.
-	Diagnostics []ParseDiagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
 	// Spans Source spans locating tree nodes back to their position in the original bytes, so a consumer can map a finding on a tree node to a source location. Absent when the parser reports no spans.
 	Spans []NodeSpan `json:"spans,omitempty" yaml:"spans,omitempty"`
-}
-
-// ParseDiagnostic One diagnostic the parse raised: a severity, a human-readable message, and an optional source span locating the diagnostic in the original bytes.
-type ParseDiagnostic struct {
-	// Severity The diagnostic's severity — for example error or warning. An open string so a parser can report its own severity vocabulary.
-	Severity string `json:"severity" yaml:"severity"`
-	// Message The human-readable diagnostic message.
-	Message string `json:"message" yaml:"message"`
-	// Span The source span locating the diagnostic in the original bytes. Absent when the parser attaches no location to the diagnostic.
-	Span *SourceSpan `json:"span,omitempty" yaml:"span,omitempty"`
 }
 
 // NodeSpan A source span for one tree node: an RFC 6901 JSON Pointer addressing the node within the tree, paired with the span locating it in the original bytes.
@@ -234,7 +224,7 @@ func (t *ParseOutput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 			for dec.More() {
-				var elem ParseDiagnostic
+				var elem Diagnostic
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
 				} else {
@@ -265,88 +255,6 @@ func (t *ParseOutput) UnmarshalJSON(data []byte) error {
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
-			}
-		default:
-			if _, err := readRaw(dec, data); err != nil {
-				return err
-			}
-		}
-	}
-	if err := expectDelim(dec, '}'); err != nil {
-		return err
-	}
-	return nil
-}
-
-// MarshalJSON encodes ParseDiagnostic in field-declaration order, omitting
-// empty non-required fields, dispatch-free.
-func (t ParseDiagnostic) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	buf.WriteByte('{')
-	first := true
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
-	buf.WriteString("\"severity\":")
-	writeJSONString(&buf, t.Severity)
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
-	buf.WriteString("\"message\":")
-	writeJSONString(&buf, t.Message)
-	if t.Span != nil {
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.WriteString("\"span\":")
-		if enc, err := t.Span.MarshalJSON(); err != nil {
-			return nil, err
-		} else {
-			buf.Write(enc)
-		}
-	}
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
-}
-
-// UnmarshalJSON decodes ParseDiagnostic with a streaming token walk, descending
-// into composite fields by direct call to each nested type's generated
-// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
-func (t *ParseDiagnostic) UnmarshalJSON(data []byte) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := expectDelim(dec, '{'); err != nil {
-		return err
-	}
-	for dec.More() {
-		key, err := readKey(dec)
-		if err != nil {
-			return err
-		}
-		switch key {
-		case "severity":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.Severity = s
-			}
-		case "message":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.Message = s
-			}
-		case "span":
-			if raw, err := readRaw(dec, data); err != nil {
-				return err
-			} else {
-				v := new(SourceSpan)
-				if err := v.UnmarshalJSON(raw); err != nil {
-					return err
-				}
-				t.Span = v
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {

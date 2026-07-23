@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use crate::IRGraph;
+use crate::Diagnostic;
 
 /// The payload Step 4 hands to the policy socket: the full IR graph (the same shape the Topology Builder emits) plus the precalculated routing paths the analyzer enumerates alongside.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -25,11 +26,11 @@ pub struct PolicyInput {
     pub settings: Option<Box<RawValue>>,
 }
 
-/// The response shape the policy plugin emits: the verdicts that fired during evaluation, one PolicyResult per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
+/// The response shape the policy plugin emits: the verdicts that fired during evaluation, one diagnostic per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PolicyOutput {
-    /// The fired verdicts, one PolicyResult each, in the order the plugin emits them. Empty when no verdict fired.
-    pub results: Vec<PolicyResult>,
+    /// The fired verdicts, one diagnostic each, in the order the plugin emits them. Empty when no verdict fired.
+    pub results: Vec<Diagnostic>,
 }
 
 /// The payload the render stage hands to a policy socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
@@ -78,14 +79,5 @@ pub struct PrecalculatedPath {
     pub nodes: Vec<String>,
     /// Alphabetically sorted union of Feature type URIs attached to any node along the path. Set-membership semantics: a Feature appears once even if multiple nodes carry it. Empty when no node along the path carries any Feature attachment.
     pub attached_features: Vec<String>,
-}
-
-/// One fired policy verdict: its severity and a human-readable message. Only fired verdicts appear in the output; an allowing rule emits no result. Severity governs the build outcome: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the outcome.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct PolicyResult {
-    /// The verdict's severity: deny halts the build, warn flags the verdict and lets the build proceed, audit records the verdict without affecting the build outcome.
-    pub severity: String,
-    /// Human-readable diagnostic for the fired verdict, surfaced to the operator.
-    pub message: String,
 }
 

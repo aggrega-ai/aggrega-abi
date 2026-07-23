@@ -6,6 +6,8 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -38,19 +40,7 @@ export interface LinterInput {
 // The response shape the publishing-linter plugin emits. findings carries one entry per rule invocation that produced a result. The schema-evolution rule emits exactly one finding (the classification verdict); structural rules may emit zero (no violations) or many (one per offence).
 export interface LinterOutput {
   // Per-rule findings produced by the plugin invocation, in plugin emit order.
-  findings: LinterFinding[];
-}
-
-// One rule's verdict. rule_id names the rule that produced it. severity distinguishes errors (publish-time halt) from warnings (informational). classification carries the PATCH/MINOR/MAJOR verdict for the schema-evolution rule; omitted for rules whose finding does not carry a classification (structural rules typically). message carries the human-readable diagnostic surfaced in CLI output.
-export interface LinterFinding {
-  // The rule that emitted the finding. For the schema-evolution rule the value is 'schema-evolution'. Unknown rule_ids requested via LinterInput.rule_id produce a finding with rule_id 'unknown_rule'.
-  rule_id: string;
-  // Diagnostic severity. 'error' halts the publish-time gate; 'warning' is informational and does not affect the gate.
-  severity: string;
-  // PATCH / MINOR / MAJOR verdict from the schema-evolution rule. Omitted for rules that do not carry a classification.
-  classification?: string;
-  // Human-readable diagnostic surfaced in CLI output. Names the offending field(s) for evolution findings; names the policy condition for structural findings.
-  message: string;
+  findings: Diagnostic[];
 }
 
 // Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.
@@ -100,25 +90,12 @@ export function decodeLinterInput(data: string): LinterInput {
 
 export function encodeLinterOutput(v: LinterOutput): string {
   const parts: string[] = [];
-  parts.push(`${jstr("findings")}:${`[${v.findings!.map((e0) => encodeLinterFinding(e0)).join(",")}]`}`);
+  parts.push(`${jstr("findings")}:${`[${v.findings!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeLinterOutput(data: string): LinterOutput {
   return JSON.parse(data) as LinterOutput;
-}
-
-export function encodeLinterFinding(v: LinterFinding): string {
-  const parts: string[] = [];
-  parts.push(`${jstr("rule_id")}:${jstr(v.rule_id)}`);
-  parts.push(`${jstr("severity")}:${jstr(v.severity)}`);
-  if (v.classification !== undefined && v.classification !== "") parts.push(`${jstr("classification")}:${jstr(v.classification)}`);
-  parts.push(`${jstr("message")}:${jstr(v.message)}`);
-  return `{${parts.join(",")}}`;
-}
-
-export function decodeLinterFinding(data: string): LinterFinding {
-  return JSON.parse(data) as LinterFinding;
 }
 
 export function encodePolicies(v: Policies): string {
