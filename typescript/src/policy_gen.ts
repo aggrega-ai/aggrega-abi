@@ -8,6 +8,12 @@
 
 import { type IRGraph, encodeIRGraph } from "./ir_gen.ts";
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+import { appendCBORIRGraph, decodeCBORIRGraphFrom } from "./ir_gen.ts";
+import { appendCBORDiagnostic, decodeCBORDiagnosticFrom } from "./diagnostic_gen.ts";
 
 function jstr(s: string): string {
   return JSON.stringify(s);
@@ -150,5 +156,290 @@ export function encodePrecalculatedPath(v: PrecalculatedPath): string {
 
 export function decodePrecalculatedPath(data: string): PrecalculatedPath {
   return JSON.parse(data) as PrecalculatedPath;
+}
+
+export function encodeCBORPolicyInput(v: PolicyInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORPolicyInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPolicyInput(out: number[], v: PolicyInput): void {
+  let n = 2;
+  if (v.sources !== undefined && v.sources.length > 0) n++;
+  if (v.settings !== undefined && v.settings !== null) n++;
+  writeHead(out, 5, n);
+  writeText(out, "graph");
+  appendCBORIRGraph(out, v.graph);
+  if (v.sources !== undefined && v.sources.length > 0) {
+    writeText(out, "sources");
+    {
+      const a0 = v.sources;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORPolicySource(out, ee0);
+      }
+    }
+  }
+  if (v.settings !== undefined && v.settings !== null) {
+    writeText(out, "settings");
+    writeBytes(out, utf8Encode(JSON.stringify(v.settings)));
+  }
+  writeText(out, "precalculated_paths");
+  {
+    const a0 = v.precalculated_paths;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORPrecalculatedPath(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORPolicyInput(data: Uint8Array): PolicyInput {
+  const dec = new CborDec(data);
+  return decodeCBORPolicyInputFrom(dec);
+}
+
+export function decodeCBORPolicyInputFrom(dec: CborDec): PolicyInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "graph": o["graph"] = decodeCBORIRGraphFrom(dec); break;
+      case "precalculated_paths": o["precalculated_paths"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPrecalculatedPathFrom(dec)); } return a; })(); break;
+      case "sources": o["sources"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPolicySourceFrom(dec)); } return a; })(); break;
+      case "settings": o["settings"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as PolicyInput;
+}
+
+export function encodeCBORPolicyOutput(v: PolicyOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORPolicyOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPolicyOutput(out: number[], v: PolicyOutput): void {
+  let n = 1;
+  if (v.error !== undefined && v.error !== "") n++;
+  writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  writeText(out, "results");
+  {
+    const a0 = v.results;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORDiagnostic(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORPolicyOutput(data: Uint8Array): PolicyOutput {
+  const dec = new CborDec(data);
+  return decodeCBORPolicyOutputFrom(dec);
+}
+
+export function decodeCBORPolicyOutputFrom(dec: CborDec): PolicyOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "results": o["results"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as PolicyOutput;
+}
+
+export function encodeCBORRenderPolicyInput(v: RenderPolicyInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORRenderPolicyInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORRenderPolicyInput(out: number[], v: RenderPolicyInput): void {
+  let n = 1;
+  if (v.sources !== undefined && v.sources.length > 0) n++;
+  if (v.settings !== undefined && v.settings !== null) n++;
+  writeHead(out, 5, n);
+  if (v.sources !== undefined && v.sources.length > 0) {
+    writeText(out, "sources");
+    {
+      const a0 = v.sources;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORPolicySource(out, ee0);
+      }
+    }
+  }
+  if (v.settings !== undefined && v.settings !== null) {
+    writeText(out, "settings");
+    writeBytes(out, utf8Encode(JSON.stringify(v.settings)));
+  }
+  writeText(out, "artifacts");
+  {
+    const a0 = v.artifacts;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORRenderedArtifact(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORRenderPolicyInput(data: Uint8Array): RenderPolicyInput {
+  const dec = new CborDec(data);
+  return decodeCBORRenderPolicyInputFrom(dec);
+}
+
+export function decodeCBORRenderPolicyInputFrom(dec: CborDec): RenderPolicyInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "artifacts": o["artifacts"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORRenderedArtifactFrom(dec)); } return a; })(); break;
+      case "sources": o["sources"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPolicySourceFrom(dec)); } return a; })(); break;
+      case "settings": o["settings"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as RenderPolicyInput;
+}
+
+export function encodeCBORRenderedArtifact(v: RenderedArtifact): Uint8Array {
+  const out: number[] = [];
+  appendCBORRenderedArtifact(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORRenderedArtifact(out: number[], v: RenderedArtifact): void {
+  let n = 2;
+  if (v.tree !== undefined && v.tree !== null) n++;
+  if (v.format !== undefined && v.format !== "") n++;
+  writeHead(out, 5, n);
+  writeText(out, "path");
+  writeText(out, v.path);
+  if (v.tree !== undefined && v.tree !== null) {
+    writeText(out, "tree");
+    writeBytes(out, utf8Encode(JSON.stringify(v.tree)));
+  }
+  if (v.format !== undefined && v.format !== "") {
+    writeText(out, "format");
+    writeText(out, v.format);
+  }
+  writeText(out, "content");
+  writeText(out, v.content);
+}
+
+export function decodeCBORRenderedArtifact(data: Uint8Array): RenderedArtifact {
+  const dec = new CborDec(data);
+  return decodeCBORRenderedArtifactFrom(dec);
+}
+
+export function decodeCBORRenderedArtifactFrom(dec: CborDec): RenderedArtifact {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "path": o["path"] = dec.readText(); break;
+      case "content": o["content"] = dec.readText(); break;
+      case "tree": o["tree"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "format": o["format"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as RenderedArtifact;
+}
+
+export function encodeCBORPolicySource(v: PolicySource): Uint8Array {
+  const out: number[] = [];
+  appendCBORPolicySource(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPolicySource(out: number[], v: PolicySource): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "path");
+  writeText(out, v.path);
+  writeText(out, "content");
+  writeText(out, v.content);
+}
+
+export function decodeCBORPolicySource(data: Uint8Array): PolicySource {
+  const dec = new CborDec(data);
+  return decodeCBORPolicySourceFrom(dec);
+}
+
+export function decodeCBORPolicySourceFrom(dec: CborDec): PolicySource {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "path": o["path"] = dec.readText(); break;
+      case "content": o["content"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as PolicySource;
+}
+
+export function encodeCBORPrecalculatedPath(v: PrecalculatedPath): Uint8Array {
+  const out: number[] = [];
+  appendCBORPrecalculatedPath(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPrecalculatedPath(out: number[], v: PrecalculatedPath): void {
+  let n = 3;
+  writeHead(out, 5, n);
+  writeText(out, "nodes");
+  {
+    const a0 = v.nodes;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      writeText(out, ee0);
+    }
+  }
+  writeText(out, "path_id");
+  writeText(out, v.path_id);
+  writeText(out, "attached_features");
+  {
+    const a0 = v.attached_features;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      writeText(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORPrecalculatedPath(data: Uint8Array): PrecalculatedPath {
+  const dec = new CborDec(data);
+  return decodeCBORPrecalculatedPathFrom(dec);
+}
+
+export function decodeCBORPrecalculatedPathFrom(dec: CborDec): PrecalculatedPath {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "path_id": o["path_id"] = dec.readText(); break;
+      case "nodes": o["nodes"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "attached_features": o["attached_features"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as PrecalculatedPath;
 }
 

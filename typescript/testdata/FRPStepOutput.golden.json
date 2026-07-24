@@ -1,1 +1,0 @@
-{"patches":[{"scope":"own","key":"a.yaml","op":"add","path":"/metadata/annotations/x","value":"true"}],"side_effects":[{"kind":"emit_file","scope":"own","file":{"path":"/p","content":"c"}}],"diagnostics":[{"severity":"warning","message":"heads up"}]}

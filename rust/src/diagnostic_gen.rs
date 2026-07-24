@@ -76,3 +76,237 @@ pub struct Span {
     pub end_column: i64,
 }
 
+
+impl Diagnostic {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if !self.code.is_empty() { n += 1; }
+        if !self.rule_id.is_empty() { n += 1; }
+        if !self.suggest.is_empty() { n += 1; }
+        if self.location.is_some() { n += 1; }
+        if !self.source_ref.is_empty() { n += 1; }
+        if !self.classification.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.code.is_empty() {
+            crate::cbor_gen::write_text(out, "code");
+            crate::cbor_gen::write_text(out, &self.code);
+        }
+        crate::cbor_gen::write_text(out, "message");
+        crate::cbor_gen::write_text(out, &self.message);
+        if !self.rule_id.is_empty() {
+            crate::cbor_gen::write_text(out, "rule_id");
+            crate::cbor_gen::write_text(out, &self.rule_id);
+        }
+        if !self.suggest.is_empty() {
+            crate::cbor_gen::write_text(out, "suggest");
+            crate::cbor_gen::write_text(out, &self.suggest);
+        }
+        if let Some(ref x) = self.location {
+            crate::cbor_gen::write_text(out, "location");
+            x.append_cbor(out)?;
+        }
+        crate::cbor_gen::write_text(out, "severity");
+        crate::cbor_gen::write_text(out, &self.severity);
+        if !self.source_ref.is_empty() {
+            crate::cbor_gen::write_text(out, "source_ref");
+            crate::cbor_gen::write_text(out, &self.source_ref);
+        }
+        if !self.classification.is_empty() {
+            crate::cbor_gen::write_text(out, "classification");
+            crate::cbor_gen::write_text(out, &self.classification);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_severity: Option<String> = None;
+        let mut f_message: Option<String> = None;
+        let mut f_code: String = String::new();
+        let mut f_rule_id: String = String::new();
+        let mut f_classification: String = String::new();
+        let mut f_source_ref: String = String::new();
+        let mut f_location: Option<Box<Location>> = None;
+        let mut f_suggest: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "severity" => f_severity = Some(dec.read_text()?),
+                "message" => f_message = Some(dec.read_text()?),
+                "code" => f_code = dec.read_text()?,
+                "rule_id" => f_rule_id = dec.read_text()?,
+                "classification" => f_classification = dec.read_text()?,
+                "source_ref" => f_source_ref = dec.read_text()?,
+                "location" => f_location = Some(Box::new(Location::decode_cbor_from(dec)?)),
+                "suggest" => f_suggest = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            severity: f_severity.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field severity".to_string()))?,
+            message: f_message.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field message".to_string()))?,
+            code: f_code,
+            rule_id: f_rule_id,
+            classification: f_classification,
+            source_ref: f_source_ref,
+            location: f_location,
+            suggest: f_suggest,
+        })
+    }
+}
+
+impl Location {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.uri.is_empty() { n += 1; }
+        if !self.kind.is_empty() { n += 1; }
+        if self.line != 0 { n += 1; }
+        if self.span.is_some() { n += 1; }
+        if !self.key_path.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.uri.is_empty() {
+            crate::cbor_gen::write_text(out, "uri");
+            crate::cbor_gen::write_text(out, &self.uri);
+        }
+        if !self.kind.is_empty() {
+            crate::cbor_gen::write_text(out, "kind");
+            crate::cbor_gen::write_text(out, &self.kind);
+        }
+        if self.line != 0 {
+            crate::cbor_gen::write_text(out, "line");
+            crate::cbor_gen::write_int(out, *&self.line);
+        }
+        if let Some(ref x) = self.span {
+            crate::cbor_gen::write_text(out, "span");
+            x.append_cbor(out)?;
+        }
+        if !self.key_path.is_empty() {
+            crate::cbor_gen::write_text(out, "key_path");
+            crate::cbor_gen::write_text(out, &self.key_path);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_span: Option<Box<Span>> = None;
+        let mut f_key_path: String = String::new();
+        let mut f_uri: String = String::new();
+        let mut f_line: i64 = 0;
+        let mut f_kind: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "span" => f_span = Some(Box::new(Span::decode_cbor_from(dec)?)),
+                "key_path" => f_key_path = dec.read_text()?,
+                "uri" => f_uri = dec.read_text()?,
+                "line" => f_line = dec.read_int()?,
+                "kind" => f_kind = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            span: f_span,
+            key_path: f_key_path,
+            uri: f_uri,
+            line: f_line,
+            kind: f_kind,
+        })
+    }
+}
+
+impl Span {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 6;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "end_line");
+        crate::cbor_gen::write_int(out, *&self.end_line);
+        crate::cbor_gen::write_text(out, "end_column");
+        crate::cbor_gen::write_int(out, *&self.end_column);
+        crate::cbor_gen::write_text(out, "end_offset");
+        crate::cbor_gen::write_int(out, *&self.end_offset);
+        crate::cbor_gen::write_text(out, "start_line");
+        crate::cbor_gen::write_int(out, *&self.start_line);
+        crate::cbor_gen::write_text(out, "start_column");
+        crate::cbor_gen::write_int(out, *&self.start_column);
+        crate::cbor_gen::write_text(out, "start_offset");
+        crate::cbor_gen::write_int(out, *&self.start_offset);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_start_offset: Option<i64> = None;
+        let mut f_end_offset: Option<i64> = None;
+        let mut f_start_line: Option<i64> = None;
+        let mut f_start_column: Option<i64> = None;
+        let mut f_end_line: Option<i64> = None;
+        let mut f_end_column: Option<i64> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "start_offset" => f_start_offset = Some(dec.read_int()?),
+                "end_offset" => f_end_offset = Some(dec.read_int()?),
+                "start_line" => f_start_line = Some(dec.read_int()?),
+                "start_column" => f_start_column = Some(dec.read_int()?),
+                "end_line" => f_end_line = Some(dec.read_int()?),
+                "end_column" => f_end_column = Some(dec.read_int()?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            start_offset: f_start_offset.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field start_offset".to_string()))?,
+            end_offset: f_end_offset.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field end_offset".to_string()))?,
+            start_line: f_start_line.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field start_line".to_string()))?,
+            start_column: f_start_column.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field start_column".to_string()))?,
+            end_line: f_end_line.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field end_line".to_string()))?,
+            end_column: f_end_column.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field end_column".to_string()))?,
+        })
+    }
+}
+

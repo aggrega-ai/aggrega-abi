@@ -7,6 +7,11 @@
 // aggrega-cli checkout.
 
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+import { appendCBORDiagnostic, decodeCBORDiagnosticFrom } from "./diagnostic_gen.ts";
 
 function jstr(s: string): string {
   return JSON.stringify(s);
@@ -129,5 +134,240 @@ export function encodeNarrowingExemption(v: NarrowingExemption): string {
 
 export function decodeNarrowingExemption(data: string): NarrowingExemption {
   return JSON.parse(data) as NarrowingExemption;
+}
+
+export function encodeCBORLinterInput(v: LinterInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORLinterInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORLinterInput(out: number[], v: LinterInput): void {
+  let n = 3;
+  if (v.parent !== undefined && v.parent !== null) n++;
+  if (v.policies !== undefined) n++;
+  if (v.previous !== undefined && v.previous !== null) n++;
+  if (v.source_path !== undefined && v.source_path !== "") n++;
+  writeHead(out, 5, n);
+  if (v.parent !== undefined && v.parent !== null) {
+    writeText(out, "parent");
+    writeBytes(out, utf8Encode(JSON.stringify(v.parent)));
+  }
+  writeText(out, "rule_id");
+  writeText(out, v.rule_id);
+  if (v.policies !== undefined) {
+    writeText(out, "policies");
+    appendCBORPolicies(out, v.policies);
+  }
+  if (v.previous !== undefined && v.previous !== null) {
+    writeText(out, "previous");
+    writeBytes(out, utf8Encode(JSON.stringify(v.previous)));
+  }
+  writeText(out, "proposed");
+  writeBytes(out, utf8Encode(JSON.stringify(v.proposed)));
+  writeText(out, "entity_kind");
+  writeText(out, v.entity_kind);
+  if (v.source_path !== undefined && v.source_path !== "") {
+    writeText(out, "source_path");
+    writeText(out, v.source_path);
+  }
+}
+
+export function decodeCBORLinterInput(data: Uint8Array): LinterInput {
+  const dec = new CborDec(data);
+  return decodeCBORLinterInputFrom(dec);
+}
+
+export function decodeCBORLinterInputFrom(dec: CborDec): LinterInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "rule_id": o["rule_id"] = dec.readText(); break;
+      case "entity_kind": o["entity_kind"] = dec.readText(); break;
+      case "proposed": o["proposed"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "previous": o["previous"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "parent": o["parent"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "source_path": o["source_path"] = dec.readText(); break;
+      case "policies": o["policies"] = decodeCBORPoliciesFrom(dec); break;
+      default: dec.skip();
+    }
+  }
+  return o as LinterInput;
+}
+
+export function encodeCBORLinterOutput(v: LinterOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORLinterOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORLinterOutput(out: number[], v: LinterOutput): void {
+  let n = 1;
+  if (v.error !== undefined && v.error !== "") n++;
+  writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  writeText(out, "findings");
+  {
+    const a0 = v.findings;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORDiagnostic(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORLinterOutput(data: Uint8Array): LinterOutput {
+  const dec = new CborDec(data);
+  return decodeCBORLinterOutputFrom(dec);
+}
+
+export function decodeCBORLinterOutputFrom(dec: CborDec): LinterOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "findings": o["findings"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as LinterOutput;
+}
+
+export function encodeCBORPolicies(v: Policies): Uint8Array {
+  const out: number[] = [];
+  appendCBORPolicies(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPolicies(out: number[], v: Policies): void {
+  let n = 0;
+  if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) n++;
+  if (v.allow_id_overrides !== undefined && v.allow_id_overrides !== false) n++;
+  if (v.enforce_immutability !== undefined && v.enforce_immutability !== false) n++;
+  if (v.narrowing_exemptions !== undefined && v.narrowing_exemptions.length > 0) n++;
+  if (v.allow_aggrega_ai_prefix !== undefined && v.allow_aggrega_ai_prefix !== false) n++;
+  if (v.allow_nonstandard_names !== undefined && v.allow_nonstandard_names !== false) n++;
+  if (v.allow_category_mismatches !== undefined && v.allow_category_mismatches !== false) n++;
+  if (v.enforce_monotonic_narrowing !== undefined && v.enforce_monotonic_narrowing !== false) n++;
+  if (v.allow_direct_x_aggrega_extensions !== undefined && v.allow_direct_x_aggrega_extensions !== false) n++;
+  writeHead(out, 5, n);
+  if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) {
+    writeText(out, "allow_dynamic_refs");
+    writeBool(out, v.allow_dynamic_refs);
+  }
+  if (v.allow_id_overrides !== undefined && v.allow_id_overrides !== false) {
+    writeText(out, "allow_id_overrides");
+    writeBool(out, v.allow_id_overrides);
+  }
+  if (v.enforce_immutability !== undefined && v.enforce_immutability !== false) {
+    writeText(out, "enforce_immutability");
+    writeBool(out, v.enforce_immutability);
+  }
+  if (v.narrowing_exemptions !== undefined && v.narrowing_exemptions.length > 0) {
+    writeText(out, "narrowing_exemptions");
+    {
+      const a0 = v.narrowing_exemptions;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORNarrowingExemption(out, ee0);
+      }
+    }
+  }
+  if (v.allow_aggrega_ai_prefix !== undefined && v.allow_aggrega_ai_prefix !== false) {
+    writeText(out, "allow_aggrega_ai_prefix");
+    writeBool(out, v.allow_aggrega_ai_prefix);
+  }
+  if (v.allow_nonstandard_names !== undefined && v.allow_nonstandard_names !== false) {
+    writeText(out, "allow_nonstandard_names");
+    writeBool(out, v.allow_nonstandard_names);
+  }
+  if (v.allow_category_mismatches !== undefined && v.allow_category_mismatches !== false) {
+    writeText(out, "allow_category_mismatches");
+    writeBool(out, v.allow_category_mismatches);
+  }
+  if (v.enforce_monotonic_narrowing !== undefined && v.enforce_monotonic_narrowing !== false) {
+    writeText(out, "enforce_monotonic_narrowing");
+    writeBool(out, v.enforce_monotonic_narrowing);
+  }
+  if (v.allow_direct_x_aggrega_extensions !== undefined && v.allow_direct_x_aggrega_extensions !== false) {
+    writeText(out, "allow_direct_x_aggrega_extensions");
+    writeBool(out, v.allow_direct_x_aggrega_extensions);
+  }
+}
+
+export function decodeCBORPolicies(data: Uint8Array): Policies {
+  const dec = new CborDec(data);
+  return decodeCBORPoliciesFrom(dec);
+}
+
+export function decodeCBORPoliciesFrom(dec: CborDec): Policies {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "enforce_monotonic_narrowing": o["enforce_monotonic_narrowing"] = dec.readBool(); break;
+      case "enforce_immutability": o["enforce_immutability"] = dec.readBool(); break;
+      case "narrowing_exemptions": o["narrowing_exemptions"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORNarrowingExemptionFrom(dec)); } return a; })(); break;
+      case "allow_dynamic_refs": o["allow_dynamic_refs"] = dec.readBool(); break;
+      case "allow_id_overrides": o["allow_id_overrides"] = dec.readBool(); break;
+      case "allow_direct_x_aggrega_extensions": o["allow_direct_x_aggrega_extensions"] = dec.readBool(); break;
+      case "allow_aggrega_ai_prefix": o["allow_aggrega_ai_prefix"] = dec.readBool(); break;
+      case "allow_nonstandard_names": o["allow_nonstandard_names"] = dec.readBool(); break;
+      case "allow_category_mismatches": o["allow_category_mismatches"] = dec.readBool(); break;
+      default: dec.skip();
+    }
+  }
+  return o as Policies;
+}
+
+export function encodeCBORNarrowingExemption(v: NarrowingExemption): Uint8Array {
+  const out: number[] = [];
+  appendCBORNarrowingExemption(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORNarrowingExemption(out: number[], v: NarrowingExemption): void {
+  let n = 3;
+  writeHead(out, 5, n);
+  writeText(out, "paths");
+  {
+    const a0 = v.paths;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      writeText(out, ee0);
+    }
+  }
+  writeText(out, "entity");
+  writeText(out, v.entity);
+  writeText(out, "reason");
+  writeText(out, v.reason);
+}
+
+export function decodeCBORNarrowingExemption(data: Uint8Array): NarrowingExemption {
+  const dec = new CborDec(data);
+  return decodeCBORNarrowingExemptionFrom(dec);
+}
+
+export function decodeCBORNarrowingExemptionFrom(dec: CborDec): NarrowingExemption {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "entity": o["entity"] = dec.readText(); break;
+      case "paths": o["paths"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "reason": o["reason"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as NarrowingExemption;
 }
 

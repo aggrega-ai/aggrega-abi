@@ -17,57 +17,57 @@ import (
 // ParseInput The payload a parser guest receives: the format name that selects how to read the bytes, the source bytes to parse, and an optional opaque options document the consumer supplies for parser-specific behavior.
 type ParseInput struct {
 	// Format The name of the source format to parse, matching one of the parser's advertised parse:<format> capabilities (for example hcl, toml, yaml, or json). The parser reads the bytes as this format.
-	Format string `json:"format" yaml:"format"`
+	Format string `json:"format" yaml:"format" cbor:"format"`
 	// Bytes The source bytes to parse, base64-encoded on the wire. The parser decodes the base64 to recover the original bytes and reads them as the named format.
-	Bytes []byte `json:"bytes" yaml:"bytes"`
+	Bytes []byte `json:"bytes" yaml:"bytes" cbor:"bytes"`
 	// Options An opaque options document the consumer supplies for parser-specific behavior. The host pipes it through without interpreting it; the parser reads whatever shape it documents. Absent when the consumer supplies no options.
-	Options json.RawMessage `json:"options,omitempty" yaml:"options,omitempty"`
+	Options json.RawMessage `json:"options,omitempty" yaml:"options,omitempty" cbor:"options,omitempty"`
 }
 
 // ParseOutput The payload a parser guest returns: the canonical structured tree of the parsed source, plus any diagnostics the parse raised and any source spans locating tree nodes back to the original bytes.
 type ParseOutput struct {
 	// Tree The canonical structured view of the parsed source, as a JSON document. The top level may be an object, an array, or a scalar, matching the parsed document's own shape (a JSON file, for example, may parse to any of these). The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
-	Tree json.RawMessage `json:"tree" yaml:"tree"`
+	Tree json.RawMessage `json:"tree" yaml:"tree" cbor:"tree"`
 	// Diagnostics Diagnostics the parse raised — for example a syntax error or a warning. Absent when the parse produced none.
-	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty" cbor:"diagnostics,omitempty"`
 	// Spans Source spans locating tree nodes back to their position in the original bytes, so a consumer can map a finding on a tree node to a source location. Absent when the parser reports no spans.
-	Spans []NodeSpan `json:"spans,omitempty" yaml:"spans,omitempty"`
+	Spans []NodeSpan `json:"spans,omitempty" yaml:"spans,omitempty" cbor:"spans,omitempty"`
 	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
-	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
 
 // NodeSpan A source span for one tree node: an RFC 6901 JSON Pointer addressing the node within the tree, paired with the span locating it in the original bytes.
 type NodeSpan struct {
 	// Pointer An RFC 6901 JSON Pointer into the tree, addressing the node this span locates.
-	Pointer string `json:"pointer" yaml:"pointer"`
+	Pointer string `json:"pointer" yaml:"pointer" cbor:"pointer"`
 	// Span The span locating the addressed node in the original bytes.
-	Span SourceSpan `json:"span" yaml:"span"`
+	Span SourceSpan `json:"span" yaml:"span" cbor:"span"`
 }
 
 // SourceSpan A span of the original source bytes: the byte offsets are the primary, exact location, and the line and column numbers accompany them for human-readable diagnostics.
 type SourceSpan struct {
 	// StartOffset The byte offset of the span's first byte in the original source, zero-based.
-	StartOffset int `json:"start_offset" yaml:"start_offset"`
+	StartOffset int `json:"start_offset" yaml:"start_offset" cbor:"start_offset"`
 	// EndOffset The byte offset one past the span's last byte in the original source, so end_offset minus start_offset is the span's length in bytes.
-	EndOffset int `json:"end_offset" yaml:"end_offset"`
+	EndOffset int `json:"end_offset" yaml:"end_offset" cbor:"end_offset"`
 	// StartLine The line number of the span's start, one-based, for human-readable diagnostics.
-	StartLine int `json:"start_line" yaml:"start_line"`
+	StartLine int `json:"start_line" yaml:"start_line" cbor:"start_line"`
 	// StartColumn The column number of the span's start, one-based, for human-readable diagnostics.
-	StartColumn int `json:"start_column" yaml:"start_column"`
+	StartColumn int `json:"start_column" yaml:"start_column" cbor:"start_column"`
 	// EndLine The line number of the span's end, one-based, for human-readable diagnostics.
-	EndLine int `json:"end_line" yaml:"end_line"`
+	EndLine int `json:"end_line" yaml:"end_line" cbor:"end_line"`
 	// EndColumn The column number of the span's end, one-based, for human-readable diagnostics.
-	EndColumn int `json:"end_column" yaml:"end_column"`
+	EndColumn int `json:"end_column" yaml:"end_column" cbor:"end_column"`
 }
 
 // ParseSourceResponse The parse-source host function's reply: on success the canonical structured tree the resolved parser produced, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a consumer guest carries a no-parser or a parse failure into its own diagnostics as a deterministic failure. This is the envelope a consumer socket receives when it asks the host to run a producer through the host; the request payload is a ParseInput.
 type ParseSourceResponse struct {
 	// Tree The canonical structured tree the resolved parser produced on success, as a JSON document carried verbatim; absent on failure.
-	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty"`
+	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty" cbor:"tree,omitempty"`
 	// Error The failure message on failure, naming the format and the reason; absent on success.
-	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 	// ErrorCode The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
-	ErrorCode string `json:"error_code,omitempty" yaml:"error_code,omitempty"`
+	ErrorCode string `json:"error_code,omitempty" yaml:"error_code,omitempty" cbor:"error_code,omitempty"`
 }
 
 // MarshalJSON encodes ParseInput in field-declaration order, omitting
@@ -532,6 +532,429 @@ func (t *ParseSourceResponse) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ParseInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ParseInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ParseInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ParseInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.Options) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "bytes")
+	dst = appendCBORByteString(dst, t.Bytes)
+	dst = appendCBORTextString(dst, "format")
+	dst = appendCBORTextString(dst, t.Format)
+	if len(t.Options) != 0 {
+		dst = appendCBORTextString(dst, "options")
+		dst = appendCBORByteString(dst, t.Options)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes ParseInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ParseInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ParseInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "format":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Format = s
+			}
+		case "bytes":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Bytes = v
+			}
+		case "options":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Options = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ParseOutput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ParseOutput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ParseOutput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ParseOutput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if t.Error != "" {
+		n++
+	}
+	if len(t.Spans) != 0 {
+		n++
+	}
+	if len(t.Diagnostics) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "tree")
+	dst = appendCBORByteString(dst, t.Tree)
+	if t.Error != "" {
+		dst = appendCBORTextString(dst, "error")
+		dst = appendCBORTextString(dst, t.Error)
+	}
+	if len(t.Spans) != 0 {
+		dst = appendCBORTextString(dst, "spans")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Spans)))
+		for i := range t.Spans {
+			ev := t.Spans[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Diagnostics) != 0 {
+		dst = appendCBORTextString(dst, "diagnostics")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Diagnostics)))
+		for i := range t.Diagnostics {
+			ev := t.Diagnostics[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes ParseOutput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ParseOutput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ParseOutput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "tree":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Tree = json.RawMessage(v)
+			}
+		case "diagnostics":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]Diagnostic, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev Diagnostic
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Diagnostics = s
+			}
+		case "spans":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]NodeSpan, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev NodeSpan
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Spans = s
+			}
+		case "error":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Error = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes NodeSpan as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t NodeSpan) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends NodeSpan's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t NodeSpan) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "span")
+	if dst, err = t.Span.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	dst = appendCBORTextString(dst, "pointer")
+	dst = appendCBORTextString(dst, t.Pointer)
+	return dst, nil
+}
+
+// DecodeCBOR decodes NodeSpan from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *NodeSpan) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *NodeSpan) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "pointer":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Pointer = s
+			}
+		case "span":
+			if err := (&t.Span).decodeCBOR(dec); err != nil {
+				return err
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes SourceSpan as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t SourceSpan) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends SourceSpan's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t SourceSpan) appendCBOR(dst []byte) ([]byte, error) {
+	n := 6
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "end_line")
+	dst = appendCBORInt(dst, int64(t.EndLine))
+	dst = appendCBORTextString(dst, "end_column")
+	dst = appendCBORInt(dst, int64(t.EndColumn))
+	dst = appendCBORTextString(dst, "end_offset")
+	dst = appendCBORInt(dst, int64(t.EndOffset))
+	dst = appendCBORTextString(dst, "start_line")
+	dst = appendCBORInt(dst, int64(t.StartLine))
+	dst = appendCBORTextString(dst, "start_column")
+	dst = appendCBORInt(dst, int64(t.StartColumn))
+	dst = appendCBORTextString(dst, "start_offset")
+	dst = appendCBORInt(dst, int64(t.StartOffset))
+	return dst, nil
+}
+
+// DecodeCBOR decodes SourceSpan from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *SourceSpan) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *SourceSpan) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "start_offset":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.StartOffset = int(v)
+			}
+		case "end_offset":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.EndOffset = int(v)
+			}
+		case "start_line":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.StartLine = int(v)
+			}
+		case "start_column":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.StartColumn = int(v)
+			}
+		case "end_line":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.EndLine = int(v)
+			}
+		case "end_column":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.EndColumn = int(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ParseSourceResponse as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ParseSourceResponse) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ParseSourceResponse's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ParseSourceResponse) appendCBOR(dst []byte) ([]byte, error) {
+	n := 0
+	if len(t.Tree) != 0 {
+		n++
+	}
+	if t.Error != "" {
+		n++
+	}
+	if t.ErrorCode != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	if len(t.Tree) != 0 {
+		dst = appendCBORTextString(dst, "tree")
+		dst = appendCBORByteString(dst, t.Tree)
+	}
+	if t.Error != "" {
+		dst = appendCBORTextString(dst, "error")
+		dst = appendCBORTextString(dst, t.Error)
+	}
+	if t.ErrorCode != "" {
+		dst = appendCBORTextString(dst, "error_code")
+		dst = appendCBORTextString(dst, t.ErrorCode)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes ParseSourceResponse from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ParseSourceResponse) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ParseSourceResponse) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "tree":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Tree = json.RawMessage(v)
+			}
+		case "error":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Error = s
+			}
+		case "error_code":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ErrorCode = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

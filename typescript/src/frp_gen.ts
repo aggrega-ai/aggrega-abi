@@ -7,6 +7,11 @@
 // aggrega-cli checkout.
 
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+import { appendCBORDiagnostic, decodeCBORDiagnosticFrom } from "./diagnostic_gen.ts";
 
 function jstr(s: string): string {
   return JSON.stringify(s);
@@ -212,5 +217,435 @@ export function encodePrecedingStep(v: PrecedingStep): string {
 
 export function decodePrecedingStep(data: string): PrecedingStep {
   return JSON.parse(data) as PrecedingStep;
+}
+
+export function encodeCBORFRPStepInput(v: FRPStepInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORFRPStepInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORFRPStepInput(out: number[], v: FRPStepInput): void {
+  let n = 3;
+  if (v.step_input !== undefined && Object.keys(v.step_input).length > 0) n++;
+  if (v.preceding_steps !== undefined && v.preceding_steps.length > 0) n++;
+  writeHead(out, 5, n);
+  writeText(out, "context");
+  writeBytes(out, utf8Encode(JSON.stringify(v.context)));
+  writeText(out, "documents");
+  appendCBORDocumentSet(out, v.documents);
+  writeText(out, "step_index");
+  writeInt(out, v.step_index);
+  if (v.step_input !== undefined && Object.keys(v.step_input).length > 0) {
+    writeText(out, "step_input");
+    {
+      const m0 = v.step_input;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+      }
+    }
+  }
+  if (v.preceding_steps !== undefined && v.preceding_steps.length > 0) {
+    writeText(out, "preceding_steps");
+    {
+      const a0 = v.preceding_steps;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORPrecedingStep(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORFRPStepInput(data: Uint8Array): FRPStepInput {
+  const dec = new CborDec(data);
+  return decodeCBORFRPStepInputFrom(dec);
+}
+
+export function decodeCBORFRPStepInputFrom(dec: CborDec): FRPStepInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "documents": o["documents"] = decodeCBORDocumentSetFrom(dec); break;
+      case "step_input": o["step_input"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "context": o["context"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "step_index": o["step_index"] = dec.readInt(); break;
+      case "preceding_steps": o["preceding_steps"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPrecedingStepFrom(dec)); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as FRPStepInput;
+}
+
+export function encodeCBORFRPStepOutput(v: FRPStepOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORFRPStepOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORFRPStepOutput(out: number[], v: FRPStepOutput): void {
+  let n = 0;
+  if (v.error !== undefined && v.error !== "") n++;
+  if (v.outputs !== undefined && Object.keys(v.outputs).length > 0) n++;
+  if (v.patches !== undefined && v.patches.length > 0) n++;
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
+  if (v.side_effects !== undefined && v.side_effects.length > 0) n++;
+  writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  if (v.outputs !== undefined && Object.keys(v.outputs).length > 0) {
+    writeText(out, "outputs");
+    {
+      const m0 = v.outputs;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+      }
+    }
+  }
+  if (v.patches !== undefined && v.patches.length > 0) {
+    writeText(out, "patches");
+    {
+      const a0 = v.patches;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORJSONPatchOp(out, ee0);
+      }
+    }
+  }
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) {
+    writeText(out, "diagnostics");
+    {
+      const a0 = v.diagnostics;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORDiagnostic(out, ee0);
+      }
+    }
+  }
+  if (v.side_effects !== undefined && v.side_effects.length > 0) {
+    writeText(out, "side_effects");
+    {
+      const a0 = v.side_effects;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORSideEffect(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORFRPStepOutput(data: Uint8Array): FRPStepOutput {
+  const dec = new CborDec(data);
+  return decodeCBORFRPStepOutputFrom(dec);
+}
+
+export function decodeCBORFRPStepOutputFrom(dec: CborDec): FRPStepOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "patches": o["patches"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORJSONPatchOpFrom(dec)); } return a; })(); break;
+      case "side_effects": o["side_effects"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORSideEffectFrom(dec)); } return a; })(); break;
+      case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
+      case "outputs": o["outputs"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as FRPStepOutput;
+}
+
+export function encodeCBORDocumentSet(v: DocumentSet): Uint8Array {
+  const out: number[] = [];
+  appendCBORDocumentSet(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORDocumentSet(out: number[], v: DocumentSet): void {
+  let n = 1;
+  if (v.host !== undefined && Object.keys(v.host).length > 0) n++;
+  writeHead(out, 5, n);
+  writeText(out, "own");
+  {
+    const m0 = v.own;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      appendCBORUnit(out, m0[kk0]);
+    }
+  }
+  if (v.host !== undefined && Object.keys(v.host).length > 0) {
+    writeText(out, "host");
+    {
+      const m0 = v.host;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        appendCBORUnit(out, m0[kk0]);
+      }
+    }
+  }
+}
+
+export function decodeCBORDocumentSet(data: Uint8Array): DocumentSet {
+  const dec = new CborDec(data);
+  return decodeCBORDocumentSetFrom(dec);
+}
+
+export function decodeCBORDocumentSetFrom(dec: CborDec): DocumentSet {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "own": o["own"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORUnitFrom(dec); } return m; })(); break;
+      case "host": o["host"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORUnitFrom(dec); } return m; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as DocumentSet;
+}
+
+export function encodeCBORUnit(v: Unit): Uint8Array {
+  const out: number[] = [];
+  appendCBORUnit(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORUnit(out: number[], v: Unit): void {
+  let n = 1;
+  if (v.tree !== undefined && v.tree !== null) n++;
+  if (v.bytes !== undefined && v.bytes !== "") n++;
+  if (v.media_type !== undefined && v.media_type !== "") n++;
+  writeHead(out, 5, n);
+  if (v.tree !== undefined && v.tree !== null) {
+    writeText(out, "tree");
+    writeBytes(out, utf8Encode(JSON.stringify(v.tree)));
+  }
+  if (v.bytes !== undefined && v.bytes !== "") {
+    writeText(out, "bytes");
+    writeBytes(out, b64decode(v.bytes));
+  }
+  writeText(out, "token");
+  writeText(out, v.token);
+  if (v.media_type !== undefined && v.media_type !== "") {
+    writeText(out, "media_type");
+    writeText(out, v.media_type);
+  }
+}
+
+export function decodeCBORUnit(data: Uint8Array): Unit {
+  const dec = new CborDec(data);
+  return decodeCBORUnitFrom(dec);
+}
+
+export function decodeCBORUnitFrom(dec: CborDec): Unit {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "token": o["token"] = dec.readText(); break;
+      case "bytes": o["bytes"] = b64encode(dec.readBytes()); break;
+      case "media_type": o["media_type"] = dec.readText(); break;
+      case "tree": o["tree"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as Unit;
+}
+
+export function encodeCBORJSONPatchOp(v: JSONPatchOp): Uint8Array {
+  const out: number[] = [];
+  appendCBORJSONPatchOp(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORJSONPatchOp(out: number[], v: JSONPatchOp): void {
+  let n = 4;
+  if (v.from !== undefined && v.from !== "") n++;
+  if (v.value !== undefined && v.value !== null) n++;
+  writeHead(out, 5, n);
+  writeText(out, "op");
+  writeText(out, v.op);
+  writeText(out, "key");
+  writeText(out, v.key);
+  if (v.from !== undefined && v.from !== "") {
+    writeText(out, "from");
+    writeText(out, v.from);
+  }
+  writeText(out, "path");
+  writeText(out, v.path);
+  writeText(out, "scope");
+  writeText(out, v.scope);
+  if (v.value !== undefined && v.value !== null) {
+    writeText(out, "value");
+    writeBytes(out, utf8Encode(JSON.stringify(v.value)));
+  }
+}
+
+export function decodeCBORJSONPatchOp(data: Uint8Array): JSONPatchOp {
+  const dec = new CborDec(data);
+  return decodeCBORJSONPatchOpFrom(dec);
+}
+
+export function decodeCBORJSONPatchOpFrom(dec: CborDec): JSONPatchOp {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "scope": o["scope"] = dec.readText(); break;
+      case "key": o["key"] = dec.readText(); break;
+      case "op": o["op"] = dec.readText(); break;
+      case "path": o["path"] = dec.readText(); break;
+      case "value": o["value"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "from": o["from"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as JSONPatchOp;
+}
+
+export function encodeCBORSideEffect(v: SideEffect): Uint8Array {
+  const out: number[] = [];
+  appendCBORSideEffect(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORSideEffect(out: number[], v: SideEffect): void {
+  let n = 1;
+  if (v.crd !== undefined && v.crd !== null) n++;
+  if (v.file !== undefined && v.file !== null) n++;
+  if (v.scope !== undefined && v.scope !== "") n++;
+  writeHead(out, 5, n);
+  if (v.crd !== undefined && v.crd !== null) {
+    writeText(out, "crd");
+    writeBytes(out, utf8Encode(JSON.stringify(v.crd)));
+  }
+  if (v.file !== undefined && v.file !== null) {
+    writeText(out, "file");
+    appendCBORSideEffectFile(out, v.file);
+  }
+  writeText(out, "kind");
+  writeText(out, v.kind);
+  if (v.scope !== undefined && v.scope !== "") {
+    writeText(out, "scope");
+    writeText(out, v.scope);
+  }
+}
+
+export function decodeCBORSideEffect(data: Uint8Array): SideEffect {
+  const dec = new CborDec(data);
+  return decodeCBORSideEffectFrom(dec);
+}
+
+export function decodeCBORSideEffectFrom(dec: CborDec): SideEffect {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "kind": o["kind"] = dec.readText(); break;
+      case "scope": o["scope"] = dec.readText(); break;
+      case "crd": o["crd"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "file": o["file"] = decodeCBORSideEffectFileFrom(dec); break;
+      default: dec.skip();
+    }
+  }
+  return o as SideEffect;
+}
+
+export function encodeCBORSideEffectFile(v: SideEffectFile): Uint8Array {
+  const out: number[] = [];
+  appendCBORSideEffectFile(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORSideEffectFile(out: number[], v: SideEffectFile): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "path");
+  writeText(out, v.path);
+  writeText(out, "content");
+  writeText(out, v.content);
+}
+
+export function decodeCBORSideEffectFile(data: Uint8Array): SideEffectFile {
+  const dec = new CborDec(data);
+  return decodeCBORSideEffectFileFrom(dec);
+}
+
+export function decodeCBORSideEffectFileFrom(dec: CborDec): SideEffectFile {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "path": o["path"] = dec.readText(); break;
+      case "content": o["content"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as SideEffectFile;
+}
+
+export function encodeCBORPrecedingStep(v: PrecedingStep): Uint8Array {
+  const out: number[] = [];
+  appendCBORPrecedingStep(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPrecedingStep(out: number[], v: PrecedingStep): void {
+  let n = 2;
+  if (v.side_effects !== undefined && v.side_effects.length > 0) n++;
+  writeHead(out, 5, n);
+  writeText(out, "index");
+  writeInt(out, v.index);
+  writeText(out, "plugin_uri");
+  writeText(out, v.plugin_uri);
+  if (v.side_effects !== undefined && v.side_effects.length > 0) {
+    writeText(out, "side_effects");
+    {
+      const a0 = v.side_effects;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORSideEffect(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORPrecedingStep(data: Uint8Array): PrecedingStep {
+  const dec = new CborDec(data);
+  return decodeCBORPrecedingStepFrom(dec);
+}
+
+export function decodeCBORPrecedingStepFrom(dec: CborDec): PrecedingStep {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "index": o["index"] = dec.readInt(); break;
+      case "plugin_uri": o["plugin_uri"] = dec.readText(); break;
+      case "side_effects": o["side_effects"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORSideEffectFrom(dec)); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as PrecedingStep;
 }
 

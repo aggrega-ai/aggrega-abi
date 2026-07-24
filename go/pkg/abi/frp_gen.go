@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"unicode/utf8"
@@ -20,94 +21,94 @@ import (
 
 // FRPStepInput The payload a feature-recipe-pipeline guest receives for one pipeline step: the keyed document set the host hands whole, the step-local input the Recipe declared for this step, the render-time context, the step's position in the pipeline, and a record of the steps that already ran.
 type FRPStepInput struct {
-	Documents DocumentSet `json:"documents" yaml:"documents"`
+	Documents DocumentSet `json:"documents" yaml:"documents" cbor:"documents"`
 	// StepInput The step's rendered `with` block, an author-ordered key set the guest reads as its step-local input. Preserves author order so the payload is byte-identical across runs of identical input.
-	StepInput map[string]json.RawMessage `json:"step_input,omitempty" yaml:"step_input,omitempty"`
+	StepInput map[string]json.RawMessage `json:"step_input,omitempty" yaml:"step_input,omitempty" cbor:"step_input,omitempty"`
 	// Context The render-time context the host hands the step. The step carries it through; the schema does not interpret its internal shape (an opaque passthrough), so the FRP socket schema does not bind to the cross-boundary render-context shape. The render context's own contract is the render-context wire shape; a guest that reads it consults that contract.
-	Context json.RawMessage `json:"context" yaml:"context"`
+	Context json.RawMessage `json:"context" yaml:"context" cbor:"context"`
 	// StepIndex This step's zero-based position in the pipeline.
-	StepIndex int `json:"step_index" yaml:"step_index"`
+	StepIndex int `json:"step_index" yaml:"step_index" cbor:"step_index"`
 	// PrecedingSteps The pipeline steps that ran before this step, so a guest can inspect what came before it.
-	PrecedingSteps []PrecedingStep `json:"preceding_steps,omitempty" yaml:"preceding_steps,omitempty"`
+	PrecedingSteps []PrecedingStep `json:"preceding_steps,omitempty" yaml:"preceding_steps,omitempty" cbor:"preceding_steps,omitempty"`
 }
 
 // FRPStepOutput The payload a feature-recipe-pipeline guest returns for one pipeline step: the RFC 6902 patches the apply engine applies to the keyed document set, the side effects this step produced, and any diagnostics the guest raised.
 type FRPStepOutput struct {
 	// Patches Structured RFC 6902 operations the step emits against documents in the keyed set. Each names its target document by scope and key, then names the op, path, and value explicitly. Distinct from the mutator socket's opaque patch slice: an FRP step's patches are applied by the apply engine and restored by snapshot on a failed step, so the operations are explicit here rather than opaque.
-	Patches []JSONPatchOp `json:"patches,omitempty" yaml:"patches,omitempty"`
+	Patches []JSONPatchOp `json:"patches,omitempty" yaml:"patches,omitempty" cbor:"patches,omitempty"`
 	// SideEffects The effects this step produced beyond patching an existing document (for example emitting a CRD or writing a file).
-	SideEffects []SideEffect `json:"side_effects,omitempty" yaml:"side_effects,omitempty"`
+	SideEffects []SideEffect `json:"side_effects,omitempty" yaml:"side_effects,omitempty" cbor:"side_effects,omitempty"`
 	// Diagnostics Diagnostics the guest raised. Each element is the shared Wasm-plugin diagnostic shape.
-	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty" cbor:"diagnostics,omitempty"`
 	// Outputs The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
-	Outputs map[string]json.RawMessage `json:"outputs,omitempty" yaml:"outputs,omitempty"`
+	Outputs map[string]json.RawMessage `json:"outputs,omitempty" yaml:"outputs,omitempty" cbor:"outputs,omitempty"`
 	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
-	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
 
 // DocumentSet The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and is blind to its content; the guest selects the documents it targets by content and addresses its patches by key.
 type DocumentSet struct {
 	// Own The node's own rendered output, keyed by unit token. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
-	Own map[string]Unit `json:"own" yaml:"own"`
+	Own map[string]Unit `json:"own" yaml:"own" cbor:"own"`
 	// Host The rendered output of the component a component-scope FeatureRecipe is attached to — the cross-entity surface. Absent for Recipe steps and boundary-scope FeatureRecipe steps, which have no host component. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
-	Host map[string]Unit `json:"host,omitempty" yaml:"host,omitempty"`
+	Host map[string]Unit `json:"host,omitempty" yaml:"host,omitempty" cbor:"host,omitempty"`
 }
 
 // Unit One addressable piece a provider's emitted output carves into — the hybrid view of one piece of output. A structured unit carries a tree (an RFC-6902-addressable view) and is a PATCH target; an opaque unit carries only its media type and bytes (no tree) and is a SELECT and EMIT target but not a PATCH target.
 type Unit struct {
 	// Token The opaque positional address the codec assigns — the emitted filename for a single-document file, or `<filename>#<ordinal>` (file order) when one file carries several documents. The guest treats it as opaque: it content-selects a unit and echoes the token, never parsing it.
-	Token string `json:"token" yaml:"token"`
+	Token string `json:"token" yaml:"token" cbor:"token"`
 	// Bytes The unit's original bytes, the reassembly source, base64-encoded on the wire. Reassembly is byte-faithful by construction: untouched bytes are re-joined from this verbatim.
-	Bytes []byte `json:"bytes,omitempty" yaml:"bytes,omitempty"`
+	Bytes []byte `json:"bytes,omitempty" yaml:"bytes,omitempty" cbor:"bytes,omitempty"`
 	// MediaType The unit's content type (for example `application/yaml` for the stock YAML codec), so the guest knows what it is looking at.
-	MediaType string `json:"media_type,omitempty" yaml:"media_type,omitempty"`
+	MediaType string `json:"media_type,omitempty" yaml:"media_type,omitempty" cbor:"media_type,omitempty"`
 	// Tree The unit's RFC-6902-addressable normalized view when the codec produced one, or absent when it did not. A unit with a tree is structured (a PATCH target); a unit with no tree is opaque. The document is opaque to the host, which pipes the bytes through without interpreting them, so the tree carries any JSON value at this schema layer.
-	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty"`
+	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty" cbor:"tree,omitempty"`
 }
 
 // JSONPatchOp One RFC 6902 JSON-Patch operation an FRP step emits against one document in the keyed set. Scope and key name the target document; op, path, value, and from carry the operation against a location within that document.
 type JSONPatchOp struct {
 	// Scope The document root the operation targets: own (the node's own rendered documents) or host (the documents of the component a component-scope FeatureRecipe is attached to).
-	Scope string `json:"scope" yaml:"scope"`
+	Scope string `json:"scope" yaml:"scope" cbor:"scope"`
 	// Key The emitted-filename key within the named root — the key the guest learned at runtime from the document it selected by content.
-	Key string `json:"key" yaml:"key"`
+	Key string `json:"key" yaml:"key" cbor:"key"`
 	// Op The RFC 6902 operation: one of add, remove, replace, move, copy, test.
-	Op string `json:"op" yaml:"op"`
+	Op string `json:"op" yaml:"op" cbor:"op"`
 	// Path An RFC 6901 JSON Pointer to the target location within the named document.
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path" yaml:"path" cbor:"path"`
 	// Value The operand for add, replace, and test, omitted otherwise. An arbitrary JSON document fragment the guest authored, which the host pipes through opaquely; it carries any JSON value at this schema layer.
-	Value any `json:"value,omitempty" yaml:"value,omitempty"`
+	Value any `json:"value,omitempty" yaml:"value,omitempty" cbor:"value,omitempty"`
 	// From The source pointer for move and copy, omitted otherwise.
-	From string `json:"from,omitempty" yaml:"from,omitempty"`
+	From string `json:"from,omitempty" yaml:"from,omitempty" cbor:"from,omitempty"`
 }
 
 // SideEffect One effect a feature-recipe-pipeline step produces beyond patching an existing document. Kind is an open string rather than a closed enum so a future effect kind extends the contract without an ABI break. When kind is emit_crd, crd carries the CRD document and file is omitted; when kind is emit_file, file carries the file to write and crd is omitted.
 type SideEffect struct {
 	// Kind The effect kind — for example emit_crd or emit_file. An open string so a future effect kind extends the contract without an ABI break.
-	Kind string `json:"kind" yaml:"kind"`
+	Kind string `json:"kind" yaml:"kind" cbor:"kind"`
 	// Scope The document root the emit contributes to: own (the node's own set) or host (the attached host component's set). An absent scope means own at apply time.
-	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
+	Scope string `json:"scope,omitempty" yaml:"scope,omitempty" cbor:"scope,omitempty"`
 	// Crd The CRD document the step emits when kind is emit_crd. Opaque to the host, which pipes it through without interpreting it; it carries any JSON value at this schema layer.
-	Crd  json.RawMessage `json:"crd,omitempty" yaml:"crd,omitempty"`
-	File *SideEffectFile `json:"file,omitempty" yaml:"file,omitempty"`
+	Crd  json.RawMessage `json:"crd,omitempty" yaml:"crd,omitempty" cbor:"crd,omitempty"`
+	File *SideEffectFile `json:"file,omitempty" yaml:"file,omitempty" cbor:"file,omitempty"`
 }
 
 // SideEffectFile The file an emit_file side effect writes: the target path and the file content.
 type SideEffectFile struct {
 	// Path The target path the file is written to.
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path" yaml:"path" cbor:"path"`
 	// Content The file content to write.
-	Content string `json:"content" yaml:"content"`
+	Content string `json:"content" yaml:"content" cbor:"content"`
 }
 
 // PrecedingStep One pipeline step that ran before the current step, so a guest can inspect what came before it: the step's pipeline index, the Wasm plugin URI that implemented it, and the side effects that step emitted.
 type PrecedingStep struct {
 	// Index The preceding step's zero-based position in the pipeline.
-	Index int `json:"index" yaml:"index"`
+	Index int `json:"index" yaml:"index" cbor:"index"`
 	// PluginURI The Universal URI of the Wasm plugin that implemented the preceding step.
-	PluginURI string `json:"plugin_uri" yaml:"plugin_uri"`
+	PluginURI string `json:"plugin_uri" yaml:"plugin_uri" cbor:"plugin_uri"`
 	// SideEffects The side effects the preceding step emitted.
-	SideEffects []SideEffect `json:"side_effects,omitempty" yaml:"side_effects,omitempty"`
+	SideEffects []SideEffect `json:"side_effects,omitempty" yaml:"side_effects,omitempty" cbor:"side_effects,omitempty"`
 }
 
 // MarshalJSON encodes FRPStepInput in field-declaration order, omitting
@@ -1091,6 +1092,886 @@ func (t *PrecedingStep) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// EncodeCBOR encodes FRPStepInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t FRPStepInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends FRPStepInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t FRPStepInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	if len(t.StepInput) != 0 {
+		n++
+	}
+	if len(t.PrecedingSteps) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "context")
+	dst = appendCBORByteString(dst, t.Context)
+	dst = appendCBORTextString(dst, "documents")
+	if dst, err = t.Documents.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	dst = appendCBORTextString(dst, "step_index")
+	dst = appendCBORInt(dst, int64(t.StepIndex))
+	if len(t.StepInput) != 0 {
+		dst = appendCBORTextString(dst, "step_input")
+		{
+			keys := make([]string, 0, len(t.StepInput))
+			for k := range t.StepInput {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.StepInput[k]
+				dst = appendCBORByteString(dst, mv)
+			}
+		}
+	}
+	if len(t.PrecedingSteps) != 0 {
+		dst = appendCBORTextString(dst, "preceding_steps")
+		dst = appendCBORHead(dst, 4, uint64(len(t.PrecedingSteps)))
+		for i := range t.PrecedingSteps {
+			ev := t.PrecedingSteps[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes FRPStepInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *FRPStepInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *FRPStepInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "documents":
+			if err := (&t.Documents).decodeCBOR(dec); err != nil {
+				return err
+			}
+		case "step_input":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]json.RawMessage, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv json.RawMessage
+					if v, err := dec.readByteString(); err != nil {
+						return err
+					} else {
+						mv = json.RawMessage(v)
+					}
+					m[mk] = mv
+				}
+				t.StepInput = m
+			}
+		case "context":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Context = json.RawMessage(v)
+			}
+		case "step_index":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.StepIndex = int(v)
+			}
+		case "preceding_steps":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]PrecedingStep, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev PrecedingStep
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.PrecedingSteps = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes FRPStepOutput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t FRPStepOutput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends FRPStepOutput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t FRPStepOutput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 0
+	if t.Error != "" {
+		n++
+	}
+	if len(t.Outputs) != 0 {
+		n++
+	}
+	if len(t.Patches) != 0 {
+		n++
+	}
+	if len(t.Diagnostics) != 0 {
+		n++
+	}
+	if len(t.SideEffects) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Error != "" {
+		dst = appendCBORTextString(dst, "error")
+		dst = appendCBORTextString(dst, t.Error)
+	}
+	if len(t.Outputs) != 0 {
+		dst = appendCBORTextString(dst, "outputs")
+		{
+			keys := make([]string, 0, len(t.Outputs))
+			for k := range t.Outputs {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.Outputs[k]
+				dst = appendCBORByteString(dst, mv)
+			}
+		}
+	}
+	if len(t.Patches) != 0 {
+		dst = appendCBORTextString(dst, "patches")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Patches)))
+		for i := range t.Patches {
+			ev := t.Patches[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Diagnostics) != 0 {
+		dst = appendCBORTextString(dst, "diagnostics")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Diagnostics)))
+		for i := range t.Diagnostics {
+			ev := t.Diagnostics[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.SideEffects) != 0 {
+		dst = appendCBORTextString(dst, "side_effects")
+		dst = appendCBORHead(dst, 4, uint64(len(t.SideEffects)))
+		for i := range t.SideEffects {
+			ev := t.SideEffects[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes FRPStepOutput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *FRPStepOutput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *FRPStepOutput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "patches":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]JSONPatchOp, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev JSONPatchOp
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Patches = s
+			}
+		case "side_effects":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]SideEffect, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev SideEffect
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.SideEffects = s
+			}
+		case "diagnostics":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]Diagnostic, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev Diagnostic
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Diagnostics = s
+			}
+		case "outputs":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]json.RawMessage, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv json.RawMessage
+					if v, err := dec.readByteString(); err != nil {
+						return err
+					} else {
+						mv = json.RawMessage(v)
+					}
+					m[mk] = mv
+				}
+				t.Outputs = m
+			}
+		case "error":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Error = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes DocumentSet as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t DocumentSet) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends DocumentSet's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t DocumentSet) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if len(t.Host) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "own")
+	{
+		keys := make([]string, 0, len(t.Own))
+		for k := range t.Own {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.Own[k]
+			if dst, err = mv.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Host) != 0 {
+		dst = appendCBORTextString(dst, "host")
+		{
+			keys := make([]string, 0, len(t.Host))
+			for k := range t.Host {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.Host[k]
+				if dst, err = mv.appendCBOR(dst); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes DocumentSet from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *DocumentSet) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *DocumentSet) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "own":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]Unit, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv Unit
+					if err := (&mv).decodeCBOR(dec); err != nil {
+						return err
+					}
+					m[mk] = mv
+				}
+				t.Own = m
+			}
+		case "host":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]Unit, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv Unit
+					if err := (&mv).decodeCBOR(dec); err != nil {
+						return err
+					}
+					m[mk] = mv
+				}
+				t.Host = m
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes Unit as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t Unit) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends Unit's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t Unit) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if len(t.Tree) != 0 {
+		n++
+	}
+	if len(t.Bytes) != 0 {
+		n++
+	}
+	if t.MediaType != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	if len(t.Tree) != 0 {
+		dst = appendCBORTextString(dst, "tree")
+		dst = appendCBORByteString(dst, t.Tree)
+	}
+	if len(t.Bytes) != 0 {
+		dst = appendCBORTextString(dst, "bytes")
+		dst = appendCBORByteString(dst, t.Bytes)
+	}
+	dst = appendCBORTextString(dst, "token")
+	dst = appendCBORTextString(dst, t.Token)
+	if t.MediaType != "" {
+		dst = appendCBORTextString(dst, "media_type")
+		dst = appendCBORTextString(dst, t.MediaType)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes Unit from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *Unit) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *Unit) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "token":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Token = s
+			}
+		case "bytes":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Bytes = v
+			}
+		case "media_type":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.MediaType = s
+			}
+		case "tree":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Tree = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes JSONPatchOp as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t JSONPatchOp) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends JSONPatchOp's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t JSONPatchOp) appendCBOR(dst []byte) ([]byte, error) {
+	n := 4
+	if t.From != "" {
+		n++
+	}
+	if t.Value != nil {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "op")
+	dst = appendCBORTextString(dst, t.Op)
+	dst = appendCBORTextString(dst, "key")
+	dst = appendCBORTextString(dst, t.Key)
+	if t.From != "" {
+		dst = appendCBORTextString(dst, "from")
+		dst = appendCBORTextString(dst, t.From)
+	}
+	dst = appendCBORTextString(dst, "path")
+	dst = appendCBORTextString(dst, t.Path)
+	dst = appendCBORTextString(dst, "scope")
+	dst = appendCBORTextString(dst, t.Scope)
+	if t.Value != nil {
+		dst = appendCBORTextString(dst, "value")
+		if raw, mErr := json.Marshal(t.Value); mErr != nil {
+			return nil, mErr
+		} else {
+			dst = appendCBORByteString(dst, raw)
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes JSONPatchOp from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *JSONPatchOp) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *JSONPatchOp) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "scope":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Scope = s
+			}
+		case "key":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Key = s
+			}
+		case "op":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Op = s
+			}
+		case "path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "value":
+			if raw, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				d2 := json.NewDecoder(bytes.NewReader(raw))
+				d2.UseNumber()
+				if err := d2.Decode(&t.Value); err != nil {
+					return err
+				}
+			}
+		case "from":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.From = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes SideEffect as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t SideEffect) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends SideEffect's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t SideEffect) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if len(t.Crd) != 0 {
+		n++
+	}
+	if t.File != nil {
+		n++
+	}
+	if t.Scope != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if len(t.Crd) != 0 {
+		dst = appendCBORTextString(dst, "crd")
+		dst = appendCBORByteString(dst, t.Crd)
+	}
+	if t.File != nil {
+		dst = appendCBORTextString(dst, "file")
+		if t.File == nil {
+			dst = append(dst, 0xf6)
+		} else if dst, err = t.File.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	dst = appendCBORTextString(dst, "kind")
+	dst = appendCBORTextString(dst, t.Kind)
+	if t.Scope != "" {
+		dst = appendCBORTextString(dst, "scope")
+		dst = appendCBORTextString(dst, t.Scope)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes SideEffect from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *SideEffect) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *SideEffect) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "kind":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Kind = s
+			}
+		case "scope":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Scope = s
+			}
+		case "crd":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Crd = json.RawMessage(v)
+			}
+		case "file":
+			{
+				v := new(SideEffectFile)
+				if err := v.decodeCBOR(dec); err != nil {
+					return err
+				}
+				t.File = v
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes SideEffectFile as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t SideEffectFile) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends SideEffectFile's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t SideEffectFile) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "path")
+	dst = appendCBORTextString(dst, t.Path)
+	dst = appendCBORTextString(dst, "content")
+	dst = appendCBORTextString(dst, t.Content)
+	return dst, nil
+}
+
+// DecodeCBOR decodes SideEffectFile from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *SideEffectFile) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *SideEffectFile) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "content":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Content = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes PrecedingStep as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t PrecedingStep) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends PrecedingStep's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t PrecedingStep) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.SideEffects) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "index")
+	dst = appendCBORInt(dst, int64(t.Index))
+	dst = appendCBORTextString(dst, "plugin_uri")
+	dst = appendCBORTextString(dst, t.PluginURI)
+	if len(t.SideEffects) != 0 {
+		dst = appendCBORTextString(dst, "side_effects")
+		dst = appendCBORHead(dst, 4, uint64(len(t.SideEffects)))
+		for i := range t.SideEffects {
+			ev := t.SideEffects[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes PrecedingStep from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *PrecedingStep) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *PrecedingStep) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "index":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.Index = int(v)
+			}
+		case "plugin_uri":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.PluginURI = s
+			}
+		case "side_effects":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]SideEffect, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev SideEffect
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.SideEffects = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // expectDelim reads the next token and asserts it is the given delimiter.
 func expectDelim(dec *json.Decoder, want json.Delim) error {
 	tok, err := dec.Token()
@@ -1305,4 +2186,379 @@ func writeJSONBytes(buf *bytes.Buffer, b []byte) {
 	buf.WriteByte('"')
 	buf.WriteString(base64.StdEncoding.EncodeToString(b))
 	buf.WriteByte('"')
+}
+
+// appendCBORHead appends a CBOR head: the major type in the top three bits and
+// the shortest length/argument encoding.
+func appendCBORHead(dst []byte, major byte, arg uint64) []byte {
+	mb := major << 5
+	switch {
+	case arg < 24:
+		return append(dst, mb|byte(arg))
+	case arg < 0x100:
+		return append(dst, mb|24, byte(arg))
+	case arg < 0x10000:
+		return append(dst, mb|25, byte(arg>>8), byte(arg))
+	case arg < 0x100000000:
+		return append(dst, mb|26, byte(arg>>24), byte(arg>>16), byte(arg>>8), byte(arg))
+	default:
+		return append(dst, mb|27,
+			byte(arg>>56), byte(arg>>48), byte(arg>>40), byte(arg>>32),
+			byte(arg>>24), byte(arg>>16), byte(arg>>8), byte(arg))
+	}
+}
+
+// appendCBORInt appends a signed integer as CBOR major type 0 (non-negative) or
+// 1 (negative), shortest head.
+func appendCBORInt(dst []byte, i int64) []byte {
+	if i < 0 {
+		return appendCBORHead(dst, 1, uint64(-1-i))
+	}
+	return appendCBORHead(dst, 0, uint64(i))
+}
+
+// appendCBORTextString appends s as a CBOR text string (major 3): shortest
+// length head then the UTF-8 bytes verbatim.
+func appendCBORTextString(dst []byte, s string) []byte {
+	dst = appendCBORHead(dst, 3, uint64(len(s)))
+	return append(dst, s...)
+}
+
+// appendCBORByteString appends b as a CBOR byte string (major 2): shortest
+// length head then the bytes verbatim.
+func appendCBORByteString(dst, b []byte) []byte {
+	dst = appendCBORHead(dst, 2, uint64(len(b)))
+	return append(dst, b...)
+}
+
+// appendCBORBool appends the fixed single-byte CBOR bool.
+func appendCBORBool(dst []byte, v bool) []byte {
+	if v {
+		return append(dst, 0xf5)
+	}
+	return append(dst, 0xf4)
+}
+
+// appendCBORFloat appends f as a canonical CBOR float per CBOR CDE §4.2: the
+// shortest of float16/float32/float64 that round-trips to the exact value, with
+// NaN canonicalized to 0xf97e00, ±Inf to the float16 infinities, and ±0
+// preserved by sign. No numeric reduction: an integer-valued float stays a
+// float.
+func appendCBORFloat(dst []byte, f float64) []byte {
+	switch {
+	case math.IsNaN(f):
+		return append(dst, 0xf9, 0x7e, 0x00)
+	case math.IsInf(f, 1):
+		return append(dst, 0xf9, 0x7c, 0x00)
+	case math.IsInf(f, -1):
+		return append(dst, 0xf9, 0xfc, 0x00)
+	}
+	f32 := float32(f)
+	if float64(f32) == f {
+		if h, ok := f32ToF16Exact(math.Float32bits(f32)); ok {
+			return append(dst, 0xf9, byte(h>>8), byte(h))
+		}
+		bits := math.Float32bits(f32)
+		return append(dst, 0xfa, byte(bits>>24), byte(bits>>16), byte(bits>>8), byte(bits))
+	}
+	bits := math.Float64bits(f)
+	return append(dst, 0xfb,
+		byte(bits>>56), byte(bits>>48), byte(bits>>40), byte(bits>>32),
+		byte(bits>>24), byte(bits>>16), byte(bits>>8), byte(bits))
+}
+
+// f32ToF16Exact converts float32 bits to a float16 if the value is EXACTLY
+// representable (no rounding), returning the 16-bit encoding and true. It is
+// used only to select the shortest float that round-trips, so a lossy
+// conversion returns false and the caller keeps the wider width. ±0 preserves
+// its sign; Inf/NaN are handled by the caller.
+func f32ToF16Exact(b uint32) (uint16, bool) {
+	sign := uint16((b >> 16) & 0x8000)
+	exp := int32((b >> 23) & 0xff)
+	mant := b & 0x7fffff
+	if exp == 0 {
+		if mant == 0 {
+			return sign, true // ±0
+		}
+		return 0, false // float32 subnormal: not float16-exact
+	}
+	if exp == 0xff {
+		return 0, false // Inf/NaN: handled by the caller
+	}
+	e := exp - 127
+	switch {
+	case e >= -14 && e <= 15:
+		if mant&0x1fff != 0 {
+			return 0, false // low mantissa bits would be lost
+		}
+		return sign | uint16((e+15)<<10) | uint16(mant>>13), true
+	case e >= -24 && e <= -15:
+		full := mant | 0x800000 // add the implicit leading 1
+		shift := uint32(-(e + 1))
+		if full&((1<<shift)-1) != 0 {
+			return 0, false // low bits would be lost
+		}
+		hm := full >> shift
+		if hm == 0 || hm > 0x3ff {
+			return 0, false
+		}
+		return sign | uint16(hm), true
+	default:
+		return 0, false
+	}
+}
+
+// float16ToFloat64 expands a CBOR half-precision float to float64.
+func float16ToFloat64(h uint16) float64 {
+	sign := uint32(h&0x8000) << 16
+	exp := uint32(h>>10) & 0x1f
+	mant := uint32(h & 0x3ff)
+	switch exp {
+	case 0:
+		if mant == 0 {
+			return float64(math.Float32frombits(sign)) // ±0
+		}
+		e := uint32(0)
+		for mant&0x400 == 0 {
+			mant <<= 1
+			e++
+		}
+		mant &= 0x3ff
+		exp32 := uint32(127 - 15 - e + 1)
+		return float64(math.Float32frombits(sign | (exp32 << 23) | (mant << 13)))
+	case 0x1f:
+		if mant == 0 {
+			return float64(math.Float32frombits(sign | 0x7f800000)) // ±Inf
+		}
+		return float64(math.Float32frombits(sign | 0x7f800000 | (mant << 13))) // NaN
+	default:
+		exp32 := exp - 15 + 127
+		return float64(math.Float32frombits(sign | (exp32 << 23) | (mant << 13)))
+	}
+}
+
+// sortCBORKeys sorts map keys into canonical CBOR order: by the bytewise order
+// of their encoded text-key bytes (length head first, then UTF-8 content).
+func sortCBORKeys(keys []string) {
+	sort.Slice(keys, func(i, j int) bool { return cborLessKey(keys[i], keys[j]) })
+}
+
+// cborLessKey is the runtime twin of the generator's key comparator.
+func cborLessKey(a, b string) bool {
+	if len(a) != len(b) {
+		ha := cborStrHeadBytes(len(a))
+		hb := cborStrHeadBytes(len(b))
+		return bytes.Compare(ha, hb) < 0
+	}
+	return a < b
+}
+
+// cborStrHeadBytes returns the CBOR text-string length head for a string of the
+// given byte length.
+func cborStrHeadBytes(n int) []byte {
+	switch {
+	case n < 24:
+		return []byte{0x60 | byte(n)}
+	case n < 0x100:
+		return []byte{0x78, byte(n)}
+	case n < 0x10000:
+		return []byte{0x79, byte(n >> 8), byte(n)}
+	default:
+		return []byte{0x7a, byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)}
+	}
+}
+
+// cborDec is a minimal canonical-CBOR reader over a byte slice. It reads only
+// the definite-length items the codec produces; indefinite lengths and
+// unsupported majors are rejected loudly.
+type cborDec struct {
+	data []byte
+	pos  int
+}
+
+// readHead reads one item head, returning the major type, the additional-info
+// nibble, and the decoded argument (the immediate for ai < 24, else the
+// big-endian follow bytes).
+func (d *cborDec) readHead() (byte, byte, uint64, error) {
+	if d.pos >= len(d.data) {
+		return 0, 0, 0, fmt.Errorf("abi: cbor: unexpected end of input")
+	}
+	ib := d.data[d.pos]
+	d.pos++
+	major := ib >> 5
+	ai := ib & 0x1f
+	switch {
+	case ai < 24:
+		return major, ai, uint64(ai), nil
+	case ai == 24:
+		if d.pos+1 > len(d.data) {
+			return 0, 0, 0, fmt.Errorf("abi: cbor: truncated 1-byte argument")
+		}
+		v := uint64(d.data[d.pos])
+		d.pos++
+		return major, ai, v, nil
+	case ai == 25:
+		if d.pos+2 > len(d.data) {
+			return 0, 0, 0, fmt.Errorf("abi: cbor: truncated 2-byte argument")
+		}
+		v := uint64(d.data[d.pos])<<8 | uint64(d.data[d.pos+1])
+		d.pos += 2
+		return major, ai, v, nil
+	case ai == 26:
+		if d.pos+4 > len(d.data) {
+			return 0, 0, 0, fmt.Errorf("abi: cbor: truncated 4-byte argument")
+		}
+		v := uint64(d.data[d.pos])<<24 | uint64(d.data[d.pos+1])<<16 | uint64(d.data[d.pos+2])<<8 | uint64(d.data[d.pos+3])
+		d.pos += 4
+		return major, ai, v, nil
+	case ai == 27:
+		if d.pos+8 > len(d.data) {
+			return 0, 0, 0, fmt.Errorf("abi: cbor: truncated 8-byte argument")
+		}
+		var v uint64
+		for k := 0; k < 8; k++ {
+			v = v<<8 | uint64(d.data[d.pos+k])
+		}
+		d.pos += 8
+		return major, ai, v, nil
+	default:
+		return 0, 0, 0, fmt.Errorf("abi: cbor: reserved additional info %d", ai)
+	}
+}
+
+func (d *cborDec) readMapHeader() (int, error) {
+	major, _, arg, err := d.readHead()
+	if err != nil {
+		return 0, err
+	}
+	if major != 5 {
+		return 0, fmt.Errorf("abi: cbor: expected map, got major %d", major)
+	}
+	return int(arg), nil
+}
+
+func (d *cborDec) readArrayHeader() (int, error) {
+	major, _, arg, err := d.readHead()
+	if err != nil {
+		return 0, err
+	}
+	if major != 4 {
+		return 0, fmt.Errorf("abi: cbor: expected array, got major %d", major)
+	}
+	return int(arg), nil
+}
+
+func (d *cborDec) readTextString() (string, error) {
+	major, _, arg, err := d.readHead()
+	if err != nil {
+		return "", err
+	}
+	if major != 3 {
+		return "", fmt.Errorf("abi: cbor: expected text string, got major %d", major)
+	}
+	if d.pos+int(arg) > len(d.data) {
+		return "", fmt.Errorf("abi: cbor: truncated text string")
+	}
+	s := string(d.data[d.pos : d.pos+int(arg)])
+	d.pos += int(arg)
+	return s, nil
+}
+
+func (d *cborDec) readByteString() ([]byte, error) {
+	major, _, arg, err := d.readHead()
+	if err != nil {
+		return nil, err
+	}
+	if major != 2 {
+		return nil, fmt.Errorf("abi: cbor: expected byte string, got major %d", major)
+	}
+	if d.pos+int(arg) > len(d.data) {
+		return nil, fmt.Errorf("abi: cbor: truncated byte string")
+	}
+	out := make([]byte, arg)
+	copy(out, d.data[d.pos:d.pos+int(arg)])
+	d.pos += int(arg)
+	return out, nil
+}
+
+func (d *cborDec) readInt() (int64, error) {
+	major, _, arg, err := d.readHead()
+	if err != nil {
+		return 0, err
+	}
+	switch major {
+	case 0:
+		return int64(arg), nil
+	case 1:
+		return -1 - int64(arg), nil
+	default:
+		return 0, fmt.Errorf("abi: cbor: expected integer, got major %d", major)
+	}
+}
+
+func (d *cborDec) readFloat() (float64, error) {
+	major, ai, arg, err := d.readHead()
+	if err != nil {
+		return 0, err
+	}
+	if major != 7 {
+		return 0, fmt.Errorf("abi: cbor: expected float, got major %d", major)
+	}
+	switch ai {
+	case 25:
+		return float16ToFloat64(uint16(arg)), nil
+	case 26:
+		return float64(math.Float32frombits(uint32(arg))), nil
+	case 27:
+		return math.Float64frombits(arg), nil
+	default:
+		return 0, fmt.Errorf("abi: cbor: expected float, got additional info %d", ai)
+	}
+}
+
+func (d *cborDec) readBool() (bool, error) {
+	major, ai, _, err := d.readHead()
+	if err != nil {
+		return false, err
+	}
+	if major != 7 || (ai != 20 && ai != 21) {
+		return false, fmt.Errorf("abi: cbor: expected bool")
+	}
+	return ai == 21, nil
+}
+
+// skip consumes exactly one CBOR item (recursively for arrays and maps),
+// discarding it — used for an unknown map key's value.
+func (d *cborDec) skip() error {
+	major, ai, arg, err := d.readHead()
+	if err != nil {
+		return err
+	}
+	switch major {
+	case 0, 1, 7:
+		return nil // argument already consumed by readHead
+	case 2, 3:
+		if d.pos+int(arg) > len(d.data) {
+			return fmt.Errorf("abi: cbor: truncated string")
+		}
+		d.pos += int(arg)
+		return nil
+	case 4:
+		for k := 0; k < int(arg); k++ {
+			if err := d.skip(); err != nil {
+				return err
+			}
+		}
+		return nil
+	case 5:
+		for k := 0; k < int(arg)*2; k++ {
+			if err := d.skip(); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		_ = ai
+		return fmt.Errorf("abi: cbor: cannot skip major %d", major)
+	}
 }

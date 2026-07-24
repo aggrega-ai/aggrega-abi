@@ -1,1 +1,0 @@
-{"abi_version":"v1alpha1","plugin_type":"cli","exports":[{"name":"cli_run","host_functions":["aggrega_cli_write_stdout"]}],"commands":[{"name":"moo","description":"This Aggrega has Super Cow Powers. Pass --alien for a UFO abduction scene."}],"metadata":{"author":"aggrega","license":"Apache-2.0"}}

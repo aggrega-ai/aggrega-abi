@@ -6,6 +6,11 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -133,5 +138,252 @@ export function encodeMutatorSource(v: MutatorSource): string {
 
 export function decodeMutatorSource(data: string): MutatorSource {
   return JSON.parse(data) as MutatorSource;
+}
+
+export function encodeCBORMutatorInput(v: MutatorInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORMutatorInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORMutatorInput(out: number[], v: MutatorInput): void {
+  let n = 2;
+  if (v.sources !== undefined && v.sources.length > 0) n++;
+  if (v.settings !== undefined && v.settings !== null) n++;
+  writeHead(out, 5, n);
+  writeText(out, "graph");
+  appendCBORMutatorGraph(out, v.graph);
+  if (v.sources !== undefined && v.sources.length > 0) {
+    writeText(out, "sources");
+    {
+      const a0 = v.sources;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORMutatorSource(out, ee0);
+      }
+    }
+  }
+  if (v.settings !== undefined && v.settings !== null) {
+    writeText(out, "settings");
+    writeBytes(out, utf8Encode(JSON.stringify(v.settings)));
+  }
+  writeText(out, "compilation_context");
+  appendCBORCompilationContext(out, v.compilation_context);
+}
+
+export function decodeCBORMutatorInput(data: Uint8Array): MutatorInput {
+  const dec = new CborDec(data);
+  return decodeCBORMutatorInputFrom(dec);
+}
+
+export function decodeCBORMutatorInputFrom(dec: CborDec): MutatorInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "compilation_context": o["compilation_context"] = decodeCBORCompilationContextFrom(dec); break;
+      case "graph": o["graph"] = decodeCBORMutatorGraphFrom(dec); break;
+      case "sources": o["sources"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORMutatorSourceFrom(dec)); } return a; })(); break;
+      case "settings": o["settings"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as MutatorInput;
+}
+
+export function encodeCBORMutatorOutput(v: MutatorOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORMutatorOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORMutatorOutput(out: number[], v: MutatorOutput): void {
+  let n = 1;
+  if (v.error !== undefined && v.error !== "") n++;
+  writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  writeText(out, "patches");
+  {
+    const a0 = v.patches;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      writeBytes(out, utf8Encode(JSON.stringify(ee0)));
+    }
+  }
+}
+
+export function decodeCBORMutatorOutput(data: Uint8Array): MutatorOutput {
+  const dec = new CborDec(data);
+  return decodeCBORMutatorOutputFrom(dec);
+}
+
+export function decodeCBORMutatorOutputFrom(dec: CborDec): MutatorOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "patches": o["patches"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(JSON.parse(utf8Decode(dec.readBytes()))); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as MutatorOutput;
+}
+
+export function encodeCBORCompilationContext(v: CompilationContext): Uint8Array {
+  const out: number[] = [];
+  appendCBORCompilationContext(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORCompilationContext(out: number[], v: CompilationContext): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "environment");
+  writeText(out, v.environment);
+  writeText(out, "release_name");
+  writeText(out, v.release_name);
+}
+
+export function decodeCBORCompilationContext(data: Uint8Array): CompilationContext {
+  const dec = new CborDec(data);
+  return decodeCBORCompilationContextFrom(dec);
+}
+
+export function decodeCBORCompilationContextFrom(dec: CborDec): CompilationContext {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "release_name": o["release_name"] = dec.readText(); break;
+      case "environment": o["environment"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as CompilationContext;
+}
+
+export function encodeCBORMutatorGraph(v: MutatorGraph): Uint8Array {
+  const out: number[] = [];
+  appendCBORMutatorGraph(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORMutatorGraph(out: number[], v: MutatorGraph): void {
+  let n = 1;
+  writeHead(out, 5, n);
+  writeText(out, "nodes");
+  {
+    const m0 = v.nodes;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      appendCBORMutatorNode(out, m0[kk0]);
+    }
+  }
+}
+
+export function decodeCBORMutatorGraph(data: Uint8Array): MutatorGraph {
+  const dec = new CborDec(data);
+  return decodeCBORMutatorGraphFrom(dec);
+}
+
+export function decodeCBORMutatorGraphFrom(dec: CborDec): MutatorGraph {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "nodes": o["nodes"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORMutatorNodeFrom(dec); } return m; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as MutatorGraph;
+}
+
+export function encodeCBORMutatorNode(v: MutatorNode): Uint8Array {
+  const out: number[] = [];
+  appendCBORMutatorNode(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORMutatorNode(out: number[], v: MutatorNode): void {
+  let n = 3;
+  writeHead(out, 5, n);
+  writeText(out, "labels");
+  {
+    const m0 = v.labels;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      writeText(out, m0[kk0]);
+    }
+  }
+  writeText(out, "component");
+  writeText(out, v.component);
+  writeText(out, "resolved_version");
+  writeText(out, v.resolved_version);
+}
+
+export function decodeCBORMutatorNode(data: Uint8Array): MutatorNode {
+  const dec = new CborDec(data);
+  return decodeCBORMutatorNodeFrom(dec);
+}
+
+export function decodeCBORMutatorNodeFrom(dec: CborDec): MutatorNode {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "component": o["component"] = dec.readText(); break;
+      case "resolved_version": o["resolved_version"] = dec.readText(); break;
+      case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as MutatorNode;
+}
+
+export function encodeCBORMutatorSource(v: MutatorSource): Uint8Array {
+  const out: number[] = [];
+  appendCBORMutatorSource(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORMutatorSource(out: number[], v: MutatorSource): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "path");
+  writeText(out, v.path);
+  writeText(out, "content");
+  writeText(out, v.content);
+}
+
+export function decodeCBORMutatorSource(data: Uint8Array): MutatorSource {
+  const dec = new CborDec(data);
+  return decodeCBORMutatorSourceFrom(dec);
+}
+
+export function decodeCBORMutatorSourceFrom(dec: CborDec): MutatorSource {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "path": o["path"] = dec.readText(); break;
+      case "content": o["content"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as MutatorSource;
 }
 

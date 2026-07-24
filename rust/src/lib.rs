@@ -14,6 +14,7 @@
 //!
 //! Contract floor: `v1alpha1`.
 
+pub mod cbor_gen;
 mod cli_gen;
 mod describe_gen;
 mod diagnostic_gen;

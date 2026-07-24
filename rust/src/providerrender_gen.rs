@@ -504,3 +504,2464 @@ pub struct LinkResolveOutput {
     pub patches: Vec<LinkPatch>,
 }
 
+
+impl RenderNodeInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if self.source_listing.is_some() { n += 1; }
+        if self.catalog_projection.is_some() { n += 1; }
+        if self.workload_projection.is_some() { n += 1; }
+        if self.artifacts_projection.is_some() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "node");
+        self.node.append_cbor(out)?;
+        crate::cbor_gen::write_text(out, "context");
+        crate::cbor_gen::write_bytes(out, &self.context.get().as_bytes());
+        if let Some(ref x) = self.source_listing {
+            crate::cbor_gen::write_text(out, "source_listing");
+            x.append_cbor(out)?;
+        }
+        if let Some(ref x) = self.catalog_projection {
+            crate::cbor_gen::write_text(out, "catalog_projection");
+            x.append_cbor(out)?;
+        }
+        if let Some(ref x) = self.workload_projection {
+            crate::cbor_gen::write_text(out, "workload_projection");
+            x.append_cbor(out)?;
+        }
+        if let Some(ref x) = self.artifacts_projection {
+            crate::cbor_gen::write_text(out, "artifacts_projection");
+            x.append_cbor(out)?;
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_node: Option<IRNodeProjection> = None;
+        let mut f_context: Option<Box<RawValue>> = None;
+        let mut f_catalog_projection: Option<Box<CatalogProjection>> = None;
+        let mut f_source_listing: Option<Box<SourceListing>> = None;
+        let mut f_workload_projection: Option<Box<WorkloadProjection>> = None;
+        let mut f_artifacts_projection: Option<Box<ArtifactsProjection>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "node" => f_node = Some(IRNodeProjection::decode_cbor_from(dec)?),
+                "context" => f_context = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "catalog_projection" => f_catalog_projection = Some(Box::new(CatalogProjection::decode_cbor_from(dec)?)),
+                "source_listing" => f_source_listing = Some(Box::new(SourceListing::decode_cbor_from(dec)?)),
+                "workload_projection" => f_workload_projection = Some(Box::new(WorkloadProjection::decode_cbor_from(dec)?)),
+                "artifacts_projection" => f_artifacts_projection = Some(Box::new(ArtifactsProjection::decode_cbor_from(dec)?)),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            node: f_node.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field node".to_string()))?,
+            context: f_context.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field context".to_string()))?,
+            catalog_projection: f_catalog_projection,
+            source_listing: f_source_listing,
+            workload_projection: f_workload_projection,
+            artifacts_projection: f_artifacts_projection,
+        })
+    }
+}
+
+impl IRNodeProjection {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 4;
+        if !self.uses.is_empty() { n += 1; }
+        if !self.values.is_empty() { n += 1; }
+        if !self.features.is_empty() { n += 1; }
+        if self.sync_wave != 0 { n += 1; }
+        if !self.recipe_name.is_empty() { n += 1; }
+        if !self.boundary_path.is_empty() { n += 1; }
+        if !self.output_labels.is_empty() { n += 1; }
+        if !self.recipe_version.is_empty() { n += 1; }
+        if !self.label_component_id.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "id");
+        crate::cbor_gen::write_text(out, &self.id);
+        crate::cbor_gen::write_text(out, "type");
+        crate::cbor_gen::write_text(out, &self.r#type);
+        if !self.uses.is_empty() {
+            crate::cbor_gen::write_text(out, "uses");
+            {
+                let c = &self.uses;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    {
+                        let c = mv;
+                        crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                        for ev in c {
+                            crate::cbor_gen::write_text(out, ev);
+                        }
+                    }
+                }
+            }
+        }
+        if !self.values.is_empty() {
+            crate::cbor_gen::write_text(out, "values");
+            {
+                let c = &self.values;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        if !self.features.is_empty() {
+            crate::cbor_gen::write_text(out, "features");
+            {
+                let c = &self.features;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        if self.sync_wave != 0 {
+            crate::cbor_gen::write_text(out, "sync_wave");
+            crate::cbor_gen::write_int(out, *&self.sync_wave);
+        }
+        crate::cbor_gen::write_text(out, "provenance");
+        self.provenance.append_cbor(out)?;
+        if !self.recipe_name.is_empty() {
+            crate::cbor_gen::write_text(out, "recipe_name");
+            crate::cbor_gen::write_text(out, &self.recipe_name);
+        }
+        if !self.boundary_path.is_empty() {
+            crate::cbor_gen::write_text(out, "boundary_path");
+            crate::cbor_gen::write_text(out, &self.boundary_path);
+        }
+        if !self.output_labels.is_empty() {
+            crate::cbor_gen::write_text(out, "output_labels");
+            {
+                let c = &self.output_labels;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
+        if !self.recipe_version.is_empty() {
+            crate::cbor_gen::write_text(out, "recipe_version");
+            crate::cbor_gen::write_text(out, &self.recipe_version);
+        }
+        crate::cbor_gen::write_text(out, "resolved_recipe");
+        crate::cbor_gen::write_text(out, &self.resolved_recipe);
+        if !self.label_component_id.is_empty() {
+            crate::cbor_gen::write_text(out, "label_component_id");
+            crate::cbor_gen::write_text(out, &self.label_component_id);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_id: Option<String> = None;
+        let mut f_type: Option<String> = None;
+        let mut f_resolved_recipe: Option<String> = None;
+        let mut f_values: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_features: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_uses: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut f_boundary_path: String = String::new();
+        let mut f_sync_wave: i64 = 0;
+        let mut f_recipe_name: String = String::new();
+        let mut f_recipe_version: String = String::new();
+        let mut f_label_component_id: String = String::new();
+        let mut f_output_labels: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_provenance: Option<NodeProvenance> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "id" => f_id = Some(dec.read_text()?),
+                "type" => f_type = Some(dec.read_text()?),
+                "resolved_recipe" => f_resolved_recipe = Some(dec.read_text()?),
+                "values" => f_values = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "features" => f_features = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "uses" => f_uses = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
+                "boundary_path" => f_boundary_path = dec.read_text()?,
+                "sync_wave" => f_sync_wave = dec.read_int()?,
+                "recipe_name" => f_recipe_name = dec.read_text()?,
+                "recipe_version" => f_recipe_version = dec.read_text()?,
+                "label_component_id" => f_label_component_id = dec.read_text()?,
+                "output_labels" => f_output_labels = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "provenance" => f_provenance = Some(NodeProvenance::decode_cbor_from(dec)?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            id: f_id.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field id".to_string()))?,
+            r#type: f_type.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field type".to_string()))?,
+            resolved_recipe: f_resolved_recipe.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field resolved_recipe".to_string()))?,
+            values: f_values,
+            features: f_features,
+            uses: f_uses,
+            boundary_path: f_boundary_path,
+            sync_wave: f_sync_wave,
+            recipe_name: f_recipe_name,
+            recipe_version: f_recipe_version,
+            label_component_id: f_label_component_id,
+            output_labels: f_output_labels,
+            provenance: f_provenance.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field provenance".to_string()))?,
+        })
+    }
+}
+
+impl NodeProvenance {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.environment.is_empty() { n += 1; }
+        if !self.provider_name.is_empty() { n += 1; }
+        if !self.aggregate_name.is_empty() { n += 1; }
+        if !self.compiler_version.is_empty() { n += 1; }
+        if !self.provider_version.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.environment.is_empty() {
+            crate::cbor_gen::write_text(out, "environment");
+            crate::cbor_gen::write_text(out, &self.environment);
+        }
+        if !self.provider_name.is_empty() {
+            crate::cbor_gen::write_text(out, "provider_name");
+            crate::cbor_gen::write_text(out, &self.provider_name);
+        }
+        if !self.aggregate_name.is_empty() {
+            crate::cbor_gen::write_text(out, "aggregate_name");
+            crate::cbor_gen::write_text(out, &self.aggregate_name);
+        }
+        if !self.compiler_version.is_empty() {
+            crate::cbor_gen::write_text(out, "compiler_version");
+            crate::cbor_gen::write_text(out, &self.compiler_version);
+        }
+        if !self.provider_version.is_empty() {
+            crate::cbor_gen::write_text(out, "provider_version");
+            crate::cbor_gen::write_text(out, &self.provider_version);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_compiler_version: String = String::new();
+        let mut f_aggregate_name: String = String::new();
+        let mut f_environment: String = String::new();
+        let mut f_provider_name: String = String::new();
+        let mut f_provider_version: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "compiler_version" => f_compiler_version = dec.read_text()?,
+                "aggregate_name" => f_aggregate_name = dec.read_text()?,
+                "environment" => f_environment = dec.read_text()?,
+                "provider_name" => f_provider_name = dec.read_text()?,
+                "provider_version" => f_provider_version = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            compiler_version: f_compiler_version,
+            aggregate_name: f_aggregate_name,
+            environment: f_environment,
+            provider_name: f_provider_name,
+            provider_version: f_provider_version,
+        })
+    }
+}
+
+impl CatalogProjection {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.recipes.is_empty() { n += 1; }
+        if !self.features.is_empty() { n += 1; }
+        if !self.components.is_empty() { n += 1; }
+        if !self.feature_recipes.is_empty() { n += 1; }
+        if !self.mapping_libraries.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.recipes.is_empty() {
+            crate::cbor_gen::write_text(out, "recipes");
+            {
+                let c = &self.recipes;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        if !self.features.is_empty() {
+            crate::cbor_gen::write_text(out, "features");
+            {
+                let c = &self.features;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        if !self.components.is_empty() {
+            crate::cbor_gen::write_text(out, "components");
+            {
+                let c = &self.components;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        if !self.feature_recipes.is_empty() {
+            crate::cbor_gen::write_text(out, "feature_recipes");
+            {
+                let c = &self.feature_recipes;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        if !self.mapping_libraries.is_empty() {
+            crate::cbor_gen::write_text(out, "mapping_libraries");
+            {
+                let c = &self.mapping_libraries;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_components: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_features: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_recipes: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_feature_recipes: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_mapping_libraries: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "components" => f_components = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "features" => f_features = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "recipes" => f_recipes = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "feature_recipes" => f_feature_recipes = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "mapping_libraries" => f_mapping_libraries = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            components: f_components,
+            features: f_features,
+            recipes: f_recipes,
+            feature_recipes: f_feature_recipes,
+            mapping_libraries: f_mapping_libraries,
+        })
+    }
+}
+
+impl RenderNodeOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if !self.error.is_empty() { n += 1; }
+        if !self.diagnostics.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        crate::cbor_gen::write_text(out, "files");
+        {
+            let c = &self.files;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        if !self.diagnostics.is_empty() {
+            crate::cbor_gen::write_text(out, "diagnostics");
+            {
+                let c = &self.diagnostics;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_files: Option<Vec<RenderedFile>> = None;
+        let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
+        let mut f_error: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "files" => f_files = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv }),
+                "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
+                "error" => f_error = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            files: f_files.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field files".to_string()))?,
+            diagnostics: f_diagnostics,
+            error: f_error,
+        })
+    }
+}
+
+impl ValidateNodeOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.error.is_empty() { n += 1; }
+        if !self.diagnostics.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        if !self.diagnostics.is_empty() {
+            crate::cbor_gen::write_text(out, "diagnostics");
+            {
+                let c = &self.diagnostics;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
+        let mut f_error: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
+                "error" => f_error = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            diagnostics: f_diagnostics,
+            error: f_error,
+        })
+    }
+}
+
+impl RenderedFile {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if !self.format.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "path");
+        crate::cbor_gen::write_text(out, &self.path);
+        if !self.format.is_empty() {
+            crate::cbor_gen::write_text(out, "format");
+            crate::cbor_gen::write_text(out, &self.format);
+        }
+        crate::cbor_gen::write_text(out, "content");
+        crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.content)?);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_path: Option<String> = None;
+        let mut f_content: Option<String> = None;
+        let mut f_format: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "path" => f_path = Some(dec.read_text()?),
+                "content" => f_content = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
+                "format" => f_format = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            path: f_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field path".to_string()))?,
+            content: f_content.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field content".to_string()))?,
+            format: f_format,
+        })
+    }
+}
+
+impl SourceFile {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 2;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "path");
+        crate::cbor_gen::write_text(out, &self.path);
+        crate::cbor_gen::write_text(out, "content");
+        crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.content)?);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_path: Option<String> = None;
+        let mut f_content: Option<String> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "path" => f_path = Some(dec.read_text()?),
+                "content" => f_content = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            path: f_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field path".to_string()))?,
+            content: f_content.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field content".to_string()))?,
+        })
+    }
+}
+
+impl SourceProjection {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 1;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "files");
+        {
+            let c = &self.files;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_files: Option<Vec<SourceFile>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "files" => f_files = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<SourceFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(SourceFile::decode_cbor_from(dec)?); } sv }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            files: f_files.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field files".to_string()))?,
+        })
+    }
+}
+
+impl SourceEntry {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 2;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "path");
+        crate::cbor_gen::write_text(out, &self.path);
+        crate::cbor_gen::write_text(out, "is_dir");
+        crate::cbor_gen::write_bool(out, *&self.is_dir);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_path: Option<String> = None;
+        let mut f_is_dir: Option<bool> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "path" => f_path = Some(dec.read_text()?),
+                "is_dir" => f_is_dir = Some(dec.read_bool()?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            path: f_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field path".to_string()))?,
+            is_dir: f_is_dir.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field is_dir".to_string()))?,
+        })
+    }
+}
+
+impl SourceListing {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if self.root_is_dir { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "root");
+        crate::cbor_gen::write_text(out, &self.root);
+        crate::cbor_gen::write_text(out, "entries");
+        {
+            let c = &self.entries;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        if self.root_is_dir {
+            crate::cbor_gen::write_text(out, "root_is_dir");
+            crate::cbor_gen::write_bool(out, *&self.root_is_dir);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_root: Option<String> = None;
+        let mut f_root_is_dir: bool = false;
+        let mut f_entries: Option<Vec<SourceEntry>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "root" => f_root = Some(dec.read_text()?),
+                "root_is_dir" => f_root_is_dir = dec.read_bool()?,
+                "entries" => f_entries = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<SourceEntry> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(SourceEntry::decode_cbor_from(dec)?); } sv }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            root: f_root.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field root".to_string()))?,
+            root_is_dir: f_root_is_dir,
+            entries: f_entries.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field entries".to_string()))?,
+        })
+    }
+}
+
+impl SourcePackRequest {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 2;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "op");
+        crate::cbor_gen::write_text(out, &self.op);
+        crate::cbor_gen::write_text(out, "path");
+        crate::cbor_gen::write_text(out, &self.path);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_op: Option<String> = None;
+        let mut f_path: Option<String> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "op" => f_op = Some(dec.read_text()?),
+                "path" => f_path = Some(dec.read_text()?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            op: f_op.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field op".to_string()))?,
+            path: f_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field path".to_string()))?,
+        })
+    }
+}
+
+impl SourcePackResponse {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.error.is_empty() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
+        if self.source_projection.is_some() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
+        }
+        if let Some(ref x) = self.source_projection {
+            crate::cbor_gen::write_text(out, "source_projection");
+            x.append_cbor(out)?;
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_source_projection: Option<Box<SourceProjection>> = None;
+        let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "source_projection" => f_source_projection = Some(Box::new(SourceProjection::decode_cbor_from(dec)?)),
+                "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            source_projection: f_source_projection,
+            error: f_error,
+            error_code: f_error_code,
+        })
+    }
+}
+
+impl SourceFileRequest {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 1;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "path");
+        crate::cbor_gen::write_text(out, &self.path);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_path: Option<String> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "path" => f_path = Some(dec.read_text()?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            path: f_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field path".to_string()))?,
+        })
+    }
+}
+
+impl SourceFileResponse {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.error.is_empty() { n += 1; }
+        if !self.content.is_empty() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        if !self.content.is_empty() {
+            crate::cbor_gen::write_text(out, "content");
+            crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.content)?);
+        }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_content: String = String::new();
+        let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "content" => f_content = crate::cbor_gen::b64_encode(&dec.read_bytes()?),
+                "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            content: f_content,
+            error: f_error,
+            error_code: f_error_code,
+        })
+    }
+}
+
+impl FetchExternalInputResponse {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.error.is_empty() { n += 1; }
+        if self.content.is_some() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        if let Some(ref x) = self.content {
+            crate::cbor_gen::write_text(out, "content");
+            crate::cbor_gen::write_text(out, x);
+        }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_content: Option<String> = None;
+        let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "content" => f_content = Some(dec.read_text()?),
+                "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            content: f_content,
+            error: f_error,
+            error_code: f_error_code,
+        })
+    }
+}
+
+impl WorkloadProjection {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if !self.secrets.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.secrets.is_empty() {
+            crate::cbor_gen::write_text(out, "secrets");
+            {
+                let c = &self.secrets;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    {
+                        let c = mv;
+                        let mut ks: Vec<&String> = c.keys().collect();
+                        crate::cbor_gen::sort_keys(&mut ks);
+                        crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                        for k in ks {
+                            crate::cbor_gen::write_text(out, k);
+                            let mv = &c[k];
+                            crate::cbor_gen::write_text(out, mv);
+                        }
+                    }
+                }
+            }
+        }
+        crate::cbor_gen::write_text(out, "workload");
+        crate::cbor_gen::write_bytes(out, &self.workload.get().as_bytes());
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_workload: Option<Box<RawValue>> = None;
+        let mut f_secrets: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "workload" => f_workload = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "secrets" => f_secrets = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            workload: f_workload.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field workload".to_string()))?,
+            secrets: f_secrets,
+        })
+    }
+}
+
+impl ArtifactsProjection {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 1;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "entries");
+        {
+            let c = &self.entries;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_entries: Option<Vec<ArtifactProjectionEntry>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "entries" => f_entries = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<ArtifactProjectionEntry> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(ArtifactProjectionEntry::decode_cbor_from(dec)?); } sv }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            entries: f_entries.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field entries".to_string()))?,
+        })
+    }
+}
+
+impl ArtifactProjectionEntry {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 3;
+        if !self.labels.is_empty() { n += 1; }
+        if !self.annotations.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "name");
+        crate::cbor_gen::write_text(out, &self.name);
+        if !self.labels.is_empty() {
+            crate::cbor_gen::write_text(out, "labels");
+            {
+                let c = &self.labels;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
+        crate::cbor_gen::write_text(out, "origin");
+        crate::cbor_gen::write_text(out, &self.origin);
+        crate::cbor_gen::write_text(out, "content");
+        crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.content)?);
+        if !self.annotations.is_empty() {
+            crate::cbor_gen::write_text(out, "annotations");
+            {
+                let c = &self.annotations;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_name: Option<String> = None;
+        let mut f_origin: Option<String> = None;
+        let mut f_content: Option<String> = None;
+        let mut f_labels: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_annotations: BTreeMap<String, String> = BTreeMap::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "name" => f_name = Some(dec.read_text()?),
+                "origin" => f_origin = Some(dec.read_text()?),
+                "content" => f_content = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
+                "labels" => f_labels = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "annotations" => f_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
+            origin: f_origin.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field origin".to_string()))?,
+            content: f_content.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field content".to_string()))?,
+            labels: f_labels,
+            annotations: f_annotations,
+        })
+    }
+}
+
+impl AssembleBoundaryInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 3;
+        if !self.edges.is_empty() { n += 1; }
+        if self.boundary.is_some() { n += 1; }
+        if !self.chart_name.is_empty() { n += 1; }
+        if !self.sub_charts.is_empty() { n += 1; }
+        if !self.aggregate_name.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.edges.is_empty() {
+            crate::cbor_gen::write_text(out, "edges");
+            {
+                let c = &self.edges;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        crate::cbor_gen::write_text(out, "context");
+        crate::cbor_gen::write_bytes(out, &self.context.get().as_bytes());
+        if let Some(ref x) = self.boundary {
+            crate::cbor_gen::write_text(out, "boundary");
+            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
+        if !self.chart_name.is_empty() {
+            crate::cbor_gen::write_text(out, "chart_name");
+            crate::cbor_gen::write_text(out, &self.chart_name);
+        }
+        if !self.sub_charts.is_empty() {
+            crate::cbor_gen::write_text(out, "sub_charts");
+            {
+                let c = &self.sub_charts;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        crate::cbor_gen::write_text(out, "boundary_path");
+        crate::cbor_gen::write_text(out, &self.boundary_path);
+        if !self.aggregate_name.is_empty() {
+            crate::cbor_gen::write_text(out, "aggregate_name");
+            crate::cbor_gen::write_text(out, &self.aggregate_name);
+        }
+        crate::cbor_gen::write_text(out, "rendered_nodes");
+        {
+            let c = &self.rendered_nodes;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_boundary: Option<Box<RawValue>> = None;
+        let mut f_rendered_nodes: Option<Vec<RenderedNode>> = None;
+        let mut f_context: Option<Box<RawValue>> = None;
+        let mut f_boundary_path: Option<String> = None;
+        let mut f_edges: Vec<RenderEdge> = Vec::new();
+        let mut f_sub_charts: Vec<SubChart> = Vec::new();
+        let mut f_chart_name: String = String::new();
+        let mut f_aggregate_name: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "boundary" => f_boundary = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "rendered_nodes" => f_rendered_nodes = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedNode> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedNode::decode_cbor_from(dec)?); } sv }),
+                "context" => f_context = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "boundary_path" => f_boundary_path = Some(dec.read_text()?),
+                "edges" => f_edges = { let sn = dec.read_array_header()?; let mut sv: Vec<RenderEdge> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderEdge::decode_cbor_from(dec)?); } sv },
+                "sub_charts" => f_sub_charts = { let sn = dec.read_array_header()?; let mut sv: Vec<SubChart> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(SubChart::decode_cbor_from(dec)?); } sv },
+                "chart_name" => f_chart_name = dec.read_text()?,
+                "aggregate_name" => f_aggregate_name = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            boundary: f_boundary,
+            rendered_nodes: f_rendered_nodes.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field rendered_nodes".to_string()))?,
+            context: f_context.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field context".to_string()))?,
+            boundary_path: f_boundary_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field boundary_path".to_string()))?,
+            edges: f_edges,
+            sub_charts: f_sub_charts,
+            chart_name: f_chart_name,
+            aggregate_name: f_aggregate_name,
+        })
+    }
+}
+
+impl RenderedNode {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 3;
+        if !self.annotations.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "id");
+        crate::cbor_gen::write_text(out, &self.id);
+        crate::cbor_gen::write_text(out, "type");
+        crate::cbor_gen::write_text(out, &self.r#type);
+        crate::cbor_gen::write_text(out, "rendered");
+        self.rendered.append_cbor(out)?;
+        if !self.annotations.is_empty() {
+            crate::cbor_gen::write_text(out, "annotations");
+            {
+                let c = &self.annotations;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_id: Option<String> = None;
+        let mut f_type: Option<String> = None;
+        let mut f_rendered: Option<RenderNodeOutput> = None;
+        let mut f_annotations: BTreeMap<String, String> = BTreeMap::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "id" => f_id = Some(dec.read_text()?),
+                "type" => f_type = Some(dec.read_text()?),
+                "rendered" => f_rendered = Some(RenderNodeOutput::decode_cbor_from(dec)?),
+                "annotations" => f_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            id: f_id.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field id".to_string()))?,
+            r#type: f_type.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field type".to_string()))?,
+            rendered: f_rendered.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field rendered".to_string()))?,
+            annotations: f_annotations,
+        })
+    }
+}
+
+impl RenderEdge {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 2;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "source");
+        crate::cbor_gen::write_text(out, &self.source);
+        crate::cbor_gen::write_text(out, "target");
+        crate::cbor_gen::write_text(out, &self.target);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_source: Option<String> = None;
+        let mut f_target: Option<String> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "source" => f_source = Some(dec.read_text()?),
+                "target" => f_target = Some(dec.read_text()?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            source: f_source.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field source".to_string()))?,
+            target: f_target.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field target".to_string()))?,
+        })
+    }
+}
+
+impl SubChart {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if !self.values.is_empty() { n += 1; }
+        if !self.version.is_empty() { n += 1; }
+        if !self.chart_yaml.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.values.is_empty() {
+            crate::cbor_gen::write_text(out, "values");
+            {
+                let c = &self.values;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        if !self.version.is_empty() {
+            crate::cbor_gen::write_text(out, "version");
+            crate::cbor_gen::write_text(out, &self.version);
+        }
+        if !self.chart_yaml.is_empty() {
+            crate::cbor_gen::write_text(out, "chart_yaml");
+            crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.chart_yaml)?);
+        }
+        crate::cbor_gen::write_text(out, "instance_id");
+        crate::cbor_gen::write_text(out, &self.instance_id);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_instance_id: Option<String> = None;
+        let mut f_version: String = String::new();
+        let mut f_values: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_chart_yaml: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "instance_id" => f_instance_id = Some(dec.read_text()?),
+                "version" => f_version = dec.read_text()?,
+                "values" => f_values = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "chart_yaml" => f_chart_yaml = crate::cbor_gen::b64_encode(&dec.read_bytes()?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            instance_id: f_instance_id.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field instance_id".to_string()))?,
+            version: f_version,
+            values: f_values,
+            chart_yaml: f_chart_yaml,
+        })
+    }
+}
+
+impl AssembleBoundaryOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if !self.error.is_empty() { n += 1; }
+        if !self.diagnostics.is_empty() { n += 1; }
+        if self.nest_per_node { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        crate::cbor_gen::write_text(out, "files");
+        {
+            let c = &self.files;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        if !self.diagnostics.is_empty() {
+            crate::cbor_gen::write_text(out, "diagnostics");
+            {
+                let c = &self.diagnostics;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        if self.nest_per_node {
+            crate::cbor_gen::write_text(out, "nest_per_node");
+            crate::cbor_gen::write_bool(out, *&self.nest_per_node);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_files: Option<Vec<RenderedFile>> = None;
+        let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
+        let mut f_nest_per_node: bool = false;
+        let mut f_error: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "files" => f_files = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv }),
+                "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
+                "nest_per_node" => f_nest_per_node = dec.read_bool()?,
+                "error" => f_error = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            files: f_files.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field files".to_string()))?,
+            diagnostics: f_diagnostics,
+            nest_per_node: f_nest_per_node,
+            error: f_error,
+        })
+    }
+}
+
+impl CarveInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if self.yaml_indent != 0 { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "body");
+        crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.body)?);
+        crate::cbor_gen::write_text(out, "name");
+        crate::cbor_gen::write_text(out, &self.name);
+        if self.yaml_indent != 0 {
+            crate::cbor_gen::write_text(out, "yaml_indent");
+            crate::cbor_gen::write_int(out, *&self.yaml_indent);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_name: Option<String> = None;
+        let mut f_body: Option<String> = None;
+        let mut f_yaml_indent: i64 = 0;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "name" => f_name = Some(dec.read_text()?),
+                "body" => f_body = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
+                "yaml_indent" => f_yaml_indent = dec.read_int()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
+            body: f_body.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field body".to_string()))?,
+            yaml_indent: f_yaml_indent,
+        })
+    }
+}
+
+impl CarveOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 1;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "units");
+        {
+            let c = &self.units;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                crate::cbor_gen::write_bytes(out, ev.get().as_bytes());
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_units: Option<Vec<Box<RawValue>>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "units" => f_units = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<Box<RawValue>> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?); } sv }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            units: f_units.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field units".to_string()))?,
+        })
+    }
+}
+
+impl ReassembleInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if !self.segs.is_empty() { n += 1; }
+        if !self.patched.is_empty() { n += 1; }
+        if self.yaml_indent != 0 { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "body");
+        crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.body)?);
+        crate::cbor_gen::write_text(out, "name");
+        crate::cbor_gen::write_text(out, &self.name);
+        if !self.segs.is_empty() {
+            crate::cbor_gen::write_text(out, "segs");
+            {
+                let c = &self.segs;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_bytes(out, ev.get().as_bytes());
+                }
+            }
+        }
+        if !self.patched.is_empty() {
+            crate::cbor_gen::write_text(out, "patched");
+            {
+                let c = &self.patched;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_bytes(out, ev.get().as_bytes());
+                }
+            }
+        }
+        if self.yaml_indent != 0 {
+            crate::cbor_gen::write_text(out, "yaml_indent");
+            crate::cbor_gen::write_int(out, *&self.yaml_indent);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_name: Option<String> = None;
+        let mut f_body: Option<String> = None;
+        let mut f_segs: Vec<Box<RawValue>> = Vec::new();
+        let mut f_patched: Vec<Box<RawValue>> = Vec::new();
+        let mut f_yaml_indent: i64 = 0;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "name" => f_name = Some(dec.read_text()?),
+                "body" => f_body = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
+                "segs" => f_segs = { let sn = dec.read_array_header()?; let mut sv: Vec<Box<RawValue>> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?); } sv },
+                "patched" => f_patched = { let sn = dec.read_array_header()?; let mut sv: Vec<Box<RawValue>> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?); } sv },
+                "yaml_indent" => f_yaml_indent = dec.read_int()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
+            body: f_body.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field body".to_string()))?,
+            segs: f_segs,
+            patched: f_patched,
+            yaml_indent: f_yaml_indent,
+        })
+    }
+}
+
+impl ReassembleOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 1;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "body");
+        crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.body)?);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_body: Option<String> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "body" => f_body = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            body: f_body.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field body".to_string()))?,
+        })
+    }
+}
+
+impl BoundaryEnvOverridesInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.infra.is_empty() { n += 1; }
+        if !self.internal_uses_edges.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.infra.is_empty() {
+            crate::cbor_gen::write_text(out, "infra");
+            {
+                let c = &self.infra;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
+        if !self.internal_uses_edges.is_empty() {
+            crate::cbor_gen::write_text(out, "internal_uses_edges");
+            {
+                let c = &self.internal_uses_edges;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_bytes(out, ev.get().as_bytes());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_internal_uses_edges: Vec<Box<RawValue>> = Vec::new();
+        let mut f_infra: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "internal_uses_edges" => f_internal_uses_edges = { let sn = dec.read_array_header()?; let mut sv: Vec<Box<RawValue>> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?); } sv },
+                "infra" => f_infra = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            internal_uses_edges: f_internal_uses_edges,
+            infra: f_infra,
+        })
+    }
+}
+
+impl BoundaryEnvOverridesOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.overrides.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.overrides.is_empty() {
+            crate::cbor_gen::write_text(out, "overrides");
+            {
+                let c = &self.overrides;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    {
+                        let c = mv;
+                        let mut ks: Vec<&String> = c.keys().collect();
+                        crate::cbor_gen::sort_keys(&mut ks);
+                        crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                        for k in ks {
+                            crate::cbor_gen::write_text(out, k);
+                            let mv = &c[k];
+                            crate::cbor_gen::write_text(out, mv);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_overrides: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "overrides" => f_overrides = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            overrides: f_overrides,
+        })
+    }
+}
+
+impl LinkEndpoint {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 3;
+        if !self.deployment.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "node");
+        crate::cbor_gen::write_text(out, &self.node);
+        crate::cbor_gen::write_text(out, "boundary");
+        crate::cbor_gen::write_text(out, &self.boundary);
+        crate::cbor_gen::write_text(out, "provider");
+        crate::cbor_gen::write_text(out, &self.provider);
+        if !self.deployment.is_empty() {
+            crate::cbor_gen::write_text(out, "deployment");
+            crate::cbor_gen::write_text(out, &self.deployment);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_node: Option<String> = None;
+        let mut f_boundary: Option<String> = None;
+        let mut f_provider: Option<String> = None;
+        let mut f_deployment: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "node" => f_node = Some(dec.read_text()?),
+                "boundary" => f_boundary = Some(dec.read_text()?),
+                "provider" => f_provider = Some(dec.read_text()?),
+                "deployment" => f_deployment = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            node: f_node.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field node".to_string()))?,
+            boundary: f_boundary.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field boundary".to_string()))?,
+            provider: f_provider.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field provider".to_string()))?,
+            deployment: f_deployment,
+        })
+    }
+}
+
+impl LinkEdge {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 5;
+        if !self.source_annotations.is_empty() { n += 1; }
+        if !self.target_annotations.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "inject");
+        {
+            let c = &self.inject;
+            let mut ks: Vec<&String> = c.keys().collect();
+            crate::cbor_gen::sort_keys(&mut ks);
+            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+            for k in ks {
+                crate::cbor_gen::write_text(out, k);
+                let mv = &c[k];
+                {
+                    let c = mv;
+                    let mut ks: Vec<&String> = c.keys().collect();
+                    crate::cbor_gen::sort_keys(&mut ks);
+                    crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                    for k in ks {
+                        crate::cbor_gen::write_text(out, k);
+                        let mv = &c[k];
+                        crate::cbor_gen::write_text(out, mv);
+                    }
+                }
+            }
+        }
+        crate::cbor_gen::write_text(out, "socket");
+        crate::cbor_gen::write_text(out, &self.socket);
+        crate::cbor_gen::write_text(out, "source");
+        self.source.append_cbor(out)?;
+        crate::cbor_gen::write_text(out, "target");
+        self.target.append_cbor(out)?;
+        crate::cbor_gen::write_text(out, "provides");
+        {
+            let c = &self.provides;
+            let mut ks: Vec<&String> = c.keys().collect();
+            crate::cbor_gen::sort_keys(&mut ks);
+            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+            for k in ks {
+                crate::cbor_gen::write_text(out, k);
+                let mv = &c[k];
+                crate::cbor_gen::write_text(out, mv);
+            }
+        }
+        if !self.source_annotations.is_empty() {
+            crate::cbor_gen::write_text(out, "source_annotations");
+            {
+                let c = &self.source_annotations;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
+        if !self.target_annotations.is_empty() {
+            crate::cbor_gen::write_text(out, "target_annotations");
+            {
+                let c = &self.target_annotations;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_source: Option<LinkEndpoint> = None;
+        let mut f_target: Option<LinkEndpoint> = None;
+        let mut f_target_annotations: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_source_annotations: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_socket: Option<String> = None;
+        let mut f_provides: Option<BTreeMap<String, String>> = None;
+        let mut f_inject: Option<BTreeMap<String, BTreeMap<String, String>>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "source" => f_source = Some(LinkEndpoint::decode_cbor_from(dec)?),
+                "target" => f_target = Some(LinkEndpoint::decode_cbor_from(dec)?),
+                "target_annotations" => f_target_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "source_annotations" => f_source_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "socket" => f_socket = Some(dec.read_text()?),
+                "provides" => f_provides = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }),
+                "inject" => f_inject = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            source: f_source.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field source".to_string()))?,
+            target: f_target.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field target".to_string()))?,
+            target_annotations: f_target_annotations,
+            source_annotations: f_source_annotations,
+            socket: f_socket.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field socket".to_string()))?,
+            provides: f_provides.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field provides".to_string()))?,
+            inject: f_inject.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field inject".to_string()))?,
+        })
+    }
+}
+
+impl LinkPatch {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 2;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "ops");
+        {
+            let c = &self.ops;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                crate::cbor_gen::write_bytes(out, ev.get().as_bytes());
+            }
+        }
+        crate::cbor_gen::write_text(out, "file");
+        crate::cbor_gen::write_text(out, &self.file);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_file: Option<String> = None;
+        let mut f_ops: Option<Vec<Box<RawValue>>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "file" => f_file = Some(dec.read_text()?),
+                "ops" => f_ops = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<Box<RawValue>> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?); } sv }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            file: f_file.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field file".to_string()))?,
+            ops: f_ops.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field ops".to_string()))?,
+        })
+    }
+}
+
+impl LinkPublishInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 1;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "edge");
+        self.edge.append_cbor(out)?;
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_edge: Option<LinkEdge> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "edge" => f_edge = Some(LinkEdge::decode_cbor_from(dec)?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            edge: f_edge.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field edge".to_string()))?,
+        })
+    }
+}
+
+impl LinkPublishOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if !self.patches.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "handle");
+        {
+            let c = &self.handle;
+            let mut ks: Vec<&String> = c.keys().collect();
+            crate::cbor_gen::sort_keys(&mut ks);
+            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+            for k in ks {
+                crate::cbor_gen::write_text(out, k);
+                let mv = &c[k];
+                crate::cbor_gen::write_text(out, mv);
+            }
+        }
+        if !self.patches.is_empty() {
+            crate::cbor_gen::write_text(out, "patches");
+            {
+                let c = &self.patches;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_handle: Option<BTreeMap<String, String>> = None;
+        let mut f_patches: Vec<LinkPatch> = Vec::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "handle" => f_handle = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }),
+                "patches" => f_patches = { let sn = dec.read_array_header()?; let mut sv: Vec<LinkPatch> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(LinkPatch::decode_cbor_from(dec)?); } sv },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            handle: f_handle.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field handle".to_string()))?,
+            patches: f_patches,
+        })
+    }
+}
+
+impl LinkResolveInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if !self.consumer_files.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "edge");
+        self.edge.append_cbor(out)?;
+        crate::cbor_gen::write_text(out, "handle");
+        {
+            let c = &self.handle;
+            let mut ks: Vec<&String> = c.keys().collect();
+            crate::cbor_gen::sort_keys(&mut ks);
+            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+            for k in ks {
+                crate::cbor_gen::write_text(out, k);
+                let mv = &c[k];
+                crate::cbor_gen::write_text(out, mv);
+            }
+        }
+        if !self.consumer_files.is_empty() {
+            crate::cbor_gen::write_text(out, "consumer_files");
+            {
+                let c = &self.consumer_files;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_edge: Option<LinkEdge> = None;
+        let mut f_handle: Option<BTreeMap<String, String>> = None;
+        let mut f_consumer_files: Vec<RenderedFile> = Vec::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "edge" => f_edge = Some(LinkEdge::decode_cbor_from(dec)?),
+                "handle" => f_handle = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }),
+                "consumer_files" => f_consumer_files = { let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            edge: f_edge.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field edge".to_string()))?,
+            handle: f_handle.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field handle".to_string()))?,
+            consumer_files: f_consumer_files,
+        })
+    }
+}
+
+impl LinkResolveOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 1;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "patches");
+        {
+            let c = &self.patches;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_patches: Option<Vec<LinkPatch>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "patches" => f_patches = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<LinkPatch> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(LinkPatch::decode_cbor_from(dec)?); } sv }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            patches: f_patches.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field patches".to_string()))?,
+        })
+    }
+}
+

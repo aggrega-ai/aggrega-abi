@@ -16,61 +16,61 @@ import (
 // PolicyInput The payload Step 4 hands to the policy socket: the full IR graph (the same shape the Topology Builder emits) plus the precalculated routing paths the analyzer enumerates alongside.
 type PolicyInput struct {
 	// Graph The full capability-agnostic IR graph, single-sourced from ir-v1alpha1.schema.json. The policy plugin reasons over the complete node/edge/attachment detail rather than a narrow projection.
-	Graph IRGraph `json:"graph" yaml:"graph"`
+	Graph IRGraph `json:"graph" yaml:"graph" cbor:"graph"`
 	// PrecalculatedPaths Routing paths the analyzer pre-enumerated so policies can reason about reachability without re-walking the graph.
-	PrecalculatedPaths []PrecalculatedPath `json:"precalculated_paths" yaml:"precalculated_paths"`
+	PrecalculatedPaths []PrecalculatedPath `json:"precalculated_paths" yaml:"precalculated_paths" cbor:"precalculated_paths"`
 	// Sources Definition files the host reads at compile time and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
-	Sources []PolicySource `json:"sources,omitempty" yaml:"sources,omitempty"`
+	Sources []PolicySource `json:"sources,omitempty" yaml:"sources,omitempty" cbor:"sources,omitempty"`
 	// Settings A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
-	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty"`
+	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty" cbor:"settings,omitempty"`
 }
 
 // PolicyOutput The response shape the policy plugin emits: the verdicts that fired during evaluation, one diagnostic per fired verdict. An allowing rule emits nothing, so an empty results array means no verdicts fired.
 type PolicyOutput struct {
 	// Results The fired verdicts, one diagnostic each, in the order the plugin emits them. Empty when no verdict fired.
-	Results []Diagnostic `json:"results" yaml:"results"`
+	Results []Diagnostic `json:"results" yaml:"results" cbor:"results"`
 	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
-	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
 
 // RenderPolicyInput The payload the render stage hands to a policy socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
 type RenderPolicyInput struct {
 	// Artifacts The rendered output files the policy reasons over, as an ordered list sorted by path so the wire is byte-identical across runs of identical input.
-	Artifacts []RenderedArtifact `json:"artifacts" yaml:"artifacts"`
+	Artifacts []RenderedArtifact `json:"artifacts" yaml:"artifacts" cbor:"artifacts"`
 	// Sources Definition files the host reads at compile time and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
-	Sources []PolicySource `json:"sources,omitempty" yaml:"sources,omitempty"`
+	Sources []PolicySource `json:"sources,omitempty" yaml:"sources,omitempty" cbor:"sources,omitempty"`
 	// Settings A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
-	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty"`
+	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty" cbor:"settings,omitempty"`
 }
 
 // RenderedArtifact One rendered output file: its path and the rendered content at that path.
 type RenderedArtifact struct {
 	// Path The output path of the rendered file, relative to the render root.
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path" yaml:"path" cbor:"path"`
 	// Content The rendered content at this path.
-	Content string `json:"content" yaml:"content"`
+	Content string `json:"content" yaml:"content" cbor:"content"`
 	// Tree The parsed structured tree of this artifact, present when the host parsed the content before handing it to the plugin — the canonical JSON view of a source format the plugin does not read natively (an HCL artifact parsed to JSON, for example). The top level may be an object, an array, or a scalar, matching the parsed document's own shape. Absent when the host did not parse the artifact, in which case the plugin reads the native content directly. The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
-	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty"`
+	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty" cbor:"tree,omitempty"`
 	// Format The format the artifact was rendered in, present when the producing provider declared it. Absent when the producing provider declared no format.
-	Format string `json:"format,omitempty" yaml:"format,omitempty"`
+	Format string `json:"format,omitempty" yaml:"format,omitempty" cbor:"format,omitempty"`
 }
 
 // PolicySource One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
 type PolicySource struct {
 	// Path The base name of the source file. The host supplies the base name only, never an absolute host path, so the wire is portable and deterministic.
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path" yaml:"path" cbor:"path"`
 	// Content The source file's content, carried verbatim as an opaque string.
-	Content string `json:"content" yaml:"content"`
+	Content string `json:"content" yaml:"content" cbor:"content"`
 }
 
 // PrecalculatedPath One pre-enumerated routing path the analyzer materializes so policy rules can reason about reachability without re-walking the graph.
 type PrecalculatedPath struct {
 	// PathID Stable identifier for this path; deterministic across runs of identical input.
-	PathID string `json:"path_id" yaml:"path_id"`
+	PathID string `json:"path_id" yaml:"path_id" cbor:"path_id"`
 	// Nodes Ordered sequence of node IDs the path traverses, from source to terminal.
-	Nodes []string `json:"nodes" yaml:"nodes"`
+	Nodes []string `json:"nodes" yaml:"nodes" cbor:"nodes"`
 	// AttachedFeatures Alphabetically sorted union of Feature type URIs attached to any node along the path. Set-membership semantics: a Feature appears once even if multiple nodes carry it. Empty when no node along the path carries any Feature attachment.
-	AttachedFeatures []string `json:"attached_features" yaml:"attached_features"`
+	AttachedFeatures []string `json:"attached_features" yaml:"attached_features" cbor:"attached_features"`
 }
 
 // MarshalJSON encodes PolicyInput in field-declaration order, omitting
@@ -684,6 +684,552 @@ func (t *PrecalculatedPath) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes PolicyInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t PolicyInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends PolicyInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t PolicyInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.Sources) != 0 {
+		n++
+	}
+	if len(t.Settings) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "graph")
+	if dst, err = t.Graph.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	if len(t.Sources) != 0 {
+		dst = appendCBORTextString(dst, "sources")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Sources)))
+		for i := range t.Sources {
+			ev := t.Sources[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Settings) != 0 {
+		dst = appendCBORTextString(dst, "settings")
+		dst = appendCBORByteString(dst, t.Settings)
+	}
+	dst = appendCBORTextString(dst, "precalculated_paths")
+	dst = appendCBORHead(dst, 4, uint64(len(t.PrecalculatedPaths)))
+	for i := range t.PrecalculatedPaths {
+		ev := t.PrecalculatedPaths[i]
+		if dst, err = ev.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes PolicyInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *PolicyInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *PolicyInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "graph":
+			if err := (&t.Graph).decodeCBOR(dec); err != nil {
+				return err
+			}
+		case "precalculated_paths":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]PrecalculatedPath, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev PrecalculatedPath
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.PrecalculatedPaths = s
+			}
+		case "sources":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]PolicySource, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev PolicySource
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Sources = s
+			}
+		case "settings":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Settings = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes PolicyOutput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t PolicyOutput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends PolicyOutput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t PolicyOutput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if t.Error != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Error != "" {
+		dst = appendCBORTextString(dst, "error")
+		dst = appendCBORTextString(dst, t.Error)
+	}
+	dst = appendCBORTextString(dst, "results")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Results)))
+	for i := range t.Results {
+		ev := t.Results[i]
+		if dst, err = ev.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes PolicyOutput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *PolicyOutput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *PolicyOutput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "results":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]Diagnostic, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev Diagnostic
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Results = s
+			}
+		case "error":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Error = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes RenderPolicyInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t RenderPolicyInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends RenderPolicyInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t RenderPolicyInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if len(t.Sources) != 0 {
+		n++
+	}
+	if len(t.Settings) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if len(t.Sources) != 0 {
+		dst = appendCBORTextString(dst, "sources")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Sources)))
+		for i := range t.Sources {
+			ev := t.Sources[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Settings) != 0 {
+		dst = appendCBORTextString(dst, "settings")
+		dst = appendCBORByteString(dst, t.Settings)
+	}
+	dst = appendCBORTextString(dst, "artifacts")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Artifacts)))
+	for i := range t.Artifacts {
+		ev := t.Artifacts[i]
+		if dst, err = ev.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes RenderPolicyInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *RenderPolicyInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *RenderPolicyInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "artifacts":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]RenderedArtifact, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev RenderedArtifact
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Artifacts = s
+			}
+		case "sources":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]PolicySource, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev PolicySource
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Sources = s
+			}
+		case "settings":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Settings = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes RenderedArtifact as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t RenderedArtifact) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends RenderedArtifact's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t RenderedArtifact) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.Tree) != 0 {
+		n++
+	}
+	if t.Format != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "path")
+	dst = appendCBORTextString(dst, t.Path)
+	if len(t.Tree) != 0 {
+		dst = appendCBORTextString(dst, "tree")
+		dst = appendCBORByteString(dst, t.Tree)
+	}
+	if t.Format != "" {
+		dst = appendCBORTextString(dst, "format")
+		dst = appendCBORTextString(dst, t.Format)
+	}
+	dst = appendCBORTextString(dst, "content")
+	dst = appendCBORTextString(dst, t.Content)
+	return dst, nil
+}
+
+// DecodeCBOR decodes RenderedArtifact from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *RenderedArtifact) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *RenderedArtifact) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "content":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Content = s
+			}
+		case "tree":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Tree = json.RawMessage(v)
+			}
+		case "format":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Format = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes PolicySource as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t PolicySource) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends PolicySource's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t PolicySource) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "path")
+	dst = appendCBORTextString(dst, t.Path)
+	dst = appendCBORTextString(dst, "content")
+	dst = appendCBORTextString(dst, t.Content)
+	return dst, nil
+}
+
+// DecodeCBOR decodes PolicySource from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *PolicySource) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *PolicySource) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "content":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Content = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes PrecalculatedPath as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t PrecalculatedPath) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends PrecalculatedPath's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t PrecalculatedPath) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "nodes")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Nodes)))
+	for i := range t.Nodes {
+		ev := t.Nodes[i]
+		dst = appendCBORTextString(dst, ev)
+	}
+	dst = appendCBORTextString(dst, "path_id")
+	dst = appendCBORTextString(dst, t.PathID)
+	dst = appendCBORTextString(dst, "attached_features")
+	dst = appendCBORHead(dst, 4, uint64(len(t.AttachedFeatures)))
+	for i := range t.AttachedFeatures {
+		ev := t.AttachedFeatures[i]
+		dst = appendCBORTextString(dst, ev)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes PrecalculatedPath from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *PrecalculatedPath) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *PrecalculatedPath) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path_id":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.PathID = s
+			}
+		case "nodes":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.Nodes = s
+			}
+		case "attached_features":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.AttachedFeatures = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

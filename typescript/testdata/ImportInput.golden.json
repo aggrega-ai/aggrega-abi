@@ -1,1 +1,0 @@
-{"format":"terraform","bytes":"cmVzb3VyY2UgImF3c19zM19idWNrZXQiICJiIiB7fQo=","sources":[{"name":"main.tf","bytes":"bW9kdWxlICJhcHAiIHsKICBzb3VyY2UgPSAiLi9hcHAiCn0K"},{"name":"variables.tf","bytes":"dmFyaWFibGUgInJlZ2lvbiIgewogIGRlZmF1bHQgPSAiZXUtd2VzdC0xIgp9Cg=="}],"settings":{"dialect":"hcl2","strict":true}}

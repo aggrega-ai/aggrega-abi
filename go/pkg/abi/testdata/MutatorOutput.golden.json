@@ -1,1 +1,0 @@
-{"patches":[{"op":"add","path":"/labels/compliance","value":"soc2"},{"op":"replace","path":"/x","value":{"z":1,"a":2}}]}

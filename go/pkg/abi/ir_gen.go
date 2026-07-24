@@ -16,166 +16,166 @@ import (
 )
 
 type Maintainer struct {
-	Name  string `json:"name,omitempty" yaml:"name,omitempty"`
-	Email string `json:"email,omitempty" yaml:"email,omitempty"`
-	URL   string `json:"url,omitempty" yaml:"url,omitempty"`
+	Name  string `json:"name,omitempty" yaml:"name,omitempty" cbor:"name,omitempty"`
+	Email string `json:"email,omitempty" yaml:"email,omitempty" cbor:"email,omitempty"`
+	URL   string `json:"url,omitempty" yaml:"url,omitempty" cbor:"url,omitempty"`
 }
 
 // FieldProvenance Origin of one leaf in an attachment's values or infra payload.
 type FieldProvenance struct {
 	// Origin Whether the leaf was authored explicitly or contributed by the annotation-driven expansion pass.
-	Origin string `json:"origin" yaml:"origin"`
+	Origin string `json:"origin" yaml:"origin" cbor:"origin"`
 	// Side Authoring surface the annotation was declared on; empty for explicit leaves.
-	Side string `json:"side,omitempty" yaml:"side,omitempty"`
+	Side string `json:"side,omitempty" yaml:"side,omitempty" cbor:"side,omitempty"`
 	// AnnotationKey Annotation name that contributed this leaf; empty for explicit leaves.
-	AnnotationKey string `json:"annotation_key,omitempty" yaml:"annotation_key,omitempty"`
+	AnnotationKey string `json:"annotation_key,omitempty" yaml:"annotation_key,omitempty" cbor:"annotation_key,omitempty"`
 	// AnnotationSource Source location of the annotation declaration as <file-path>:<dotted-yaml-key-path>; empty for explicit leaves.
-	AnnotationSource string `json:"annotation_source,omitempty" yaml:"annotation_source,omitempty"`
+	AnnotationSource string `json:"annotation_source,omitempty" yaml:"annotation_source,omitempty" cbor:"annotation_source,omitempty"`
 	// OverridesAnnotation When an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced.
-	OverridesAnnotation *FieldProvenance `json:"overrides_annotation,omitempty" yaml:"overrides_annotation,omitempty"`
+	OverridesAnnotation *FieldProvenance `json:"overrides_annotation,omitempty" yaml:"overrides_annotation,omitempty" cbor:"overrides_annotation,omitempty"`
 }
 
 // IRFeatureEntry One resolved attachment for a node. Shared shape for a Feature (in feature_values_mapping) and a credential request (in the secrets bucket): a credential is a Feature labeled kind=secret, partitioned into the secrets bucket rather than given a lossier shape. Values carries vault pointers for credentials, never resolved plaintext.
 type IRFeatureEntry struct {
 	// Type URI of the Catalog Feature; in the secrets bucket, the credential Feature interface.
-	Type string `json:"type" yaml:"type"`
+	Type string `json:"type" yaml:"type" cbor:"type"`
 	// ResolvedVersion The exact semantic version resolved during compilation.
-	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version"`
+	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
 	// Values Operational configuration payload for the attachment; vault pointers for credentials.
-	Values json.RawMessage `json:"values,omitempty" yaml:"values,omitempty"`
+	Values json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
 	// Infra Per-instance physical sizing for this attachment.
-	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty"`
+	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 	// Inject Agnostic injection routing. Maps local variables to Target provides keys.
-	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty"`
+	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty" cbor:"inject,omitempty"`
 	// Secrets Credentials scoped explicitly to this attachment.
-	Secrets map[string]IRFeatureEntry `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	Secrets map[string]IRFeatureEntry `json:"secrets,omitempty" yaml:"secrets,omitempty" cbor:"secrets,omitempty"`
 	// Origin Distinguishes attachments authored in a features: block (explicit) from synthetic attachments produced by the annotation-driven expansion pass (annotation), or mixed when the attachment's value/infra leaves carry a mix of both (per-leaf detail then lives in the provenance maps).
-	Origin string `json:"origin,omitempty" yaml:"origin,omitempty"`
+	Origin string `json:"origin,omitempty" yaml:"origin,omitempty" cbor:"origin,omitempty"`
 	// AnnotationKey Annotation name that triggered a synthetic attachment. Empty when origin is explicit.
-	AnnotationKey string `json:"annotation_key,omitempty" yaml:"annotation_key,omitempty"`
+	AnnotationKey string `json:"annotation_key,omitempty" yaml:"annotation_key,omitempty" cbor:"annotation_key,omitempty"`
 	// AnnotationSource Source location of the annotation declaration as <release-file-path>:<dotted-yaml-key-path>. Empty when origin is explicit.
-	AnnotationSource string `json:"annotation_source,omitempty" yaml:"annotation_source,omitempty"`
+	AnnotationSource string `json:"annotation_source,omitempty" yaml:"annotation_source,omitempty" cbor:"annotation_source,omitempty"`
 	// ValuesProvenance Per-leaf origin for the values payload, keyed by dotted leaf path.
-	ValuesProvenance map[string]FieldProvenance `json:"values_provenance,omitempty" yaml:"values_provenance,omitempty"`
+	ValuesProvenance map[string]FieldProvenance `json:"values_provenance,omitempty" yaml:"values_provenance,omitempty" cbor:"values_provenance,omitempty"`
 	// InfraProvenance Per-leaf origin for the infra payload, keyed by dotted leaf path.
-	InfraProvenance map[string]FieldProvenance `json:"infra_provenance,omitempty" yaml:"infra_provenance,omitempty"`
+	InfraProvenance map[string]FieldProvenance `json:"infra_provenance,omitempty" yaml:"infra_provenance,omitempty" cbor:"infra_provenance,omitempty"`
 }
 
 // IRBoundaryFeature A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
 type IRBoundaryFeature struct {
 	// Type URI of the Catalog Feature attached at this boundary.
-	Type string `json:"type" yaml:"type"`
+	Type string `json:"type" yaml:"type" cbor:"type"`
 	// Infra Physical sizing for the boundary attachment; the infra a boundary-scope FeatureRecipe evaluates its templates and source against.
-	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty"`
+	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 }
 
 // CatalogMetadata The Enterprise Metadata Suite explicitly extracted from the Catalog entity, exposing lifecycle and ownership data to Wasm linters.
 type CatalogMetadata struct {
-	Maintainers []Maintainer `json:"maintainers,omitempty" yaml:"maintainers,omitempty"`
-	License     string       `json:"license,omitempty" yaml:"license,omitempty"`
-	Repository  string       `json:"repository,omitempty" yaml:"repository,omitempty"`
-	Home        string       `json:"home,omitempty" yaml:"home,omitempty"`
-	Keywords    []string     `json:"keywords,omitempty" yaml:"keywords,omitempty"`
-	Deprecated  bool         `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
+	Maintainers []Maintainer `json:"maintainers,omitempty" yaml:"maintainers,omitempty" cbor:"maintainers,omitempty"`
+	License     string       `json:"license,omitempty" yaml:"license,omitempty" cbor:"license,omitempty"`
+	Repository  string       `json:"repository,omitempty" yaml:"repository,omitempty" cbor:"repository,omitempty"`
+	Home        string       `json:"home,omitempty" yaml:"home,omitempty" cbor:"home,omitempty"`
+	Keywords    []string     `json:"keywords,omitempty" yaml:"keywords,omitempty" cbor:"keywords,omitempty"`
+	Deprecated  bool         `json:"deprecated,omitempty" yaml:"deprecated,omitempty" cbor:"deprecated,omitempty"`
 }
 
 type IRNode struct {
 	// Description Optional developer-authored documentation describing this component instance's role in the application. Passed through from the Aggregate for augmenting rendering and linting diagnostics.
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty" cbor:"description,omitempty"`
 	// Labels The entity's duck-typing and ontology labels.
-	Labels map[string]string `json:"labels" yaml:"labels"`
+	Labels map[string]string `json:"labels" yaml:"labels" cbor:"labels"`
 	// Component The name of the underlying Component.
-	Component string `json:"component" yaml:"component"`
+	Component string `json:"component" yaml:"component" cbor:"component"`
 	// ResolvedVersion The exact Semantic Version of the Component resolved during compilation.
-	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version"`
+	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
 	// SyncWave The deployment wave inherited from the IRNode's containing boundary's syncWave field (default 0; negative permitted). Renderers translate the integer to provider-native sequencing artifacts (argocd.argoproj.io/sync-wave for K8s/Helm; depends_on for Terraform; DependsOn for CloudFormation; no-op for Compose).
-	SyncWave int `json:"sync_wave,omitempty" yaml:"sync_wave,omitempty"`
+	SyncWave int `json:"sync_wave,omitempty" yaml:"sync_wave,omitempty" cbor:"sync_wave,omitempty"`
 	// BoundaryPath The physical spatial hierarchy mapped from the Release boundaries (e.g., 'aws-prod/eks-main/payments'). Allows rendering plugins to generate boundary-aware unique identifiers.
-	BoundaryPath string `json:"boundary_path,omitempty" yaml:"boundary_path,omitempty"`
+	BoundaryPath string `json:"boundary_path,omitempty" yaml:"boundary_path,omitempty" cbor:"boundary_path,omitempty"`
 	// SubsystemPath The logical spatial hierarchy mapped from the Aggregate subsystems (e.g., 'finance-module/ledger-api'). Allows rendering plugins to generate logical metadata tags.
-	SubsystemPath string `json:"subsystem_path,omitempty" yaml:"subsystem_path,omitempty"`
+	SubsystemPath string `json:"subsystem_path,omitempty" yaml:"subsystem_path,omitempty" cbor:"subsystem_path,omitempty"`
 	// SynthesizedSubsystem True when this node's subsystem was synthesized by the compiler — the `default` subsystem created for an Aggregate that declares top-level `components` rather than named `subsystems`. Derived provenance, never authored: it distinguishes the synthesized `default` from a subsystem a user explicitly named `default`. Independent of `synthesized_boundary` (a node may be synthesized on either axis or both). Absent (false) for every authored subsystem.
-	SynthesizedSubsystem bool `json:"synthesized_subsystem,omitempty" yaml:"synthesized_subsystem,omitempty"`
+	SynthesizedSubsystem bool `json:"synthesized_subsystem,omitempty" yaml:"synthesized_subsystem,omitempty" cbor:"synthesized_subsystem,omitempty"`
 	// SynthesizedBoundary True when this node's boundary was synthesized by the compiler — the `default` boundary created for a Release that declares top-level `components` rather than named `boundaries`. Derived provenance, never authored: it distinguishes the synthesized `default` from a boundary a user explicitly named `default`, and routes the node's artifacts to `dist/` flat instead of `dist/boundaries/default/`. Absent (false) for every authored boundary.
-	SynthesizedBoundary bool `json:"synthesized_boundary,omitempty" yaml:"synthesized_boundary,omitempty"`
+	SynthesizedBoundary bool `json:"synthesized_boundary,omitempty" yaml:"synthesized_boundary,omitempty" cbor:"synthesized_boundary,omitempty"`
 	// SourceFile Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
-	SourceFile      string           `json:"source_file,omitempty" yaml:"source_file,omitempty"`
-	CatalogMetadata *CatalogMetadata `json:"catalog_metadata,omitempty" yaml:"catalog_metadata,omitempty"`
+	SourceFile      string           `json:"source_file,omitempty" yaml:"source_file,omitempty" cbor:"source_file,omitempty"`
+	CatalogMetadata *CatalogMetadata `json:"catalog_metadata,omitempty" yaml:"catalog_metadata,omitempty" cbor:"catalog_metadata,omitempty"`
 	// CatalogAnnotations Immutable, intrinsic component characteristics authored by the Platform Architect in Domain 2.
-	CatalogAnnotations map[string]string `json:"catalog_annotations,omitempty" yaml:"catalog_annotations,omitempty"`
+	CatalogAnnotations map[string]string `json:"catalog_annotations,omitempty" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
 	// ReleaseAnnotations Physical topology strings and Ops realities cascading from boundaries in the Release.
-	ReleaseAnnotations map[string]string `json:"release_annotations,omitempty" yaml:"release_annotations,omitempty"`
+	ReleaseAnnotations map[string]string `json:"release_annotations,omitempty" yaml:"release_annotations,omitempty" cbor:"release_annotations,omitempty"`
 	// AggregateAnnotations Cognitive metadata, developer intent, and FinOps cascading from subsystems in the Aggregate.
-	AggregateAnnotations map[string]string `json:"aggregate_annotations,omitempty" yaml:"aggregate_annotations,omitempty"`
+	AggregateAnnotations map[string]string `json:"aggregate_annotations,omitempty" yaml:"aggregate_annotations,omitempty" cbor:"aggregate_annotations,omitempty"`
 	// SelfInject Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
-	SelfInject json.RawMessage `json:"self_inject,omitempty" yaml:"self_inject,omitempty"`
+	SelfInject json.RawMessage `json:"self_inject,omitempty" yaml:"self_inject,omitempty" cbor:"self_inject,omitempty"`
 }
 
 type IREdge struct {
-	Source string `json:"source" yaml:"source"`
-	Target string `json:"target" yaml:"target"`
+	Source string `json:"source" yaml:"source" cbor:"source"`
+	Target string `json:"target" yaml:"target" cbor:"target"`
 	// Socket The usesSchema category this edge belongs to (e.g., 'databases', 'tools').
-	Socket string `json:"socket,omitempty" yaml:"socket,omitempty"`
+	Socket string `json:"socket,omitempty" yaml:"socket,omitempty" cbor:"socket,omitempty"`
 	// Alias The developer-defined alias for this connection (e.g., 'primary_db').
-	Alias string `json:"alias,omitempty" yaml:"alias,omitempty"`
+	Alias string `json:"alias,omitempty" yaml:"alias,omitempty" cbor:"alias,omitempty"`
 	// OriginFeature If this edge was autonomously declared by a Feature (including credential Features labeled feature.aggrega.ai/kind: secret), this identifies the Feature type URI. Allows Wasm plugins to isolate their own topology.
-	OriginFeature string `json:"origin_feature,omitempty" yaml:"origin_feature,omitempty"`
+	OriginFeature string `json:"origin_feature,omitempty" yaml:"origin_feature,omitempty" cbor:"origin_feature,omitempty"`
 	// OriginFeatureInstance The per-attachment instance name of the Feature that declared this edge. Locates a boundary-scope FeatureRecipe's resolved provides by instance, disambiguating two attachments of the same Feature type on one boundary.
-	OriginFeatureInstance string `json:"origin_feature_instance,omitempty" yaml:"origin_feature_instance,omitempty"`
+	OriginFeatureInstance string `json:"origin_feature_instance,omitempty" yaml:"origin_feature_instance,omitempty" cbor:"origin_feature_instance,omitempty"`
 	// OriginRelease True when this edge was created by a Release wiring a declared-but-unbound socket to an existing component. Marks edge AUTHORSHIP, not configuration: a developer-declared edge that a Release merely supplied infra for stays Aggregate-origin (origin_release unset; its Release infra appears in the edge's infra map). origin_feature set => Feature-origin; origin_release true => Release-origin; neither => Aggregate-origin.
-	OriginRelease bool `json:"origin_release,omitempty" yaml:"origin_release,omitempty"`
+	OriginRelease bool `json:"origin_release,omitempty" yaml:"origin_release,omitempty" cbor:"origin_release,omitempty"`
 	// Values Resolved per-connection developer values for this edge (from the Aggregate edge), validated against the target socket's valueSchema at Step 1 and projected into the consuming node's render context at .uses.<socket>.<alias>.values.
-	Values json.RawMessage `json:"values,omitempty" yaml:"values,omitempty"`
+	Values json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
 	// Infra Resolved per-connection infra for this edge (Aggregate-seeded and/or Release-supplied), validated against the target socket's infraSchema at Step 1 and projected at .uses.<socket>.<alias>.infra.
-	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty"`
+	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 	// Inject Agnostic injection routing. Maps local variables to Target provides keys.
-	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty"`
+	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty" cbor:"inject,omitempty"`
 }
 
 type IRMetadata struct {
 	// AggregateName The Aggregate's metadata.name. Follows IR snake_case convention.
-	AggregateName string `json:"aggregate_name" yaml:"aggregate_name"`
+	AggregateName string `json:"aggregate_name" yaml:"aggregate_name" cbor:"aggregate_name"`
 }
 
 // IRProvenance Traceability metadata for diagnostics and auditing.
 type IRProvenance struct {
-	SchemaVersion string `json:"schema_version" yaml:"schema_version"`
+	SchemaVersion string `json:"schema_version" yaml:"schema_version" cbor:"schema_version"`
 	// CompilerVersion Mandatory compliance stamp. Identifies the specific Go compiler binary used to generate this graph.
-	CompilerVersion string `json:"compiler_version" yaml:"compiler_version"`
+	CompilerVersion string `json:"compiler_version" yaml:"compiler_version" cbor:"compiler_version"`
 	// AggregateVersion The exact semantic version of the root Aggregate intent used during compilation.
-	AggregateVersion string `json:"aggregate_version" yaml:"aggregate_version"`
+	AggregateVersion string `json:"aggregate_version" yaml:"aggregate_version" cbor:"aggregate_version"`
 	// ManifestVersion The exact semantic version of the Manifest lockfile used during compilation.
-	ManifestVersion string `json:"manifest_version" yaml:"manifest_version"`
+	ManifestVersion string `json:"manifest_version" yaml:"manifest_version" cbor:"manifest_version"`
 	// ReleaseVersion The exact semantic version of the Release routing file used during compilation.
-	ReleaseVersion    string   `json:"release_version" yaml:"release_version"`
-	SourceIdentifiers []string `json:"source_identifiers" yaml:"source_identifiers"`
+	ReleaseVersion    string   `json:"release_version" yaml:"release_version" cbor:"release_version"`
+	SourceIdentifiers []string `json:"source_identifiers" yaml:"source_identifiers" cbor:"source_identifiers"`
 }
 
 type IRSpec struct {
 	// Nodes Dictionary of all application nodes, keyed by their absolute ID. Purely topological.
-	Nodes map[string]IRNode `json:"nodes" yaml:"nodes"`
+	Nodes map[string]IRNode `json:"nodes" yaml:"nodes" cbor:"nodes"`
 	// Edges Explicit logical network paths and dependencies between nodes.
-	Edges []IREdge `json:"edges" yaml:"edges"`
+	Edges []IREdge `json:"edges" yaml:"edges" cbor:"edges"`
 	// FeatureMarkers Explicit canonical strings (e.g., semantic_routing, data_masking) derived from annotations, utilized for downstream Feature Negotiation.
-	FeatureMarkers []string `json:"feature_markers" yaml:"feature_markers"`
+	FeatureMarkers []string `json:"feature_markers" yaml:"feature_markers" cbor:"feature_markers"`
 	// ValuesMapping The single source of truth for opaque pass-through cognitive payloads, mapped by node ID.
-	ValuesMapping map[string]json.RawMessage `json:"values_mapping" yaml:"values_mapping"`
+	ValuesMapping map[string]json.RawMessage `json:"values_mapping" yaml:"values_mapping" cbor:"values_mapping"`
 	// InfraMapping The physical sizing payload injected from the Release, mapped by node ID.
-	InfraMapping map[string]json.RawMessage `json:"infra_mapping" yaml:"infra_mapping"`
+	InfraMapping map[string]json.RawMessage `json:"infra_mapping" yaml:"infra_mapping" cbor:"infra_mapping"`
 	// FeatureValuesMapping Normalized map of Node IDs to their attached Feature configurations.
-	FeatureValuesMapping map[string]map[string]IRFeatureEntry `json:"feature_values_mapping" yaml:"feature_values_mapping"`
+	FeatureValuesMapping map[string]map[string]IRFeatureEntry `json:"feature_values_mapping" yaml:"feature_values_mapping" cbor:"feature_values_mapping"`
 	// Secrets Validated credential requests mapped by component node ID, cleanly separated from the standard payload.
-	Secrets map[string]map[string]IRFeatureEntry `json:"secrets" yaml:"secrets"`
+	Secrets map[string]map[string]IRFeatureEntry `json:"secrets" yaml:"secrets" cbor:"secrets"`
 	// BoundaryFeatures Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
-	BoundaryFeatures map[string]map[string]IRBoundaryFeature `json:"boundary_features,omitempty" yaml:"boundary_features,omitempty"`
-	Provenance       IRProvenance                            `json:"provenance" yaml:"provenance"`
+	BoundaryFeatures map[string]map[string]IRBoundaryFeature `json:"boundary_features,omitempty" yaml:"boundary_features,omitempty" cbor:"boundary_features,omitempty"`
+	Provenance       IRProvenance                            `json:"provenance" yaml:"provenance" cbor:"provenance"`
 }
 
 type IRGraph struct {
-	APIVersion string     `json:"apiVersion" yaml:"apiVersion"`
-	Kind       string     `json:"kind" yaml:"kind"`
-	Metadata   IRMetadata `json:"metadata" yaml:"metadata"`
-	Spec       IRSpec     `json:"spec" yaml:"spec"`
+	APIVersion string     `json:"apiVersion" yaml:"apiVersion" cbor:"apiVersion"`
+	Kind       string     `json:"kind" yaml:"kind" cbor:"kind"`
+	Metadata   IRMetadata `json:"metadata" yaml:"metadata" cbor:"metadata"`
+	Spec       IRSpec     `json:"spec" yaml:"spec" cbor:"spec"`
 }
 
 // MarshalJSON encodes Maintainer in field-declaration order, omitting
@@ -2194,6 +2194,1810 @@ func (t *IRGraph) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes Maintainer as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t Maintainer) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends Maintainer's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t Maintainer) appendCBOR(dst []byte) ([]byte, error) {
+	n := 0
+	if t.URL != "" {
+		n++
+	}
+	if t.Name != "" {
+		n++
+	}
+	if t.Email != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	if t.URL != "" {
+		dst = appendCBORTextString(dst, "url")
+		dst = appendCBORTextString(dst, t.URL)
+	}
+	if t.Name != "" {
+		dst = appendCBORTextString(dst, "name")
+		dst = appendCBORTextString(dst, t.Name)
+	}
+	if t.Email != "" {
+		dst = appendCBORTextString(dst, "email")
+		dst = appendCBORTextString(dst, t.Email)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes Maintainer from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *Maintainer) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *Maintainer) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
+		case "email":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Email = s
+			}
+		case "url":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.URL = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes FieldProvenance as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t FieldProvenance) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends FieldProvenance's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t FieldProvenance) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if t.Side != "" {
+		n++
+	}
+	if t.AnnotationKey != "" {
+		n++
+	}
+	if t.AnnotationSource != "" {
+		n++
+	}
+	if t.OverridesAnnotation != nil {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Side != "" {
+		dst = appendCBORTextString(dst, "side")
+		dst = appendCBORTextString(dst, t.Side)
+	}
+	dst = appendCBORTextString(dst, "origin")
+	dst = appendCBORTextString(dst, t.Origin)
+	if t.AnnotationKey != "" {
+		dst = appendCBORTextString(dst, "annotation_key")
+		dst = appendCBORTextString(dst, t.AnnotationKey)
+	}
+	if t.AnnotationSource != "" {
+		dst = appendCBORTextString(dst, "annotation_source")
+		dst = appendCBORTextString(dst, t.AnnotationSource)
+	}
+	if t.OverridesAnnotation != nil {
+		dst = appendCBORTextString(dst, "overrides_annotation")
+		if t.OverridesAnnotation == nil {
+			dst = append(dst, 0xf6)
+		} else if dst, err = t.OverridesAnnotation.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes FieldProvenance from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *FieldProvenance) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *FieldProvenance) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "origin":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Origin = s
+			}
+		case "side":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Side = s
+			}
+		case "annotation_key":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AnnotationKey = s
+			}
+		case "annotation_source":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AnnotationSource = s
+			}
+		case "overrides_annotation":
+			{
+				v := new(FieldProvenance)
+				if err := v.decodeCBOR(dec); err != nil {
+					return err
+				}
+				t.OverridesAnnotation = v
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes IRFeatureEntry as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t IRFeatureEntry) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends IRFeatureEntry's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.Infra) != 0 {
+		n++
+	}
+	if len(t.Inject) != 0 {
+		n++
+	}
+	if t.Origin != "" {
+		n++
+	}
+	if len(t.Values) != 0 {
+		n++
+	}
+	if len(t.Secrets) != 0 {
+		n++
+	}
+	if t.AnnotationKey != "" {
+		n++
+	}
+	if len(t.InfraProvenance) != 0 {
+		n++
+	}
+	if t.AnnotationSource != "" {
+		n++
+	}
+	if len(t.ValuesProvenance) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "type")
+	dst = appendCBORTextString(dst, t.Type)
+	if len(t.Infra) != 0 {
+		dst = appendCBORTextString(dst, "infra")
+		dst = appendCBORByteString(dst, t.Infra)
+	}
+	if len(t.Inject) != 0 {
+		dst = appendCBORTextString(dst, "inject")
+		dst = appendCBORByteString(dst, t.Inject)
+	}
+	if t.Origin != "" {
+		dst = appendCBORTextString(dst, "origin")
+		dst = appendCBORTextString(dst, t.Origin)
+	}
+	if len(t.Values) != 0 {
+		dst = appendCBORTextString(dst, "values")
+		dst = appendCBORByteString(dst, t.Values)
+	}
+	if len(t.Secrets) != 0 {
+		dst = appendCBORTextString(dst, "secrets")
+		{
+			keys := make([]string, 0, len(t.Secrets))
+			for k := range t.Secrets {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.Secrets[k]
+				if dst, err = mv.appendCBOR(dst); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	if t.AnnotationKey != "" {
+		dst = appendCBORTextString(dst, "annotation_key")
+		dst = appendCBORTextString(dst, t.AnnotationKey)
+	}
+	if len(t.InfraProvenance) != 0 {
+		dst = appendCBORTextString(dst, "infra_provenance")
+		{
+			keys := make([]string, 0, len(t.InfraProvenance))
+			for k := range t.InfraProvenance {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.InfraProvenance[k]
+				if dst, err = mv.appendCBOR(dst); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	dst = appendCBORTextString(dst, "resolved_version")
+	dst = appendCBORTextString(dst, t.ResolvedVersion)
+	if t.AnnotationSource != "" {
+		dst = appendCBORTextString(dst, "annotation_source")
+		dst = appendCBORTextString(dst, t.AnnotationSource)
+	}
+	if len(t.ValuesProvenance) != 0 {
+		dst = appendCBORTextString(dst, "values_provenance")
+		{
+			keys := make([]string, 0, len(t.ValuesProvenance))
+			for k := range t.ValuesProvenance {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.ValuesProvenance[k]
+				if dst, err = mv.appendCBOR(dst); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes IRFeatureEntry from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *IRFeatureEntry) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "type":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Type = s
+			}
+		case "resolved_version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ResolvedVersion = s
+			}
+		case "values":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Values = json.RawMessage(v)
+			}
+		case "infra":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Infra = json.RawMessage(v)
+			}
+		case "inject":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Inject = json.RawMessage(v)
+			}
+		case "secrets":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]IRFeatureEntry, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv IRFeatureEntry
+					if err := (&mv).decodeCBOR(dec); err != nil {
+						return err
+					}
+					m[mk] = mv
+				}
+				t.Secrets = m
+			}
+		case "origin":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Origin = s
+			}
+		case "annotation_key":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AnnotationKey = s
+			}
+		case "annotation_source":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AnnotationSource = s
+			}
+		case "values_provenance":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]FieldProvenance, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv FieldProvenance
+					if err := (&mv).decodeCBOR(dec); err != nil {
+						return err
+					}
+					m[mk] = mv
+				}
+				t.ValuesProvenance = m
+			}
+		case "infra_provenance":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]FieldProvenance, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv FieldProvenance
+					if err := (&mv).decodeCBOR(dec); err != nil {
+						return err
+					}
+					m[mk] = mv
+				}
+				t.InfraProvenance = m
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes IRBoundaryFeature as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t IRBoundaryFeature) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends IRBoundaryFeature's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t IRBoundaryFeature) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if len(t.Infra) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "type")
+	dst = appendCBORTextString(dst, t.Type)
+	if len(t.Infra) != 0 {
+		dst = appendCBORTextString(dst, "infra")
+		dst = appendCBORByteString(dst, t.Infra)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes IRBoundaryFeature from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *IRBoundaryFeature) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *IRBoundaryFeature) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "type":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Type = s
+			}
+		case "infra":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Infra = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes CatalogMetadata as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t CatalogMetadata) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends CatalogMetadata's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t CatalogMetadata) appendCBOR(dst []byte) ([]byte, error) {
+	n := 0
+	if t.Home != "" {
+		n++
+	}
+	if t.License != "" {
+		n++
+	}
+	if len(t.Keywords) != 0 {
+		n++
+	}
+	if t.Deprecated != false {
+		n++
+	}
+	if t.Repository != "" {
+		n++
+	}
+	if len(t.Maintainers) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Home != "" {
+		dst = appendCBORTextString(dst, "home")
+		dst = appendCBORTextString(dst, t.Home)
+	}
+	if t.License != "" {
+		dst = appendCBORTextString(dst, "license")
+		dst = appendCBORTextString(dst, t.License)
+	}
+	if len(t.Keywords) != 0 {
+		dst = appendCBORTextString(dst, "keywords")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Keywords)))
+		for i := range t.Keywords {
+			ev := t.Keywords[i]
+			dst = appendCBORTextString(dst, ev)
+		}
+	}
+	if t.Deprecated != false {
+		dst = appendCBORTextString(dst, "deprecated")
+		dst = appendCBORBool(dst, t.Deprecated)
+	}
+	if t.Repository != "" {
+		dst = appendCBORTextString(dst, "repository")
+		dst = appendCBORTextString(dst, t.Repository)
+	}
+	if len(t.Maintainers) != 0 {
+		dst = appendCBORTextString(dst, "maintainers")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Maintainers)))
+		for i := range t.Maintainers {
+			ev := t.Maintainers[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes CatalogMetadata from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *CatalogMetadata) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *CatalogMetadata) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "maintainers":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]Maintainer, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev Maintainer
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Maintainers = s
+			}
+		case "license":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.License = s
+			}
+		case "repository":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Repository = s
+			}
+		case "home":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Home = s
+			}
+		case "keywords":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.Keywords = s
+			}
+		case "deprecated":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.Deprecated = v
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes IRNode as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t IRNode) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends IRNode's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t IRNode) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	if t.SyncWave != 0 {
+		n++
+	}
+	if t.Description != "" {
+		n++
+	}
+	if len(t.SelfInject) != 0 {
+		n++
+	}
+	if t.SourceFile != "" {
+		n++
+	}
+	if t.BoundaryPath != "" {
+		n++
+	}
+	if t.SubsystemPath != "" {
+		n++
+	}
+	if t.CatalogMetadata != nil {
+		n++
+	}
+	if len(t.CatalogAnnotations) != 0 {
+		n++
+	}
+	if len(t.ReleaseAnnotations) != 0 {
+		n++
+	}
+	if t.SynthesizedBoundary != false {
+		n++
+	}
+	if len(t.AggregateAnnotations) != 0 {
+		n++
+	}
+	if t.SynthesizedSubsystem != false {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "labels")
+	{
+		keys := make([]string, 0, len(t.Labels))
+		for k := range t.Labels {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.Labels[k]
+			dst = appendCBORTextString(dst, mv)
+		}
+	}
+	dst = appendCBORTextString(dst, "component")
+	dst = appendCBORTextString(dst, t.Component)
+	if t.SyncWave != 0 {
+		dst = appendCBORTextString(dst, "sync_wave")
+		dst = appendCBORInt(dst, int64(t.SyncWave))
+	}
+	if t.Description != "" {
+		dst = appendCBORTextString(dst, "description")
+		dst = appendCBORTextString(dst, t.Description)
+	}
+	if len(t.SelfInject) != 0 {
+		dst = appendCBORTextString(dst, "self_inject")
+		dst = appendCBORByteString(dst, t.SelfInject)
+	}
+	if t.SourceFile != "" {
+		dst = appendCBORTextString(dst, "source_file")
+		dst = appendCBORTextString(dst, t.SourceFile)
+	}
+	if t.BoundaryPath != "" {
+		dst = appendCBORTextString(dst, "boundary_path")
+		dst = appendCBORTextString(dst, t.BoundaryPath)
+	}
+	if t.SubsystemPath != "" {
+		dst = appendCBORTextString(dst, "subsystem_path")
+		dst = appendCBORTextString(dst, t.SubsystemPath)
+	}
+	if t.CatalogMetadata != nil {
+		dst = appendCBORTextString(dst, "catalog_metadata")
+		if t.CatalogMetadata == nil {
+			dst = append(dst, 0xf6)
+		} else if dst, err = t.CatalogMetadata.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	dst = appendCBORTextString(dst, "resolved_version")
+	dst = appendCBORTextString(dst, t.ResolvedVersion)
+	if len(t.CatalogAnnotations) != 0 {
+		dst = appendCBORTextString(dst, "catalog_annotations")
+		{
+			keys := make([]string, 0, len(t.CatalogAnnotations))
+			for k := range t.CatalogAnnotations {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.CatalogAnnotations[k]
+				dst = appendCBORTextString(dst, mv)
+			}
+		}
+	}
+	if len(t.ReleaseAnnotations) != 0 {
+		dst = appendCBORTextString(dst, "release_annotations")
+		{
+			keys := make([]string, 0, len(t.ReleaseAnnotations))
+			for k := range t.ReleaseAnnotations {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.ReleaseAnnotations[k]
+				dst = appendCBORTextString(dst, mv)
+			}
+		}
+	}
+	if t.SynthesizedBoundary != false {
+		dst = appendCBORTextString(dst, "synthesized_boundary")
+		dst = appendCBORBool(dst, t.SynthesizedBoundary)
+	}
+	if len(t.AggregateAnnotations) != 0 {
+		dst = appendCBORTextString(dst, "aggregate_annotations")
+		{
+			keys := make([]string, 0, len(t.AggregateAnnotations))
+			for k := range t.AggregateAnnotations {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.AggregateAnnotations[k]
+				dst = appendCBORTextString(dst, mv)
+			}
+		}
+	}
+	if t.SynthesizedSubsystem != false {
+		dst = appendCBORTextString(dst, "synthesized_subsystem")
+		dst = appendCBORBool(dst, t.SynthesizedSubsystem)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes IRNode from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *IRNode) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *IRNode) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "description":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Description = s
+			}
+		case "labels":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.Labels = m
+			}
+		case "component":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Component = s
+			}
+		case "resolved_version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ResolvedVersion = s
+			}
+		case "sync_wave":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.SyncWave = int(v)
+			}
+		case "boundary_path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.BoundaryPath = s
+			}
+		case "subsystem_path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SubsystemPath = s
+			}
+		case "synthesized_subsystem":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.SynthesizedSubsystem = v
+			}
+		case "synthesized_boundary":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.SynthesizedBoundary = v
+			}
+		case "source_file":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SourceFile = s
+			}
+		case "catalog_metadata":
+			{
+				v := new(CatalogMetadata)
+				if err := v.decodeCBOR(dec); err != nil {
+					return err
+				}
+				t.CatalogMetadata = v
+			}
+		case "catalog_annotations":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.CatalogAnnotations = m
+			}
+		case "release_annotations":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.ReleaseAnnotations = m
+			}
+		case "aggregate_annotations":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.AggregateAnnotations = m
+			}
+		case "self_inject":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.SelfInject = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes IREdge as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t IREdge) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends IREdge's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t IREdge) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if t.Alias != "" {
+		n++
+	}
+	if len(t.Infra) != 0 {
+		n++
+	}
+	if len(t.Inject) != 0 {
+		n++
+	}
+	if t.Socket != "" {
+		n++
+	}
+	if len(t.Values) != 0 {
+		n++
+	}
+	if t.OriginFeature != "" {
+		n++
+	}
+	if t.OriginRelease != false {
+		n++
+	}
+	if t.OriginFeatureInstance != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	if t.Alias != "" {
+		dst = appendCBORTextString(dst, "alias")
+		dst = appendCBORTextString(dst, t.Alias)
+	}
+	if len(t.Infra) != 0 {
+		dst = appendCBORTextString(dst, "infra")
+		dst = appendCBORByteString(dst, t.Infra)
+	}
+	if len(t.Inject) != 0 {
+		dst = appendCBORTextString(dst, "inject")
+		dst = appendCBORByteString(dst, t.Inject)
+	}
+	if t.Socket != "" {
+		dst = appendCBORTextString(dst, "socket")
+		dst = appendCBORTextString(dst, t.Socket)
+	}
+	dst = appendCBORTextString(dst, "source")
+	dst = appendCBORTextString(dst, t.Source)
+	dst = appendCBORTextString(dst, "target")
+	dst = appendCBORTextString(dst, t.Target)
+	if len(t.Values) != 0 {
+		dst = appendCBORTextString(dst, "values")
+		dst = appendCBORByteString(dst, t.Values)
+	}
+	if t.OriginFeature != "" {
+		dst = appendCBORTextString(dst, "origin_feature")
+		dst = appendCBORTextString(dst, t.OriginFeature)
+	}
+	if t.OriginRelease != false {
+		dst = appendCBORTextString(dst, "origin_release")
+		dst = appendCBORBool(dst, t.OriginRelease)
+	}
+	if t.OriginFeatureInstance != "" {
+		dst = appendCBORTextString(dst, "origin_feature_instance")
+		dst = appendCBORTextString(dst, t.OriginFeatureInstance)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes IREdge from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *IREdge) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *IREdge) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "source":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Source = s
+			}
+		case "target":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Target = s
+			}
+		case "socket":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Socket = s
+			}
+		case "alias":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Alias = s
+			}
+		case "origin_feature":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.OriginFeature = s
+			}
+		case "origin_feature_instance":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.OriginFeatureInstance = s
+			}
+		case "origin_release":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.OriginRelease = v
+			}
+		case "values":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Values = json.RawMessage(v)
+			}
+		case "infra":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Infra = json.RawMessage(v)
+			}
+		case "inject":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Inject = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes IRMetadata as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t IRMetadata) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends IRMetadata's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t IRMetadata) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "aggregate_name")
+	dst = appendCBORTextString(dst, t.AggregateName)
+	return dst, nil
+}
+
+// DecodeCBOR decodes IRMetadata from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *IRMetadata) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *IRMetadata) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "aggregate_name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AggregateName = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes IRProvenance as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t IRProvenance) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends IRProvenance's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t IRProvenance) appendCBOR(dst []byte) ([]byte, error) {
+	n := 6
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "schema_version")
+	dst = appendCBORTextString(dst, t.SchemaVersion)
+	dst = appendCBORTextString(dst, "release_version")
+	dst = appendCBORTextString(dst, t.ReleaseVersion)
+	dst = appendCBORTextString(dst, "compiler_version")
+	dst = appendCBORTextString(dst, t.CompilerVersion)
+	dst = appendCBORTextString(dst, "manifest_version")
+	dst = appendCBORTextString(dst, t.ManifestVersion)
+	dst = appendCBORTextString(dst, "aggregate_version")
+	dst = appendCBORTextString(dst, t.AggregateVersion)
+	dst = appendCBORTextString(dst, "source_identifiers")
+	dst = appendCBORHead(dst, 4, uint64(len(t.SourceIdentifiers)))
+	for i := range t.SourceIdentifiers {
+		ev := t.SourceIdentifiers[i]
+		dst = appendCBORTextString(dst, ev)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes IRProvenance from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *IRProvenance) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *IRProvenance) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "schema_version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SchemaVersion = s
+			}
+		case "compiler_version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.CompilerVersion = s
+			}
+		case "aggregate_version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AggregateVersion = s
+			}
+		case "manifest_version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ManifestVersion = s
+			}
+		case "release_version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ReleaseVersion = s
+			}
+		case "source_identifiers":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.SourceIdentifiers = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes IRSpec as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t IRSpec) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends IRSpec's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t IRSpec) appendCBOR(dst []byte) ([]byte, error) {
+	n := 8
+	if len(t.BoundaryFeatures) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "edges")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Edges)))
+	for i := range t.Edges {
+		ev := t.Edges[i]
+		if dst, err = ev.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	dst = appendCBORTextString(dst, "nodes")
+	{
+		keys := make([]string, 0, len(t.Nodes))
+		for k := range t.Nodes {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.Nodes[k]
+			if dst, err = mv.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	dst = appendCBORTextString(dst, "secrets")
+	{
+		keys := make([]string, 0, len(t.Secrets))
+		for k := range t.Secrets {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.Secrets[k]
+			{
+				keys := make([]string, 0, len(mv))
+				for k := range mv {
+					keys = append(keys, k)
+				}
+				sortCBORKeys(keys)
+				dst = appendCBORHead(dst, 5, uint64(len(keys)))
+				for _, k := range keys {
+					dst = appendCBORTextString(dst, k)
+					mv := mv[k]
+					if dst, err = mv.appendCBOR(dst); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+	}
+	dst = appendCBORTextString(dst, "provenance")
+	if dst, err = t.Provenance.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	dst = appendCBORTextString(dst, "infra_mapping")
+	{
+		keys := make([]string, 0, len(t.InfraMapping))
+		for k := range t.InfraMapping {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.InfraMapping[k]
+			dst = appendCBORByteString(dst, mv)
+		}
+	}
+	dst = appendCBORTextString(dst, "values_mapping")
+	{
+		keys := make([]string, 0, len(t.ValuesMapping))
+		for k := range t.ValuesMapping {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.ValuesMapping[k]
+			dst = appendCBORByteString(dst, mv)
+		}
+	}
+	dst = appendCBORTextString(dst, "feature_markers")
+	dst = appendCBORHead(dst, 4, uint64(len(t.FeatureMarkers)))
+	for i := range t.FeatureMarkers {
+		ev := t.FeatureMarkers[i]
+		dst = appendCBORTextString(dst, ev)
+	}
+	if len(t.BoundaryFeatures) != 0 {
+		dst = appendCBORTextString(dst, "boundary_features")
+		{
+			keys := make([]string, 0, len(t.BoundaryFeatures))
+			for k := range t.BoundaryFeatures {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.BoundaryFeatures[k]
+				{
+					keys := make([]string, 0, len(mv))
+					for k := range mv {
+						keys = append(keys, k)
+					}
+					sortCBORKeys(keys)
+					dst = appendCBORHead(dst, 5, uint64(len(keys)))
+					for _, k := range keys {
+						dst = appendCBORTextString(dst, k)
+						mv := mv[k]
+						if dst, err = mv.appendCBOR(dst); err != nil {
+							return nil, err
+						}
+					}
+				}
+			}
+		}
+	}
+	dst = appendCBORTextString(dst, "feature_values_mapping")
+	{
+		keys := make([]string, 0, len(t.FeatureValuesMapping))
+		for k := range t.FeatureValuesMapping {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.FeatureValuesMapping[k]
+			{
+				keys := make([]string, 0, len(mv))
+				for k := range mv {
+					keys = append(keys, k)
+				}
+				sortCBORKeys(keys)
+				dst = appendCBORHead(dst, 5, uint64(len(keys)))
+				for _, k := range keys {
+					dst = appendCBORTextString(dst, k)
+					mv := mv[k]
+					if dst, err = mv.appendCBOR(dst); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes IRSpec from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *IRSpec) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *IRSpec) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "nodes":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]IRNode, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv IRNode
+					if err := (&mv).decodeCBOR(dec); err != nil {
+						return err
+					}
+					m[mk] = mv
+				}
+				t.Nodes = m
+			}
+		case "edges":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]IREdge, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev IREdge
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Edges = s
+			}
+		case "feature_markers":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.FeatureMarkers = s
+			}
+		case "values_mapping":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]json.RawMessage, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv json.RawMessage
+					if v, err := dec.readByteString(); err != nil {
+						return err
+					} else {
+						mv = json.RawMessage(v)
+					}
+					m[mk] = mv
+				}
+				t.ValuesMapping = m
+			}
+		case "infra_mapping":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]json.RawMessage, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv json.RawMessage
+					if v, err := dec.readByteString(); err != nil {
+						return err
+					} else {
+						mv = json.RawMessage(v)
+					}
+					m[mk] = mv
+				}
+				t.InfraMapping = m
+			}
+		case "feature_values_mapping":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]map[string]IRFeatureEntry, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv map[string]IRFeatureEntry
+					{
+						mn, err := dec.readMapHeader()
+						if err != nil {
+							return err
+						}
+						m := make(map[string]IRFeatureEntry, mn)
+						for mi := 0; mi < mn; mi++ {
+							mk, err := dec.readTextString()
+							if err != nil {
+								return err
+							}
+							var mv IRFeatureEntry
+							if err := (&mv).decodeCBOR(dec); err != nil {
+								return err
+							}
+							m[mk] = mv
+						}
+						mv = m
+					}
+					m[mk] = mv
+				}
+				t.FeatureValuesMapping = m
+			}
+		case "secrets":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]map[string]IRFeatureEntry, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv map[string]IRFeatureEntry
+					{
+						mn, err := dec.readMapHeader()
+						if err != nil {
+							return err
+						}
+						m := make(map[string]IRFeatureEntry, mn)
+						for mi := 0; mi < mn; mi++ {
+							mk, err := dec.readTextString()
+							if err != nil {
+								return err
+							}
+							var mv IRFeatureEntry
+							if err := (&mv).decodeCBOR(dec); err != nil {
+								return err
+							}
+							m[mk] = mv
+						}
+						mv = m
+					}
+					m[mk] = mv
+				}
+				t.Secrets = m
+			}
+		case "boundary_features":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]map[string]IRBoundaryFeature, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv map[string]IRBoundaryFeature
+					{
+						mn, err := dec.readMapHeader()
+						if err != nil {
+							return err
+						}
+						m := make(map[string]IRBoundaryFeature, mn)
+						for mi := 0; mi < mn; mi++ {
+							mk, err := dec.readTextString()
+							if err != nil {
+								return err
+							}
+							var mv IRBoundaryFeature
+							if err := (&mv).decodeCBOR(dec); err != nil {
+								return err
+							}
+							m[mk] = mv
+						}
+						mv = m
+					}
+					m[mk] = mv
+				}
+				t.BoundaryFeatures = m
+			}
+		case "provenance":
+			if err := (&t.Provenance).decodeCBOR(dec); err != nil {
+				return err
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes IRGraph as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t IRGraph) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends IRGraph's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t IRGraph) appendCBOR(dst []byte) ([]byte, error) {
+	n := 4
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "kind")
+	dst = appendCBORTextString(dst, t.Kind)
+	dst = appendCBORTextString(dst, "spec")
+	if dst, err = t.Spec.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	dst = appendCBORTextString(dst, "metadata")
+	if dst, err = t.Metadata.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	dst = appendCBORTextString(dst, "apiVersion")
+	dst = appendCBORTextString(dst, t.APIVersion)
+	return dst, nil
+}
+
+// DecodeCBOR decodes IRGraph from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *IRGraph) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *IRGraph) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "apiVersion":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.APIVersion = s
+			}
+		case "kind":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Kind = s
+			}
+		case "metadata":
+			if err := (&t.Metadata).decodeCBOR(dec); err != nil {
+				return err
+			}
+		case "spec":
+			if err := (&t.Spec).decodeCBOR(dec); err != nil {
+				return err
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

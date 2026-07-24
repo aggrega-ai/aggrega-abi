@@ -17,3 +17,55 @@ pub struct CLIRunInput {
     pub args: Vec<String>,
 }
 
+
+impl CLIRunInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 2;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "args");
+        {
+            let c = &self.args;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                crate::cbor_gen::write_text(out, ev);
+            }
+        }
+        crate::cbor_gen::write_text(out, "command");
+        crate::cbor_gen::write_text(out, &self.command);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_command: Option<String> = None;
+        let mut f_args: Option<Vec<String>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "command" => f_command = Some(dec.read_text()?),
+                "args" => f_args = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            command: f_command.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field command".to_string()))?,
+            args: f_args.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field args".to_string()))?,
+        })
+    }
+}
+

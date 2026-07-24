@@ -16,52 +16,52 @@ import (
 
 // MutatorInput The payload the host hands the mutator plugin on each invocation: release-level compilation context plus a labels-only projection of the topology graph.
 type MutatorInput struct {
-	CompilationContext CompilationContext `json:"compilation_context" yaml:"compilation_context"`
-	Graph              MutatorGraph       `json:"graph" yaml:"graph"`
+	CompilationContext CompilationContext `json:"compilation_context" yaml:"compilation_context" cbor:"compilation_context"`
+	Graph              MutatorGraph       `json:"graph" yaml:"graph" cbor:"graph"`
 	// Sources Definition files the host reads and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
-	Sources []MutatorSource `json:"sources,omitempty" yaml:"sources,omitempty"`
+	Sources []MutatorSource `json:"sources,omitempty" yaml:"sources,omitempty" cbor:"sources,omitempty"`
 	// Settings A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
-	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty"`
+	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty" cbor:"settings,omitempty"`
 }
 
 // MutatorOutput The response shape the mutator plugin emits: a list of opaque JSON Patch documents the host applies to the topology graph. Patches stay opaque at the schema layer so the host need not duplicate the JSON Patch parser the guest already implements.
 type MutatorOutput struct {
 	// Patches Opaque JSON Patch documents to apply to the topology graph, in order.
-	Patches []json.RawMessage `json:"patches" yaml:"patches"`
+	Patches []json.RawMessage `json:"patches" yaml:"patches" cbor:"patches"`
 	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
-	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
 
 // CompilationContext Release-level metadata the mutator reads when deciding which compliance, FinOps, or governance rules apply to the build.
 type CompilationContext struct {
 	// ReleaseName The Release's metadata.name.
-	ReleaseName string `json:"release_name" yaml:"release_name"`
+	ReleaseName string `json:"release_name" yaml:"release_name" cbor:"release_name"`
 	// Environment The environment label the Release runs under (e.g., dev, staging, prod).
-	Environment string `json:"environment" yaml:"environment"`
+	Environment string `json:"environment" yaml:"environment" cbor:"environment"`
 }
 
 // MutatorGraph The labels-only projection of the topology graph exposed to the mutator plugin. Intentionally narrower than the full topology result: edges, values, and feature payloads are not exposed because the mutator's job is labelling, not topology reshaping.
 type MutatorGraph struct {
 	// Nodes Nodes keyed by absolute node ID.
-	Nodes map[string]MutatorNode `json:"nodes" yaml:"nodes"`
+	Nodes map[string]MutatorNode `json:"nodes" yaml:"nodes" cbor:"nodes"`
 }
 
 // MutatorNode The minimum per-node projection the mutator plugin needs to evaluate compliance rules: which Component the node implements, which version of that Component resolved, and which labels the node carries.
 type MutatorNode struct {
 	// Component The name of the underlying Component the node instantiates.
-	Component string `json:"component" yaml:"component"`
+	Component string `json:"component" yaml:"component" cbor:"component"`
 	// ResolvedVersion The exact Semantic Version of the Component the resolver pinned for this node.
-	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version"`
+	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
 	// Labels The node's duck-typing and ontology labels.
-	Labels map[string]string `json:"labels" yaml:"labels"`
+	Labels map[string]string `json:"labels" yaml:"labels" cbor:"labels"`
 }
 
 // MutatorSource One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
 type MutatorSource struct {
 	// Path The base name of the source file. The host supplies the base name only, never an absolute host path, so the wire is portable and deterministic.
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path" yaml:"path" cbor:"path"`
 	// Content The source file's content, carried verbatim as an opaque string.
-	Content string `json:"content" yaml:"content"`
+	Content string `json:"content" yaml:"content" cbor:"content"`
 }
 
 // MarshalJSON encodes MutatorInput in field-declaration order, omitting
@@ -576,6 +576,475 @@ func (t *MutatorSource) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes MutatorInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t MutatorInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends MutatorInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t MutatorInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.Sources) != 0 {
+		n++
+	}
+	if len(t.Settings) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "graph")
+	if dst, err = t.Graph.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	if len(t.Sources) != 0 {
+		dst = appendCBORTextString(dst, "sources")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Sources)))
+		for i := range t.Sources {
+			ev := t.Sources[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Settings) != 0 {
+		dst = appendCBORTextString(dst, "settings")
+		dst = appendCBORByteString(dst, t.Settings)
+	}
+	dst = appendCBORTextString(dst, "compilation_context")
+	if dst, err = t.CompilationContext.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes MutatorInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *MutatorInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *MutatorInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "compilation_context":
+			if err := (&t.CompilationContext).decodeCBOR(dec); err != nil {
+				return err
+			}
+		case "graph":
+			if err := (&t.Graph).decodeCBOR(dec); err != nil {
+				return err
+			}
+		case "sources":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]MutatorSource, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev MutatorSource
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Sources = s
+			}
+		case "settings":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Settings = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes MutatorOutput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t MutatorOutput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends MutatorOutput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t MutatorOutput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if t.Error != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	if t.Error != "" {
+		dst = appendCBORTextString(dst, "error")
+		dst = appendCBORTextString(dst, t.Error)
+	}
+	dst = appendCBORTextString(dst, "patches")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Patches)))
+	for i := range t.Patches {
+		ev := t.Patches[i]
+		dst = appendCBORByteString(dst, ev)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes MutatorOutput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *MutatorOutput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *MutatorOutput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "patches":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]json.RawMessage, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev json.RawMessage
+					if v, err := dec.readByteString(); err != nil {
+						return err
+					} else {
+						ev = json.RawMessage(v)
+					}
+					s = append(s, ev)
+				}
+				t.Patches = s
+			}
+		case "error":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Error = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes CompilationContext as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t CompilationContext) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends CompilationContext's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t CompilationContext) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "environment")
+	dst = appendCBORTextString(dst, t.Environment)
+	dst = appendCBORTextString(dst, "release_name")
+	dst = appendCBORTextString(dst, t.ReleaseName)
+	return dst, nil
+}
+
+// DecodeCBOR decodes CompilationContext from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *CompilationContext) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *CompilationContext) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "release_name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ReleaseName = s
+			}
+		case "environment":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Environment = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes MutatorGraph as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t MutatorGraph) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends MutatorGraph's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t MutatorGraph) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "nodes")
+	{
+		keys := make([]string, 0, len(t.Nodes))
+		for k := range t.Nodes {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.Nodes[k]
+			if dst, err = mv.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes MutatorGraph from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *MutatorGraph) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *MutatorGraph) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "nodes":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]MutatorNode, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv MutatorNode
+					if err := (&mv).decodeCBOR(dec); err != nil {
+						return err
+					}
+					m[mk] = mv
+				}
+				t.Nodes = m
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes MutatorNode as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t MutatorNode) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends MutatorNode's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t MutatorNode) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "labels")
+	{
+		keys := make([]string, 0, len(t.Labels))
+		for k := range t.Labels {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.Labels[k]
+			dst = appendCBORTextString(dst, mv)
+		}
+	}
+	dst = appendCBORTextString(dst, "component")
+	dst = appendCBORTextString(dst, t.Component)
+	dst = appendCBORTextString(dst, "resolved_version")
+	dst = appendCBORTextString(dst, t.ResolvedVersion)
+	return dst, nil
+}
+
+// DecodeCBOR decodes MutatorNode from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *MutatorNode) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *MutatorNode) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "component":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Component = s
+			}
+		case "resolved_version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ResolvedVersion = s
+			}
+		case "labels":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.Labels = m
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes MutatorSource as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t MutatorSource) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends MutatorSource's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t MutatorSource) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "path")
+	dst = appendCBORTextString(dst, t.Path)
+	dst = appendCBORTextString(dst, "content")
+	dst = appendCBORTextString(dst, t.Content)
+	return dst, nil
+}
+
+// DecodeCBOR decodes MutatorSource from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *MutatorSource) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *MutatorSource) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "content":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Content = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

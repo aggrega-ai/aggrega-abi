@@ -6,6 +6,11 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -270,5 +275,527 @@ export function encodeAssemblyNameAnnotation(v: AssemblyNameAnnotation): string 
 
 export function decodeAssemblyNameAnnotation(data: string): AssemblyNameAnnotation {
   return JSON.parse(data) as AssemblyNameAnnotation;
+}
+
+export function encodeCBORPluginDescriptor(v: PluginDescriptor): Uint8Array {
+  const out: number[] = [];
+  appendCBORPluginDescriptor(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPluginDescriptor(out: number[], v: PluginDescriptor): void {
+  let n = 3;
+  if (v.commands !== undefined && v.commands.length > 0) n++;
+  if (v.contract !== undefined && v.contract !== null) n++;
+  if (v.metadata !== undefined && v.metadata !== null) n++;
+  if (v.description !== undefined && v.description !== "") n++;
+  if (v.capabilities !== undefined && v.capabilities.length > 0) n++;
+  if (v.settings_schema !== undefined && v.settings_schema !== null) n++;
+  writeHead(out, 5, n);
+  writeText(out, "exports");
+  {
+    const a0 = v.exports;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORPluginExport(out, ee0);
+    }
+  }
+  if (v.commands !== undefined && v.commands.length > 0) {
+    writeText(out, "commands");
+    {
+      const a0 = v.commands;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORPluginCLICommand(out, ee0);
+      }
+    }
+  }
+  if (v.contract !== undefined && v.contract !== null) {
+    writeText(out, "contract");
+    appendCBORProviderContract(out, v.contract);
+  }
+  if (v.metadata !== undefined && v.metadata !== null) {
+    writeText(out, "metadata");
+    appendCBORPluginDescriptorMeta(out, v.metadata);
+  }
+  writeText(out, "abi_version");
+  writeText(out, v.abi_version);
+  if (v.description !== undefined && v.description !== "") {
+    writeText(out, "description");
+    writeText(out, v.description);
+  }
+  writeText(out, "plugin_type");
+  writeText(out, v.plugin_type);
+  if (v.capabilities !== undefined && v.capabilities.length > 0) {
+    writeText(out, "capabilities");
+    {
+      const a0 = v.capabilities;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+  if (v.settings_schema !== undefined && v.settings_schema !== null) {
+    writeText(out, "settings_schema");
+    writeBytes(out, utf8Encode(JSON.stringify(v.settings_schema)));
+  }
+}
+
+export function decodeCBORPluginDescriptor(data: Uint8Array): PluginDescriptor {
+  const dec = new CborDec(data);
+  return decodeCBORPluginDescriptorFrom(dec);
+}
+
+export function decodeCBORPluginDescriptorFrom(dec: CborDec): PluginDescriptor {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "abi_version": o["abi_version"] = dec.readText(); break;
+      case "plugin_type": o["plugin_type"] = dec.readText(); break;
+      case "capabilities": o["capabilities"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "exports": o["exports"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPluginExportFrom(dec)); } return a; })(); break;
+      case "contract": o["contract"] = decodeCBORProviderContractFrom(dec); break;
+      case "description": o["description"] = dec.readText(); break;
+      case "commands": o["commands"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPluginCLICommandFrom(dec)); } return a; })(); break;
+      case "settings_schema": o["settings_schema"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "metadata": o["metadata"] = decodeCBORPluginDescriptorMetaFrom(dec); break;
+      default: dec.skip();
+    }
+  }
+  return o as PluginDescriptor;
+}
+
+export function encodeCBORPluginExport(v: PluginExport): Uint8Array {
+  const out: number[] = [];
+  appendCBORPluginExport(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPluginExport(out: number[], v: PluginExport): void {
+  let n = 1;
+  if (v.input !== undefined && v.input !== null) n++;
+  if (v.scope !== undefined && v.scope !== "") n++;
+  if (v.output !== undefined && v.output !== null) n++;
+  if (v.operates !== undefined && v.operates !== "") n++;
+  if (v.selector !== undefined && v.selector !== "") n++;
+  if (v.stability !== undefined && v.stability !== "") n++;
+  if (v.description !== undefined && v.description !== "") n++;
+  if (v.input_pattern !== undefined && v.input_pattern !== "") n++;
+  if (v.host_functions !== undefined && v.host_functions.length > 0) n++;
+  writeHead(out, 5, n);
+  writeText(out, "name");
+  writeText(out, v.name);
+  if (v.input !== undefined && v.input !== null) {
+    writeText(out, "input");
+    writeBytes(out, utf8Encode(JSON.stringify(v.input)));
+  }
+  if (v.scope !== undefined && v.scope !== "") {
+    writeText(out, "scope");
+    writeText(out, v.scope);
+  }
+  if (v.output !== undefined && v.output !== null) {
+    writeText(out, "output");
+    writeBytes(out, utf8Encode(JSON.stringify(v.output)));
+  }
+  if (v.operates !== undefined && v.operates !== "") {
+    writeText(out, "operates");
+    writeText(out, v.operates);
+  }
+  if (v.selector !== undefined && v.selector !== "") {
+    writeText(out, "selector");
+    writeText(out, v.selector);
+  }
+  if (v.stability !== undefined && v.stability !== "") {
+    writeText(out, "stability");
+    writeText(out, v.stability);
+  }
+  if (v.description !== undefined && v.description !== "") {
+    writeText(out, "description");
+    writeText(out, v.description);
+  }
+  if (v.input_pattern !== undefined && v.input_pattern !== "") {
+    writeText(out, "input_pattern");
+    writeText(out, v.input_pattern);
+  }
+  if (v.host_functions !== undefined && v.host_functions.length > 0) {
+    writeText(out, "host_functions");
+    {
+      const a0 = v.host_functions;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORPluginExport(data: Uint8Array): PluginExport {
+  const dec = new CborDec(data);
+  return decodeCBORPluginExportFrom(dec);
+}
+
+export function decodeCBORPluginExportFrom(dec: CborDec): PluginExport {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "name": o["name"] = dec.readText(); break;
+      case "input_pattern": o["input_pattern"] = dec.readText(); break;
+      case "host_functions": o["host_functions"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "description": o["description"] = dec.readText(); break;
+      case "stability": o["stability"] = dec.readText(); break;
+      case "operates": o["operates"] = dec.readText(); break;
+      case "scope": o["scope"] = dec.readText(); break;
+      case "selector": o["selector"] = dec.readText(); break;
+      case "input": o["input"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "output": o["output"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as PluginExport;
+}
+
+export function encodeCBORPluginCLICommand(v: PluginCLICommand): Uint8Array {
+  const out: number[] = [];
+  appendCBORPluginCLICommand(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPluginCLICommand(out: number[], v: PluginCLICommand): void {
+  let n = 1;
+  if (v.flags !== undefined && v.flags.length > 0) n++;
+  if (v.description !== undefined && v.description !== "") n++;
+  writeHead(out, 5, n);
+  writeText(out, "name");
+  writeText(out, v.name);
+  if (v.flags !== undefined && v.flags.length > 0) {
+    writeText(out, "flags");
+    {
+      const a0 = v.flags;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORPluginCommandFlag(out, ee0);
+      }
+    }
+  }
+  if (v.description !== undefined && v.description !== "") {
+    writeText(out, "description");
+    writeText(out, v.description);
+  }
+}
+
+export function decodeCBORPluginCLICommand(data: Uint8Array): PluginCLICommand {
+  const dec = new CborDec(data);
+  return decodeCBORPluginCLICommandFrom(dec);
+}
+
+export function decodeCBORPluginCLICommandFrom(dec: CborDec): PluginCLICommand {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "name": o["name"] = dec.readText(); break;
+      case "description": o["description"] = dec.readText(); break;
+      case "flags": o["flags"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPluginCommandFlagFrom(dec)); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as PluginCLICommand;
+}
+
+export function encodeCBORPluginCommandFlag(v: PluginCommandFlag): Uint8Array {
+  const out: number[] = [];
+  appendCBORPluginCommandFlag(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPluginCommandFlag(out: number[], v: PluginCommandFlag): void {
+  let n = 1;
+  if (v.type !== undefined && v.type !== "") n++;
+  if (v.default !== undefined && v.default !== "") n++;
+  if (v.shorthand !== undefined && v.shorthand !== "") n++;
+  if (v.description !== undefined && v.description !== "") n++;
+  writeHead(out, 5, n);
+  writeText(out, "name");
+  writeText(out, v.name);
+  if (v.type !== undefined && v.type !== "") {
+    writeText(out, "type");
+    writeText(out, v.type);
+  }
+  if (v.default !== undefined && v.default !== "") {
+    writeText(out, "default");
+    writeText(out, v.default);
+  }
+  if (v.shorthand !== undefined && v.shorthand !== "") {
+    writeText(out, "shorthand");
+    writeText(out, v.shorthand);
+  }
+  if (v.description !== undefined && v.description !== "") {
+    writeText(out, "description");
+    writeText(out, v.description);
+  }
+}
+
+export function decodeCBORPluginCommandFlag(data: Uint8Array): PluginCommandFlag {
+  const dec = new CborDec(data);
+  return decodeCBORPluginCommandFlagFrom(dec);
+}
+
+export function decodeCBORPluginCommandFlagFrom(dec: CborDec): PluginCommandFlag {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "name": o["name"] = dec.readText(); break;
+      case "shorthand": o["shorthand"] = dec.readText(); break;
+      case "description": o["description"] = dec.readText(); break;
+      case "type": o["type"] = dec.readText(); break;
+      case "default": o["default"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as PluginCommandFlag;
+}
+
+export function encodeCBORPluginDescriptorMeta(v: PluginDescriptorMeta): Uint8Array {
+  const out: number[] = [];
+  appendCBORPluginDescriptorMeta(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPluginDescriptorMeta(out: number[], v: PluginDescriptorMeta): void {
+  let n = 0;
+  if (v.author !== undefined && v.author !== "") n++;
+  if (v.commit !== undefined && v.commit !== "") n++;
+  if (v.license !== undefined && v.license !== "") n++;
+  if (v.version !== undefined && v.version !== "") n++;
+  if (v.repository !== undefined && v.repository !== "") n++;
+  writeHead(out, 5, n);
+  if (v.author !== undefined && v.author !== "") {
+    writeText(out, "author");
+    writeText(out, v.author);
+  }
+  if (v.commit !== undefined && v.commit !== "") {
+    writeText(out, "commit");
+    writeText(out, v.commit);
+  }
+  if (v.license !== undefined && v.license !== "") {
+    writeText(out, "license");
+    writeText(out, v.license);
+  }
+  if (v.version !== undefined && v.version !== "") {
+    writeText(out, "version");
+    writeText(out, v.version);
+  }
+  if (v.repository !== undefined && v.repository !== "") {
+    writeText(out, "repository");
+    writeText(out, v.repository);
+  }
+}
+
+export function decodeCBORPluginDescriptorMeta(data: Uint8Array): PluginDescriptorMeta {
+  const dec = new CborDec(data);
+  return decodeCBORPluginDescriptorMetaFrom(dec);
+}
+
+export function decodeCBORPluginDescriptorMetaFrom(dec: CborDec): PluginDescriptorMeta {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "author": o["author"] = dec.readText(); break;
+      case "repository": o["repository"] = dec.readText(); break;
+      case "license": o["license"] = dec.readText(); break;
+      case "version": o["version"] = dec.readText(); break;
+      case "commit": o["commit"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as PluginDescriptorMeta;
+}
+
+export function encodeCBORProviderContract(v: ProviderContract): Uint8Array {
+  const out: number[] = [];
+  appendCBORProviderContract(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORProviderContract(out: number[], v: ProviderContract): void {
+  let n = 2;
+  if (v.source_filter !== undefined && v.source_filter.length > 0) n++;
+  if (v.reusable_instance !== undefined && v.reusable_instance !== false) n++;
+  if (v.artifact_delimiters !== undefined && v.artifact_delimiters !== null) n++;
+  if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) n++;
+  if (v.assembly_name_annotation !== undefined && v.assembly_name_annotation !== null) n++;
+  writeHead(out, 5, n);
+  writeText(out, "input_kinds");
+  appendCBORInputKinds(out, v.input_kinds);
+  if (v.source_filter !== undefined && v.source_filter.length > 0) {
+    writeText(out, "source_filter");
+    {
+      const a0 = v.source_filter;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+  writeText(out, "boundary_assembly");
+  writeText(out, v.boundary_assembly);
+  if (v.reusable_instance !== undefined && v.reusable_instance !== false) {
+    writeText(out, "reusable_instance");
+    writeBool(out, v.reusable_instance);
+  }
+  if (v.artifact_delimiters !== undefined && v.artifact_delimiters !== null) {
+    writeText(out, "artifact_delimiters");
+    appendCBORArtifactDelimiters(out, v.artifact_delimiters);
+  }
+  if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) {
+    writeText(out, "cross_boundary_linking");
+    writeBool(out, v.cross_boundary_linking);
+  }
+  if (v.assembly_name_annotation !== undefined && v.assembly_name_annotation !== null) {
+    writeText(out, "assembly_name_annotation");
+    appendCBORAssemblyNameAnnotation(out, v.assembly_name_annotation);
+  }
+}
+
+export function decodeCBORProviderContract(data: Uint8Array): ProviderContract {
+  const dec = new CborDec(data);
+  return decodeCBORProviderContractFrom(dec);
+}
+
+export function decodeCBORProviderContractFrom(dec: CborDec): ProviderContract {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "input_kinds": o["input_kinds"] = decodeCBORInputKindsFrom(dec); break;
+      case "boundary_assembly": o["boundary_assembly"] = dec.readText(); break;
+      case "artifact_delimiters": o["artifact_delimiters"] = decodeCBORArtifactDelimitersFrom(dec); break;
+      case "source_filter": o["source_filter"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "assembly_name_annotation": o["assembly_name_annotation"] = decodeCBORAssemblyNameAnnotationFrom(dec); break;
+      case "reusable_instance": o["reusable_instance"] = dec.readBool(); break;
+      case "cross_boundary_linking": o["cross_boundary_linking"] = dec.readBool(); break;
+      default: dec.skip();
+    }
+  }
+  return o as ProviderContract;
+}
+
+export function encodeCBORInputKinds(v: InputKinds): Uint8Array {
+  const out: number[] = [];
+  appendCBORInputKinds(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORInputKinds(out: number[], v: InputKinds): void {
+  let n = 3;
+  writeHead(out, 5, n);
+  writeText(out, "sourced");
+  writeBool(out, v.sourced);
+  writeText(out, "synthesized");
+  writeBool(out, v.synthesized);
+  writeText(out, "artifacts_standalone");
+  writeBool(out, v.artifacts_standalone);
+}
+
+export function decodeCBORInputKinds(data: Uint8Array): InputKinds {
+  const dec = new CborDec(data);
+  return decodeCBORInputKindsFrom(dec);
+}
+
+export function decodeCBORInputKindsFrom(dec: CborDec): InputKinds {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "sourced": o["sourced"] = dec.readBool(); break;
+      case "synthesized": o["synthesized"] = dec.readBool(); break;
+      case "artifacts_standalone": o["artifacts_standalone"] = dec.readBool(); break;
+      default: dec.skip();
+    }
+  }
+  return o as InputKinds;
+}
+
+export function encodeCBORArtifactDelimiters(v: ArtifactDelimiters): Uint8Array {
+  const out: number[] = [];
+  appendCBORArtifactDelimiters(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORArtifactDelimiters(out: number[], v: ArtifactDelimiters): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "left");
+  writeText(out, v.left);
+  writeText(out, "right");
+  writeText(out, v.right);
+}
+
+export function decodeCBORArtifactDelimiters(data: Uint8Array): ArtifactDelimiters {
+  const dec = new CborDec(data);
+  return decodeCBORArtifactDelimitersFrom(dec);
+}
+
+export function decodeCBORArtifactDelimitersFrom(dec: CborDec): ArtifactDelimiters {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "left": o["left"] = dec.readText(); break;
+      case "right": o["right"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as ArtifactDelimiters;
+}
+
+export function encodeCBORAssemblyNameAnnotation(v: AssemblyNameAnnotation): Uint8Array {
+  const out: number[] = [];
+  appendCBORAssemblyNameAnnotation(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORAssemblyNameAnnotation(out: number[], v: AssemblyNameAnnotation): void {
+  let n = 1;
+  if (v.require_unique !== undefined && v.require_unique !== false) n++;
+  writeHead(out, 5, n);
+  writeText(out, "annotation");
+  writeText(out, v.annotation);
+  if (v.require_unique !== undefined && v.require_unique !== false) {
+    writeText(out, "require_unique");
+    writeBool(out, v.require_unique);
+  }
+}
+
+export function decodeCBORAssemblyNameAnnotation(data: Uint8Array): AssemblyNameAnnotation {
+  const dec = new CborDec(data);
+  return decodeCBORAssemblyNameAnnotationFrom(dec);
+}
+
+export function decodeCBORAssemblyNameAnnotationFrom(dec: CborDec): AssemblyNameAnnotation {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "annotation": o["annotation"] = dec.readText(); break;
+      case "require_unique": o["require_unique"] = dec.readBool(); break;
+      default: dec.skip();
+    }
+  }
+  return o as AssemblyNameAnnotation;
 }
 

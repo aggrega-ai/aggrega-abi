@@ -6,6 +6,11 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -34,5 +39,45 @@ export function encodeCLIRunInput(v: CLIRunInput): string {
 
 export function decodeCLIRunInput(data: string): CLIRunInput {
   return JSON.parse(data) as CLIRunInput;
+}
+
+export function encodeCBORCLIRunInput(v: CLIRunInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORCLIRunInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORCLIRunInput(out: number[], v: CLIRunInput): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "args");
+  {
+    const a0 = v.args;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      writeText(out, ee0);
+    }
+  }
+  writeText(out, "command");
+  writeText(out, v.command);
+}
+
+export function decodeCBORCLIRunInput(data: Uint8Array): CLIRunInput {
+  const dec = new CborDec(data);
+  return decodeCBORCLIRunInputFrom(dec);
+}
+
+export function decodeCBORCLIRunInputFrom(dec: CborDec): CLIRunInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "command": o["command"] = dec.readText(); break;
+      case "args": o["args"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as CLIRunInput;
 }
 

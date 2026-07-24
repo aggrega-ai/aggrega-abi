@@ -1,1 +1,0 @@
-{"files":[{"path":"templates/deployment.yaml","content":"a2luZDogRGVwbG95bWVudAptZXRhZGF0YToKICBuYW1lOiBwYXltZW50cy1hcGkKICBuYW1lc3BhY2U6IHBheW1lbnRzCg=="}],"diagnostics":[{"severity":"warning","message":"values.legacyPort is deprecated","code":"deprecated-field"}]}

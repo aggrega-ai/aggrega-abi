@@ -1,1 +1,0 @@
-{"files":[{"path":"docker-compose.yaml","content":"c2VydmljZXM6CiAgcGF5bWVudHMtYXBpOiB7fQo="}],"diagnostics":[{"severity":"warning","message":"values.legacyPort is deprecated","code":"deprecated-field"}],"nest_per_node":true}

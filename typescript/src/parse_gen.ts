@@ -7,6 +7,11 @@
 // aggrega-cli checkout.
 
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+import { appendCBORDiagnostic, decodeCBORDiagnosticFrom } from "./diagnostic_gen.ts";
 
 function jstr(s: string): string {
   return JSON.stringify(s);
@@ -136,5 +141,232 @@ export function encodeParseSourceResponse(v: ParseSourceResponse): string {
 
 export function decodeParseSourceResponse(data: string): ParseSourceResponse {
   return JSON.parse(data) as ParseSourceResponse;
+}
+
+export function encodeCBORParseInput(v: ParseInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORParseInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORParseInput(out: number[], v: ParseInput): void {
+  let n = 2;
+  if (v.options !== undefined && v.options !== null) n++;
+  writeHead(out, 5, n);
+  writeText(out, "bytes");
+  writeBytes(out, b64decode(v.bytes));
+  writeText(out, "format");
+  writeText(out, v.format);
+  if (v.options !== undefined && v.options !== null) {
+    writeText(out, "options");
+    writeBytes(out, utf8Encode(JSON.stringify(v.options)));
+  }
+}
+
+export function decodeCBORParseInput(data: Uint8Array): ParseInput {
+  const dec = new CborDec(data);
+  return decodeCBORParseInputFrom(dec);
+}
+
+export function decodeCBORParseInputFrom(dec: CborDec): ParseInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "format": o["format"] = dec.readText(); break;
+      case "bytes": o["bytes"] = b64encode(dec.readBytes()); break;
+      case "options": o["options"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as ParseInput;
+}
+
+export function encodeCBORParseOutput(v: ParseOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORParseOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORParseOutput(out: number[], v: ParseOutput): void {
+  let n = 1;
+  if (v.error !== undefined && v.error !== "") n++;
+  if (v.spans !== undefined && v.spans.length > 0) n++;
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
+  writeHead(out, 5, n);
+  writeText(out, "tree");
+  writeBytes(out, utf8Encode(JSON.stringify(v.tree)));
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  if (v.spans !== undefined && v.spans.length > 0) {
+    writeText(out, "spans");
+    {
+      const a0 = v.spans;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORNodeSpan(out, ee0);
+      }
+    }
+  }
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) {
+    writeText(out, "diagnostics");
+    {
+      const a0 = v.diagnostics;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORDiagnostic(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORParseOutput(data: Uint8Array): ParseOutput {
+  const dec = new CborDec(data);
+  return decodeCBORParseOutputFrom(dec);
+}
+
+export function decodeCBORParseOutputFrom(dec: CborDec): ParseOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "tree": o["tree"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
+      case "spans": o["spans"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORNodeSpanFrom(dec)); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as ParseOutput;
+}
+
+export function encodeCBORNodeSpan(v: NodeSpan): Uint8Array {
+  const out: number[] = [];
+  appendCBORNodeSpan(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORNodeSpan(out: number[], v: NodeSpan): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "span");
+  appendCBORSourceSpan(out, v.span);
+  writeText(out, "pointer");
+  writeText(out, v.pointer);
+}
+
+export function decodeCBORNodeSpan(data: Uint8Array): NodeSpan {
+  const dec = new CborDec(data);
+  return decodeCBORNodeSpanFrom(dec);
+}
+
+export function decodeCBORNodeSpanFrom(dec: CborDec): NodeSpan {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "pointer": o["pointer"] = dec.readText(); break;
+      case "span": o["span"] = decodeCBORSourceSpanFrom(dec); break;
+      default: dec.skip();
+    }
+  }
+  return o as NodeSpan;
+}
+
+export function encodeCBORSourceSpan(v: SourceSpan): Uint8Array {
+  const out: number[] = [];
+  appendCBORSourceSpan(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORSourceSpan(out: number[], v: SourceSpan): void {
+  let n = 6;
+  writeHead(out, 5, n);
+  writeText(out, "end_line");
+  writeInt(out, v.end_line);
+  writeText(out, "end_column");
+  writeInt(out, v.end_column);
+  writeText(out, "end_offset");
+  writeInt(out, v.end_offset);
+  writeText(out, "start_line");
+  writeInt(out, v.start_line);
+  writeText(out, "start_column");
+  writeInt(out, v.start_column);
+  writeText(out, "start_offset");
+  writeInt(out, v.start_offset);
+}
+
+export function decodeCBORSourceSpan(data: Uint8Array): SourceSpan {
+  const dec = new CborDec(data);
+  return decodeCBORSourceSpanFrom(dec);
+}
+
+export function decodeCBORSourceSpanFrom(dec: CborDec): SourceSpan {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "start_offset": o["start_offset"] = dec.readInt(); break;
+      case "end_offset": o["end_offset"] = dec.readInt(); break;
+      case "start_line": o["start_line"] = dec.readInt(); break;
+      case "start_column": o["start_column"] = dec.readInt(); break;
+      case "end_line": o["end_line"] = dec.readInt(); break;
+      case "end_column": o["end_column"] = dec.readInt(); break;
+      default: dec.skip();
+    }
+  }
+  return o as SourceSpan;
+}
+
+export function encodeCBORParseSourceResponse(v: ParseSourceResponse): Uint8Array {
+  const out: number[] = [];
+  appendCBORParseSourceResponse(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORParseSourceResponse(out: number[], v: ParseSourceResponse): void {
+  let n = 0;
+  if (v.tree !== undefined && v.tree !== null) n++;
+  if (v.error !== undefined && v.error !== "") n++;
+  if (v.error_code !== undefined && v.error_code !== "") n++;
+  writeHead(out, 5, n);
+  if (v.tree !== undefined && v.tree !== null) {
+    writeText(out, "tree");
+    writeBytes(out, utf8Encode(JSON.stringify(v.tree)));
+  }
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  if (v.error_code !== undefined && v.error_code !== "") {
+    writeText(out, "error_code");
+    writeText(out, v.error_code);
+  }
+}
+
+export function decodeCBORParseSourceResponse(data: Uint8Array): ParseSourceResponse {
+  const dec = new CborDec(data);
+  return decodeCBORParseSourceResponseFrom(dec);
+}
+
+export function decodeCBORParseSourceResponseFrom(dec: CborDec): ParseSourceResponse {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "tree": o["tree"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "error": o["error"] = dec.readText(); break;
+      case "error_code": o["error_code"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as ParseSourceResponse;
 }
 

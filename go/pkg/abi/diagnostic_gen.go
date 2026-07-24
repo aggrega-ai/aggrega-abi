@@ -17,51 +17,51 @@ import (
 // Diagnostic One issue a Wasm plugin raised: a severity, a human-readable message, an optional location, and optional socket-specific fields. Every socket that emits diagnostics emits this shape; each populates the subset it uses (a parser sets a location span, an import sets code and source_ref, a publishing linter sets rule_id and classification, a policy sets only severity and message, a renderer sets a structured location and suggest) and omits the rest.
 type Diagnostic struct {
 	// Severity The diagnostic's severity, as an open string so each socket keeps its own vocabulary. A parser reports its own severities; an import reports error, warning, or info; a publishing linter reports error or warning; a policy reports the build-outcome verdict deny, warn, or audit. The host reads the value without the schema constraining it to one vocabulary.
-	Severity string `json:"severity" yaml:"severity"`
+	Severity string `json:"severity" yaml:"severity" cbor:"severity"`
 	// Message The human-readable diagnostic text.
-	Message string `json:"message" yaml:"message"`
+	Message string `json:"message" yaml:"message" cbor:"message"`
 	// Code An optional stable, machine-matchable code for the diagnostic, independent of the human-readable message. Absent when the emitting socket assigns no code.
-	Code string `json:"code,omitempty" yaml:"code,omitempty"`
+	Code string `json:"code,omitempty" yaml:"code,omitempty" cbor:"code,omitempty"`
 	// RuleID The identifier of the rule that produced the diagnostic, when the emitting socket is rule-based (a publishing linter). Absent otherwise.
-	RuleID string `json:"rule_id,omitempty" yaml:"rule_id,omitempty"`
+	RuleID string `json:"rule_id,omitempty" yaml:"rule_id,omitempty" cbor:"rule_id,omitempty"`
 	// Classification A semantic-version-impact classification the diagnostic carries, when the emitting rule assigns one (a schema-evolution rule). Absent for diagnostics that carry no classification.
-	Classification string `json:"classification,omitempty" yaml:"classification,omitempty"`
+	Classification string `json:"classification,omitempty" yaml:"classification,omitempty" cbor:"classification,omitempty"`
 	// SourceRef An opaque reference to the source element the diagnostic concerns (for example the identifier of a source node an import could not resolve). Absent when the diagnostic references no specific source element.
-	SourceRef string `json:"source_ref,omitempty" yaml:"source_ref,omitempty"`
+	SourceRef string `json:"source_ref,omitempty" yaml:"source_ref,omitempty" cbor:"source_ref,omitempty"`
 	// Location Where the diagnostic points, when the emitting socket can locate the issue. A parser fills the byte span; a renderer fills the structured position within a source document. Absent when the diagnostic has no location.
-	Location *Location `json:"location,omitempty" yaml:"location,omitempty"`
+	Location *Location `json:"location,omitempty" yaml:"location,omitempty" cbor:"location,omitempty"`
 	// Suggest An optional remediation hint the emitting socket offers alongside the diagnostic. Absent when no hint is offered.
-	Suggest string `json:"suggest,omitempty" yaml:"suggest,omitempty"`
+	Suggest string `json:"suggest,omitempty" yaml:"suggest,omitempty" cbor:"suggest,omitempty"`
 }
 
 // Location Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind). Every field is optional; a socket populates the representation it can produce and omits the rest.
 type Location struct {
 	// Span The span of raw source bytes the diagnostic locates, when the emitting socket parses source and can pin the issue to a byte range (a parser). Absent otherwise.
-	Span *Span `json:"span,omitempty" yaml:"span,omitempty"`
+	Span *Span `json:"span,omitempty" yaml:"span,omitempty" cbor:"span,omitempty"`
 	// KeyPath A dotted path to the offending element within a structured source document, when the emitting socket locates the issue structurally (a renderer). Absent otherwise.
-	KeyPath string `json:"key_path,omitempty" yaml:"key_path,omitempty"`
+	KeyPath string `json:"key_path,omitempty" yaml:"key_path,omitempty" cbor:"key_path,omitempty"`
 	// URI An identifier for the source artifact the diagnostic concerns, when the emitting socket knows it (a renderer). Absent otherwise.
-	URI string `json:"uri,omitempty" yaml:"uri,omitempty"`
+	URI string `json:"uri,omitempty" yaml:"uri,omitempty" cbor:"uri,omitempty"`
 	// Line A line number within the structured source document, distinct from the raw-byte line and column carried by span. Present when the emitting socket knows a document line (a renderer). Absent otherwise.
-	Line int `json:"line,omitempty" yaml:"line,omitempty"`
+	Line int `json:"line,omitempty" yaml:"line,omitempty" cbor:"line,omitempty"`
 	// Kind An open string naming the source surface the location refers to, when the emitting socket distinguishes surfaces (a renderer). Absent otherwise.
-	Kind string `json:"kind,omitempty" yaml:"kind,omitempty"`
+	Kind string `json:"kind,omitempty" yaml:"kind,omitempty" cbor:"kind,omitempty"`
 }
 
 // Span A span of the original source bytes: the byte offsets are the primary, exact location, and the line and column numbers accompany them for human-readable diagnostics.
 type Span struct {
 	// StartOffset The byte offset of the span's first byte in the original source, zero-based.
-	StartOffset int `json:"start_offset" yaml:"start_offset"`
+	StartOffset int `json:"start_offset" yaml:"start_offset" cbor:"start_offset"`
 	// EndOffset The byte offset one past the span's last byte in the original source, so end_offset minus start_offset is the span's length in bytes.
-	EndOffset int `json:"end_offset" yaml:"end_offset"`
+	EndOffset int `json:"end_offset" yaml:"end_offset" cbor:"end_offset"`
 	// StartLine The line number of the span's start, one-based, for human-readable diagnostics.
-	StartLine int `json:"start_line" yaml:"start_line"`
+	StartLine int `json:"start_line" yaml:"start_line" cbor:"start_line"`
 	// StartColumn The column number of the span's start, one-based, for human-readable diagnostics.
-	StartColumn int `json:"start_column" yaml:"start_column"`
+	StartColumn int `json:"start_column" yaml:"start_column" cbor:"start_column"`
 	// EndLine The line number of the span's end, one-based, for human-readable diagnostics.
-	EndLine int `json:"end_line" yaml:"end_line"`
+	EndLine int `json:"end_line" yaml:"end_line" cbor:"end_line"`
 	// EndColumn The column number of the span's end, one-based, for human-readable diagnostics.
-	EndColumn int `json:"end_column" yaml:"end_column"`
+	EndColumn int `json:"end_column" yaml:"end_column" cbor:"end_column"`
 }
 
 // MarshalJSON encodes Diagnostic in field-declaration order, omitting
@@ -434,6 +434,353 @@ func (t *Span) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes Diagnostic as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t Diagnostic) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends Diagnostic's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t Diagnostic) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if t.Code != "" {
+		n++
+	}
+	if t.RuleID != "" {
+		n++
+	}
+	if t.Suggest != "" {
+		n++
+	}
+	if t.Location != nil {
+		n++
+	}
+	if t.SourceRef != "" {
+		n++
+	}
+	if t.Classification != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Code != "" {
+		dst = appendCBORTextString(dst, "code")
+		dst = appendCBORTextString(dst, t.Code)
+	}
+	dst = appendCBORTextString(dst, "message")
+	dst = appendCBORTextString(dst, t.Message)
+	if t.RuleID != "" {
+		dst = appendCBORTextString(dst, "rule_id")
+		dst = appendCBORTextString(dst, t.RuleID)
+	}
+	if t.Suggest != "" {
+		dst = appendCBORTextString(dst, "suggest")
+		dst = appendCBORTextString(dst, t.Suggest)
+	}
+	if t.Location != nil {
+		dst = appendCBORTextString(dst, "location")
+		if t.Location == nil {
+			dst = append(dst, 0xf6)
+		} else if dst, err = t.Location.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	dst = appendCBORTextString(dst, "severity")
+	dst = appendCBORTextString(dst, t.Severity)
+	if t.SourceRef != "" {
+		dst = appendCBORTextString(dst, "source_ref")
+		dst = appendCBORTextString(dst, t.SourceRef)
+	}
+	if t.Classification != "" {
+		dst = appendCBORTextString(dst, "classification")
+		dst = appendCBORTextString(dst, t.Classification)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes Diagnostic from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *Diagnostic) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *Diagnostic) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "severity":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Severity = s
+			}
+		case "message":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Message = s
+			}
+		case "code":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Code = s
+			}
+		case "rule_id":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.RuleID = s
+			}
+		case "classification":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Classification = s
+			}
+		case "source_ref":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SourceRef = s
+			}
+		case "location":
+			{
+				v := new(Location)
+				if err := v.decodeCBOR(dec); err != nil {
+					return err
+				}
+				t.Location = v
+			}
+		case "suggest":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Suggest = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes Location as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t Location) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends Location's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t Location) appendCBOR(dst []byte) ([]byte, error) {
+	n := 0
+	if t.URI != "" {
+		n++
+	}
+	if t.Kind != "" {
+		n++
+	}
+	if t.Line != 0 {
+		n++
+	}
+	if t.Span != nil {
+		n++
+	}
+	if t.KeyPath != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.URI != "" {
+		dst = appendCBORTextString(dst, "uri")
+		dst = appendCBORTextString(dst, t.URI)
+	}
+	if t.Kind != "" {
+		dst = appendCBORTextString(dst, "kind")
+		dst = appendCBORTextString(dst, t.Kind)
+	}
+	if t.Line != 0 {
+		dst = appendCBORTextString(dst, "line")
+		dst = appendCBORInt(dst, int64(t.Line))
+	}
+	if t.Span != nil {
+		dst = appendCBORTextString(dst, "span")
+		if t.Span == nil {
+			dst = append(dst, 0xf6)
+		} else if dst, err = t.Span.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	if t.KeyPath != "" {
+		dst = appendCBORTextString(dst, "key_path")
+		dst = appendCBORTextString(dst, t.KeyPath)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes Location from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *Location) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *Location) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "span":
+			{
+				v := new(Span)
+				if err := v.decodeCBOR(dec); err != nil {
+					return err
+				}
+				t.Span = v
+			}
+		case "key_path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.KeyPath = s
+			}
+		case "uri":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.URI = s
+			}
+		case "line":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.Line = int(v)
+			}
+		case "kind":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Kind = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes Span as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t Span) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends Span's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t Span) appendCBOR(dst []byte) ([]byte, error) {
+	n := 6
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "end_line")
+	dst = appendCBORInt(dst, int64(t.EndLine))
+	dst = appendCBORTextString(dst, "end_column")
+	dst = appendCBORInt(dst, int64(t.EndColumn))
+	dst = appendCBORTextString(dst, "end_offset")
+	dst = appendCBORInt(dst, int64(t.EndOffset))
+	dst = appendCBORTextString(dst, "start_line")
+	dst = appendCBORInt(dst, int64(t.StartLine))
+	dst = appendCBORTextString(dst, "start_column")
+	dst = appendCBORInt(dst, int64(t.StartColumn))
+	dst = appendCBORTextString(dst, "start_offset")
+	dst = appendCBORInt(dst, int64(t.StartOffset))
+	return dst, nil
+}
+
+// DecodeCBOR decodes Span from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *Span) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *Span) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "start_offset":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.StartOffset = int(v)
+			}
+		case "end_offset":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.EndOffset = int(v)
+			}
+		case "start_line":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.StartLine = int(v)
+			}
+		case "start_column":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.StartColumn = int(v)
+			}
+		case "end_line":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.EndLine = int(v)
+			}
+		case "end_column":
+			if v, err := dec.readInt(); err != nil {
+				return err
+			} else {
+				t.EndColumn = int(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

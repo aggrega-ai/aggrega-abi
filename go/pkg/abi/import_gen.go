@@ -17,123 +17,123 @@ import (
 // ImportInput The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, and an optional opaque options document the consumer supplies for importer-specific behavior.
 type ImportInput struct {
 	// Format The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
-	Format string `json:"format" yaml:"format"`
+	Format string `json:"format" yaml:"format" cbor:"format"`
 	// Bytes The primary source bytes to import, base64-encoded on the wire. The importer decodes the base64 to recover the original bytes and reads them as the named format.
-	Bytes []byte `json:"bytes" yaml:"bytes"`
+	Bytes []byte `json:"bytes" yaml:"bytes" cbor:"bytes"`
 	// Sources Named sources for a multi-file or directory import, each carrying its own bytes. Absent for a single-file import, where the primary bytes carry the whole source.
-	Sources []ImportSource `json:"sources,omitempty" yaml:"sources,omitempty"`
+	Sources []ImportSource `json:"sources,omitempty" yaml:"sources,omitempty" cbor:"sources,omitempty"`
 	// Settings An opaque import-options document the consumer supplies for importer-specific behavior. The host pipes it through without interpreting it; the importer reads whatever shape it documents. Absent when the consumer supplies no options.
-	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty"`
+	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty" cbor:"settings,omitempty"`
 }
 
 // ImportSource One named source within a multi-file or directory import: a name locating the source and its own bytes.
 type ImportSource struct {
 	// Name The name of this source within the import, such as a relative file path.
-	Name string `json:"name" yaml:"name"`
+	Name string `json:"name" yaml:"name" cbor:"name"`
 	// Bytes This source's bytes, base64-encoded on the wire. The importer decodes the base64 to recover the original bytes.
-	Bytes []byte `json:"bytes" yaml:"bytes"`
+	Bytes []byte `json:"bytes" yaml:"bytes" cbor:"bytes"`
 }
 
 // ImportOutput The payload an importer guest returns: the entities the import produced, the mapping decisions behind them, any diagnostics the import raised, and any scaffold files it produced. Every field is optional, so an import that resolved nothing may return diagnostics alone.
 type ImportOutput struct {
 	// Entities The entities the import produced, each either a reference to an existing catalog entity or a drafted entity body. Absent when the import emitted no entities.
-	Entities []EmittedEntity `json:"entities,omitempty" yaml:"entities,omitempty"`
+	Entities []EmittedEntity `json:"entities,omitempty" yaml:"entities,omitempty" cbor:"entities,omitempty"`
 	// Decisions The mapping decisions the import made, one per source node it resolved, recording the candidates it weighed and the choice it made. Absent when the import recorded no decisions.
-	Decisions []ImportDecision `json:"decisions,omitempty" yaml:"decisions,omitempty"`
+	Decisions []ImportDecision `json:"decisions,omitempty" yaml:"decisions,omitempty" cbor:"decisions,omitempty"`
 	// Diagnostics Diagnostics the import raised — for example an unresolved source node or an ambiguous mapping. Absent when the import produced none.
-	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty" cbor:"diagnostics,omitempty"`
 	// Files Scaffold files the import produced alongside the entities, such as a starter aggregate or a readme. Absent when the import produced no files.
-	Files []ScaffoldFile `json:"files,omitempty" yaml:"files,omitempty"`
+	Files []ScaffoldFile `json:"files,omitempty" yaml:"files,omitempty" cbor:"files,omitempty"`
 	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
-	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
 
 // EmittedEntity One entity the import produced: its kind, its name, and how it is emitted — a reference to an existing catalog entity or a newly drafted entity body.
 type EmittedEntity struct {
 	// Kind The kind of entity emitted. In v1 this is Component or Aggregate; additional kinds may appear as the emission surface grows, so a reader tolerates an unrecognized kind.
-	Kind string `json:"kind" yaml:"kind"`
+	Kind string `json:"kind" yaml:"kind" cbor:"kind"`
 	// Name The name of the emitted entity.
-	Name string `json:"name" yaml:"name"`
+	Name string `json:"name" yaml:"name" cbor:"name"`
 	// Mode How the entity is emitted: reference points at an existing catalog entity by name, and draft carries a newly drafted entity body.
-	Mode string `json:"mode" yaml:"mode"`
+	Mode string `json:"mode" yaml:"mode" cbor:"mode"`
 	// Body The raw YAML body of a drafted entity. Empty for a pure reference, which names an existing entity rather than drafting one.
-	Body string `json:"body,omitempty" yaml:"body,omitempty"`
+	Body string `json:"body,omitempty" yaml:"body,omitempty" cbor:"body,omitempty"`
 	// Labels Labels to attach to the emitted entity, as a string-to-string map. Empty in v1; reserved for a future label-driven emission axis.
-	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" cbor:"labels,omitempty"`
 	// Annotations Annotations to attach to the emitted entity, as a string-to-string map. Empty in v1; reserved for a future annotation-driven emission axis.
-	Annotations map[string]string `json:"annotations,omitempty" yaml:"annotations,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty" yaml:"annotations,omitempty" cbor:"annotations,omitempty"`
 	// SourceRef A reference to the source node this entity was emitted from, so a reader can trace the entity back to its origin in the imported source.
-	SourceRef string `json:"sourceRef,omitempty" yaml:"sourceRef,omitempty"`
+	SourceRef string `json:"sourceRef,omitempty" yaml:"sourceRef,omitempty" cbor:"sourceRef,omitempty"`
 	// DecisionRef A reference to the mapping decision that produced this entity, linking it to the candidates weighed and the choice made.
-	DecisionRef string `json:"decisionRef,omitempty" yaml:"decisionRef,omitempty"`
+	DecisionRef string `json:"decisionRef,omitempty" yaml:"decisionRef,omitempty" cbor:"decisionRef,omitempty"`
 }
 
 // ImportDecision One mapping decision: the source node the importer resolved, the candidate catalog entities it weighed, the candidate it chose, and the reasoning behind the choice.
 type ImportDecision struct {
 	// SourceNode The source node this decision resolved: the node the importer read from the source and mapped to a catalog entity.
-	SourceNode DecisionSourceNode `json:"sourceNode" yaml:"sourceNode"`
+	SourceNode DecisionSourceNode `json:"sourceNode" yaml:"sourceNode" cbor:"sourceNode"`
 	// Candidates The candidate catalog entities the importer weighed for this source node, each with its score and the per-signal breakdown behind that score. Absent when the importer weighed no candidates.
-	Candidates []ImportCandidate `json:"candidates,omitempty" yaml:"candidates,omitempty"`
+	Candidates []ImportCandidate `json:"candidates,omitempty" yaml:"candidates,omitempty" cbor:"candidates,omitempty"`
 	// Chosen The candidate the importer chose for this source node, and how it emitted it. Absent when the importer made no choice.
-	Chosen *DecisionChoice `json:"chosen,omitempty" yaml:"chosen,omitempty"`
+	Chosen *DecisionChoice `json:"chosen,omitempty" yaml:"chosen,omitempty" cbor:"chosen,omitempty"`
 	// Rationale A human-readable explanation of why the importer made this choice.
-	Rationale string `json:"rationale,omitempty" yaml:"rationale,omitempty"`
+	Rationale string `json:"rationale,omitempty" yaml:"rationale,omitempty" cbor:"rationale,omitempty"`
 	// SwapHint A hint describing how to swap the chosen mapping for an alternative, so a reader can revise the decision.
-	SwapHint string `json:"swapHint,omitempty" yaml:"swapHint,omitempty"`
+	SwapHint string `json:"swapHint,omitempty" yaml:"swapHint,omitempty" cbor:"swapHint,omitempty"`
 }
 
 // DecisionSourceNode The source node a mapping decision resolved: an identifier, the type the source names it, and a human-readable summary of its parameters.
 type DecisionSourceNode struct {
 	// ID The identifier of the source node within the imported source.
-	ID string `json:"id" yaml:"id"`
+	ID string `json:"id" yaml:"id" cbor:"id"`
 	// Type The type of the source node as the source names it.
-	Type string `json:"type" yaml:"type"`
+	Type string `json:"type" yaml:"type" cbor:"type"`
 	// ParamsSummary A human-readable summary of the source node's parameters, for display alongside the decision.
-	ParamsSummary string `json:"paramsSummary" yaml:"paramsSummary"`
+	ParamsSummary string `json:"paramsSummary" yaml:"paramsSummary" cbor:"paramsSummary"`
 }
 
 // ImportCandidate One candidate catalog entity the importer weighed for a source node: the candidate component, its overall score, the match tier the score falls into, and the per-signal breakdown behind the score.
 type ImportCandidate struct {
 	// ComponentName The name of the candidate catalog component.
-	ComponentName string `json:"componentName" yaml:"componentName"`
+	ComponentName string `json:"componentName" yaml:"componentName" cbor:"componentName"`
 	// Score The candidate's overall match score, aggregated from the per-signal breakdown.
-	Score float64 `json:"score" yaml:"score"`
+	Score float64 `json:"score" yaml:"score" cbor:"score"`
 	// Tier The match tier the candidate falls into, a coarse band over the score.
-	Tier string `json:"tier" yaml:"tier"`
+	Tier string `json:"tier" yaml:"tier" cbor:"tier"`
 	// Signals The per-signal breakdown behind the candidate's score.
-	Signals CandidateSignals `json:"signals" yaml:"signals"`
+	Signals CandidateSignals `json:"signals" yaml:"signals" cbor:"signals"`
 }
 
 // CandidateSignals The per-signal breakdown behind a candidate's score: one contribution per matching signal. A fixed-field object, so the set of signals is stable and the wire is deterministic.
 type CandidateSignals struct {
 	// Table The score contribution from the mapping-table signal.
-	Table float64 `json:"table" yaml:"table"`
+	Table float64 `json:"table" yaml:"table" cbor:"table"`
 	// Category The score contribution from the category signal.
-	Category float64 `json:"category" yaml:"category"`
+	Category float64 `json:"category" yaml:"category" cbor:"category"`
 	// DomainLabels The score contribution from the domain-labels signal.
-	DomainLabels float64 `json:"domainLabels" yaml:"domainLabels"`
+	DomainLabels float64 `json:"domainLabels" yaml:"domainLabels" cbor:"domainLabels"`
 	// Shape The score contribution from the shape signal.
-	Shape float64 `json:"shape" yaml:"shape"`
+	Shape float64 `json:"shape" yaml:"shape" cbor:"shape"`
 	// Name The score contribution from the name signal.
-	Name float64 `json:"name" yaml:"name"`
+	Name float64 `json:"name" yaml:"name" cbor:"name"`
 }
 
 // DecisionChoice The candidate a mapping decision chose: the target catalog entity, how it is emitted, and the match tier of the choice.
 type DecisionChoice struct {
 	// Target The name of the chosen target catalog entity.
-	Target string `json:"target" yaml:"target"`
+	Target string `json:"target" yaml:"target" cbor:"target"`
 	// Mode How the chosen target is emitted, mirroring an emitted entity's mode: a reference to an existing entity or a newly drafted body.
-	Mode string `json:"mode" yaml:"mode"`
+	Mode string `json:"mode" yaml:"mode" cbor:"mode"`
 	// Tier The match tier of the chosen target.
-	Tier string `json:"tier" yaml:"tier"`
+	Tier string `json:"tier" yaml:"tier" cbor:"tier"`
 }
 
 // ScaffoldFile One scaffold file the import produced: a path relative to the import output root and the file's content.
 type ScaffoldFile struct {
 	// Path The path of the scaffold file, relative to the import output root.
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path" yaml:"path" cbor:"path"`
 	// Content The scaffold file's content.
-	Content string `json:"content" yaml:"content"`
+	Content string `json:"content" yaml:"content" cbor:"content"`
 }
 
 // MarshalJSON encodes ImportInput in field-declaration order, omitting
@@ -1262,6 +1262,996 @@ func (t *ScaffoldFile) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ImportInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ImportInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ImportInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ImportInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.Sources) != 0 {
+		n++
+	}
+	if len(t.Settings) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "bytes")
+	dst = appendCBORByteString(dst, t.Bytes)
+	dst = appendCBORTextString(dst, "format")
+	dst = appendCBORTextString(dst, t.Format)
+	if len(t.Sources) != 0 {
+		dst = appendCBORTextString(dst, "sources")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Sources)))
+		for i := range t.Sources {
+			ev := t.Sources[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Settings) != 0 {
+		dst = appendCBORTextString(dst, "settings")
+		dst = appendCBORByteString(dst, t.Settings)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes ImportInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ImportInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ImportInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "format":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Format = s
+			}
+		case "bytes":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Bytes = v
+			}
+		case "sources":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]ImportSource, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev ImportSource
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Sources = s
+			}
+		case "settings":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Settings = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ImportSource as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ImportSource) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ImportSource's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ImportSource) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "name")
+	dst = appendCBORTextString(dst, t.Name)
+	dst = appendCBORTextString(dst, "bytes")
+	dst = appendCBORByteString(dst, t.Bytes)
+	return dst, nil
+}
+
+// DecodeCBOR decodes ImportSource from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ImportSource) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ImportSource) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
+		case "bytes":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Bytes = v
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ImportOutput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ImportOutput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ImportOutput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ImportOutput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 0
+	if t.Error != "" {
+		n++
+	}
+	if len(t.Files) != 0 {
+		n++
+	}
+	if len(t.Entities) != 0 {
+		n++
+	}
+	if len(t.Decisions) != 0 {
+		n++
+	}
+	if len(t.Diagnostics) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Error != "" {
+		dst = appendCBORTextString(dst, "error")
+		dst = appendCBORTextString(dst, t.Error)
+	}
+	if len(t.Files) != 0 {
+		dst = appendCBORTextString(dst, "files")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Files)))
+		for i := range t.Files {
+			ev := t.Files[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Entities) != 0 {
+		dst = appendCBORTextString(dst, "entities")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Entities)))
+		for i := range t.Entities {
+			ev := t.Entities[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Decisions) != 0 {
+		dst = appendCBORTextString(dst, "decisions")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Decisions)))
+		for i := range t.Decisions {
+			ev := t.Decisions[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.Diagnostics) != 0 {
+		dst = appendCBORTextString(dst, "diagnostics")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Diagnostics)))
+		for i := range t.Diagnostics {
+			ev := t.Diagnostics[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes ImportOutput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ImportOutput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ImportOutput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "entities":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]EmittedEntity, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev EmittedEntity
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Entities = s
+			}
+		case "decisions":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]ImportDecision, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev ImportDecision
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Decisions = s
+			}
+		case "diagnostics":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]Diagnostic, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev Diagnostic
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Diagnostics = s
+			}
+		case "files":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]ScaffoldFile, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev ScaffoldFile
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Files = s
+			}
+		case "error":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Error = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes EmittedEntity as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t EmittedEntity) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends EmittedEntity's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t EmittedEntity) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	if t.Body != "" {
+		n++
+	}
+	if len(t.Labels) != 0 {
+		n++
+	}
+	if t.SourceRef != "" {
+		n++
+	}
+	if len(t.Annotations) != 0 {
+		n++
+	}
+	if t.DecisionRef != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	if t.Body != "" {
+		dst = appendCBORTextString(dst, "body")
+		dst = appendCBORTextString(dst, t.Body)
+	}
+	dst = appendCBORTextString(dst, "kind")
+	dst = appendCBORTextString(dst, t.Kind)
+	dst = appendCBORTextString(dst, "mode")
+	dst = appendCBORTextString(dst, t.Mode)
+	dst = appendCBORTextString(dst, "name")
+	dst = appendCBORTextString(dst, t.Name)
+	if len(t.Labels) != 0 {
+		dst = appendCBORTextString(dst, "labels")
+		{
+			keys := make([]string, 0, len(t.Labels))
+			for k := range t.Labels {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.Labels[k]
+				dst = appendCBORTextString(dst, mv)
+			}
+		}
+	}
+	if t.SourceRef != "" {
+		dst = appendCBORTextString(dst, "sourceRef")
+		dst = appendCBORTextString(dst, t.SourceRef)
+	}
+	if len(t.Annotations) != 0 {
+		dst = appendCBORTextString(dst, "annotations")
+		{
+			keys := make([]string, 0, len(t.Annotations))
+			for k := range t.Annotations {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.Annotations[k]
+				dst = appendCBORTextString(dst, mv)
+			}
+		}
+	}
+	if t.DecisionRef != "" {
+		dst = appendCBORTextString(dst, "decisionRef")
+		dst = appendCBORTextString(dst, t.DecisionRef)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes EmittedEntity from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *EmittedEntity) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *EmittedEntity) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "kind":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Kind = s
+			}
+		case "name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
+		case "mode":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Mode = s
+			}
+		case "body":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Body = s
+			}
+		case "labels":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.Labels = m
+			}
+		case "annotations":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.Annotations = m
+			}
+		case "sourceRef":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SourceRef = s
+			}
+		case "decisionRef":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.DecisionRef = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ImportDecision as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ImportDecision) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ImportDecision's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ImportDecision) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if t.Chosen != nil {
+		n++
+	}
+	if t.SwapHint != "" {
+		n++
+	}
+	if t.Rationale != "" {
+		n++
+	}
+	if len(t.Candidates) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Chosen != nil {
+		dst = appendCBORTextString(dst, "chosen")
+		if t.Chosen == nil {
+			dst = append(dst, 0xf6)
+		} else if dst, err = t.Chosen.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	if t.SwapHint != "" {
+		dst = appendCBORTextString(dst, "swapHint")
+		dst = appendCBORTextString(dst, t.SwapHint)
+	}
+	if t.Rationale != "" {
+		dst = appendCBORTextString(dst, "rationale")
+		dst = appendCBORTextString(dst, t.Rationale)
+	}
+	if len(t.Candidates) != 0 {
+		dst = appendCBORTextString(dst, "candidates")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Candidates)))
+		for i := range t.Candidates {
+			ev := t.Candidates[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	dst = appendCBORTextString(dst, "sourceNode")
+	if dst, err = t.SourceNode.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes ImportDecision from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ImportDecision) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ImportDecision) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "sourceNode":
+			if err := (&t.SourceNode).decodeCBOR(dec); err != nil {
+				return err
+			}
+		case "candidates":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]ImportCandidate, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev ImportCandidate
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Candidates = s
+			}
+		case "chosen":
+			{
+				v := new(DecisionChoice)
+				if err := v.decodeCBOR(dec); err != nil {
+					return err
+				}
+				t.Chosen = v
+			}
+		case "rationale":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Rationale = s
+			}
+		case "swapHint":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SwapHint = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes DecisionSourceNode as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t DecisionSourceNode) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends DecisionSourceNode's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t DecisionSourceNode) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "id")
+	dst = appendCBORTextString(dst, t.ID)
+	dst = appendCBORTextString(dst, "type")
+	dst = appendCBORTextString(dst, t.Type)
+	dst = appendCBORTextString(dst, "paramsSummary")
+	dst = appendCBORTextString(dst, t.ParamsSummary)
+	return dst, nil
+}
+
+// DecodeCBOR decodes DecisionSourceNode from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *DecisionSourceNode) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *DecisionSourceNode) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "id":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ID = s
+			}
+		case "type":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Type = s
+			}
+		case "paramsSummary":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ParamsSummary = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ImportCandidate as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ImportCandidate) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ImportCandidate's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ImportCandidate) appendCBOR(dst []byte) ([]byte, error) {
+	n := 4
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "tier")
+	dst = appendCBORTextString(dst, t.Tier)
+	dst = appendCBORTextString(dst, "score")
+	dst = appendCBORFloat(dst, t.Score)
+	dst = appendCBORTextString(dst, "signals")
+	if dst, err = t.Signals.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	dst = appendCBORTextString(dst, "componentName")
+	dst = appendCBORTextString(dst, t.ComponentName)
+	return dst, nil
+}
+
+// DecodeCBOR decodes ImportCandidate from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ImportCandidate) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ImportCandidate) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "componentName":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ComponentName = s
+			}
+		case "score":
+			if v, err := dec.readFloat(); err != nil {
+				return err
+			} else {
+				t.Score = v
+			}
+		case "tier":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Tier = s
+			}
+		case "signals":
+			if err := (&t.Signals).decodeCBOR(dec); err != nil {
+				return err
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes CandidateSignals as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t CandidateSignals) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends CandidateSignals's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t CandidateSignals) appendCBOR(dst []byte) ([]byte, error) {
+	n := 5
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "name")
+	dst = appendCBORFloat(dst, t.Name)
+	dst = appendCBORTextString(dst, "shape")
+	dst = appendCBORFloat(dst, t.Shape)
+	dst = appendCBORTextString(dst, "table")
+	dst = appendCBORFloat(dst, t.Table)
+	dst = appendCBORTextString(dst, "category")
+	dst = appendCBORFloat(dst, t.Category)
+	dst = appendCBORTextString(dst, "domainLabels")
+	dst = appendCBORFloat(dst, t.DomainLabels)
+	return dst, nil
+}
+
+// DecodeCBOR decodes CandidateSignals from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *CandidateSignals) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *CandidateSignals) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "table":
+			if v, err := dec.readFloat(); err != nil {
+				return err
+			} else {
+				t.Table = v
+			}
+		case "category":
+			if v, err := dec.readFloat(); err != nil {
+				return err
+			} else {
+				t.Category = v
+			}
+		case "domainLabels":
+			if v, err := dec.readFloat(); err != nil {
+				return err
+			} else {
+				t.DomainLabels = v
+			}
+		case "shape":
+			if v, err := dec.readFloat(); err != nil {
+				return err
+			} else {
+				t.Shape = v
+			}
+		case "name":
+			if v, err := dec.readFloat(); err != nil {
+				return err
+			} else {
+				t.Name = v
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes DecisionChoice as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t DecisionChoice) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends DecisionChoice's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t DecisionChoice) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "mode")
+	dst = appendCBORTextString(dst, t.Mode)
+	dst = appendCBORTextString(dst, "tier")
+	dst = appendCBORTextString(dst, t.Tier)
+	dst = appendCBORTextString(dst, "target")
+	dst = appendCBORTextString(dst, t.Target)
+	return dst, nil
+}
+
+// DecodeCBOR decodes DecisionChoice from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *DecisionChoice) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *DecisionChoice) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "target":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Target = s
+			}
+		case "mode":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Mode = s
+			}
+		case "tier":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Tier = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes ScaffoldFile as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t ScaffoldFile) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends ScaffoldFile's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t ScaffoldFile) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "path")
+	dst = appendCBORTextString(dst, t.Path)
+	dst = appendCBORTextString(dst, "content")
+	dst = appendCBORTextString(dst, t.Content)
+	return dst, nil
+}
+
+// DecodeCBOR decodes ScaffoldFile from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *ScaffoldFile) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *ScaffoldFile) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "content":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Content = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

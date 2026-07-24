@@ -7,6 +7,11 @@
 // aggrega-cli checkout.
 
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+import { appendCBORDiagnostic, decodeCBORDiagnosticFrom } from "./diagnostic_gen.ts";
 
 function jstr(s: string): string {
   return JSON.stringify(s);
@@ -270,5 +275,508 @@ export function encodeScaffoldFile(v: ScaffoldFile): string {
 
 export function decodeScaffoldFile(data: string): ScaffoldFile {
   return JSON.parse(data) as ScaffoldFile;
+}
+
+export function encodeCBORImportInput(v: ImportInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORImportInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORImportInput(out: number[], v: ImportInput): void {
+  let n = 2;
+  if (v.sources !== undefined && v.sources.length > 0) n++;
+  if (v.settings !== undefined && v.settings !== null) n++;
+  writeHead(out, 5, n);
+  writeText(out, "bytes");
+  writeBytes(out, b64decode(v.bytes));
+  writeText(out, "format");
+  writeText(out, v.format);
+  if (v.sources !== undefined && v.sources.length > 0) {
+    writeText(out, "sources");
+    {
+      const a0 = v.sources;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORImportSource(out, ee0);
+      }
+    }
+  }
+  if (v.settings !== undefined && v.settings !== null) {
+    writeText(out, "settings");
+    writeBytes(out, utf8Encode(JSON.stringify(v.settings)));
+  }
+}
+
+export function decodeCBORImportInput(data: Uint8Array): ImportInput {
+  const dec = new CborDec(data);
+  return decodeCBORImportInputFrom(dec);
+}
+
+export function decodeCBORImportInputFrom(dec: CborDec): ImportInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "format": o["format"] = dec.readText(); break;
+      case "bytes": o["bytes"] = b64encode(dec.readBytes()); break;
+      case "sources": o["sources"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORImportSourceFrom(dec)); } return a; })(); break;
+      case "settings": o["settings"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as ImportInput;
+}
+
+export function encodeCBORImportSource(v: ImportSource): Uint8Array {
+  const out: number[] = [];
+  appendCBORImportSource(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORImportSource(out: number[], v: ImportSource): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "name");
+  writeText(out, v.name);
+  writeText(out, "bytes");
+  writeBytes(out, b64decode(v.bytes));
+}
+
+export function decodeCBORImportSource(data: Uint8Array): ImportSource {
+  const dec = new CborDec(data);
+  return decodeCBORImportSourceFrom(dec);
+}
+
+export function decodeCBORImportSourceFrom(dec: CborDec): ImportSource {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "name": o["name"] = dec.readText(); break;
+      case "bytes": o["bytes"] = b64encode(dec.readBytes()); break;
+      default: dec.skip();
+    }
+  }
+  return o as ImportSource;
+}
+
+export function encodeCBORImportOutput(v: ImportOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORImportOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORImportOutput(out: number[], v: ImportOutput): void {
+  let n = 0;
+  if (v.error !== undefined && v.error !== "") n++;
+  if (v.files !== undefined && v.files.length > 0) n++;
+  if (v.entities !== undefined && v.entities.length > 0) n++;
+  if (v.decisions !== undefined && v.decisions.length > 0) n++;
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
+  writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  if (v.files !== undefined && v.files.length > 0) {
+    writeText(out, "files");
+    {
+      const a0 = v.files;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORScaffoldFile(out, ee0);
+      }
+    }
+  }
+  if (v.entities !== undefined && v.entities.length > 0) {
+    writeText(out, "entities");
+    {
+      const a0 = v.entities;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBOREmittedEntity(out, ee0);
+      }
+    }
+  }
+  if (v.decisions !== undefined && v.decisions.length > 0) {
+    writeText(out, "decisions");
+    {
+      const a0 = v.decisions;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORImportDecision(out, ee0);
+      }
+    }
+  }
+  if (v.diagnostics !== undefined && v.diagnostics.length > 0) {
+    writeText(out, "diagnostics");
+    {
+      const a0 = v.diagnostics;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORDiagnostic(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORImportOutput(data: Uint8Array): ImportOutput {
+  const dec = new CborDec(data);
+  return decodeCBORImportOutputFrom(dec);
+}
+
+export function decodeCBORImportOutputFrom(dec: CborDec): ImportOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "entities": o["entities"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBOREmittedEntityFrom(dec)); } return a; })(); break;
+      case "decisions": o["decisions"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORImportDecisionFrom(dec)); } return a; })(); break;
+      case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
+      case "files": o["files"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORScaffoldFileFrom(dec)); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as ImportOutput;
+}
+
+export function encodeCBOREmittedEntity(v: EmittedEntity): Uint8Array {
+  const out: number[] = [];
+  appendCBOREmittedEntity(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBOREmittedEntity(out: number[], v: EmittedEntity): void {
+  let n = 3;
+  if (v.body !== undefined && v.body !== "") n++;
+  if (v.labels !== undefined && Object.keys(v.labels).length > 0) n++;
+  if (v.sourceRef !== undefined && v.sourceRef !== "") n++;
+  if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) n++;
+  if (v.decisionRef !== undefined && v.decisionRef !== "") n++;
+  writeHead(out, 5, n);
+  if (v.body !== undefined && v.body !== "") {
+    writeText(out, "body");
+    writeText(out, v.body);
+  }
+  writeText(out, "kind");
+  writeText(out, v.kind);
+  writeText(out, "mode");
+  writeText(out, v.mode);
+  writeText(out, "name");
+  writeText(out, v.name);
+  if (v.labels !== undefined && Object.keys(v.labels).length > 0) {
+    writeText(out, "labels");
+    {
+      const m0 = v.labels;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
+  if (v.sourceRef !== undefined && v.sourceRef !== "") {
+    writeText(out, "sourceRef");
+    writeText(out, v.sourceRef);
+  }
+  if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) {
+    writeText(out, "annotations");
+    {
+      const m0 = v.annotations;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
+  if (v.decisionRef !== undefined && v.decisionRef !== "") {
+    writeText(out, "decisionRef");
+    writeText(out, v.decisionRef);
+  }
+}
+
+export function decodeCBOREmittedEntity(data: Uint8Array): EmittedEntity {
+  const dec = new CborDec(data);
+  return decodeCBOREmittedEntityFrom(dec);
+}
+
+export function decodeCBOREmittedEntityFrom(dec: CborDec): EmittedEntity {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "kind": o["kind"] = dec.readText(); break;
+      case "name": o["name"] = dec.readText(); break;
+      case "mode": o["mode"] = dec.readText(); break;
+      case "body": o["body"] = dec.readText(); break;
+      case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "sourceRef": o["sourceRef"] = dec.readText(); break;
+      case "decisionRef": o["decisionRef"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as EmittedEntity;
+}
+
+export function encodeCBORImportDecision(v: ImportDecision): Uint8Array {
+  const out: number[] = [];
+  appendCBORImportDecision(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORImportDecision(out: number[], v: ImportDecision): void {
+  let n = 1;
+  if (v.chosen !== undefined && v.chosen !== null) n++;
+  if (v.swapHint !== undefined && v.swapHint !== "") n++;
+  if (v.rationale !== undefined && v.rationale !== "") n++;
+  if (v.candidates !== undefined && v.candidates.length > 0) n++;
+  writeHead(out, 5, n);
+  if (v.chosen !== undefined && v.chosen !== null) {
+    writeText(out, "chosen");
+    appendCBORDecisionChoice(out, v.chosen);
+  }
+  if (v.swapHint !== undefined && v.swapHint !== "") {
+    writeText(out, "swapHint");
+    writeText(out, v.swapHint);
+  }
+  if (v.rationale !== undefined && v.rationale !== "") {
+    writeText(out, "rationale");
+    writeText(out, v.rationale);
+  }
+  if (v.candidates !== undefined && v.candidates.length > 0) {
+    writeText(out, "candidates");
+    {
+      const a0 = v.candidates;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORImportCandidate(out, ee0);
+      }
+    }
+  }
+  writeText(out, "sourceNode");
+  appendCBORDecisionSourceNode(out, v.sourceNode);
+}
+
+export function decodeCBORImportDecision(data: Uint8Array): ImportDecision {
+  const dec = new CborDec(data);
+  return decodeCBORImportDecisionFrom(dec);
+}
+
+export function decodeCBORImportDecisionFrom(dec: CborDec): ImportDecision {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "sourceNode": o["sourceNode"] = decodeCBORDecisionSourceNodeFrom(dec); break;
+      case "candidates": o["candidates"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORImportCandidateFrom(dec)); } return a; })(); break;
+      case "chosen": o["chosen"] = decodeCBORDecisionChoiceFrom(dec); break;
+      case "rationale": o["rationale"] = dec.readText(); break;
+      case "swapHint": o["swapHint"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as ImportDecision;
+}
+
+export function encodeCBORDecisionSourceNode(v: DecisionSourceNode): Uint8Array {
+  const out: number[] = [];
+  appendCBORDecisionSourceNode(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORDecisionSourceNode(out: number[], v: DecisionSourceNode): void {
+  let n = 3;
+  writeHead(out, 5, n);
+  writeText(out, "id");
+  writeText(out, v.id);
+  writeText(out, "type");
+  writeText(out, v.type);
+  writeText(out, "paramsSummary");
+  writeText(out, v.paramsSummary);
+}
+
+export function decodeCBORDecisionSourceNode(data: Uint8Array): DecisionSourceNode {
+  const dec = new CborDec(data);
+  return decodeCBORDecisionSourceNodeFrom(dec);
+}
+
+export function decodeCBORDecisionSourceNodeFrom(dec: CborDec): DecisionSourceNode {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "id": o["id"] = dec.readText(); break;
+      case "type": o["type"] = dec.readText(); break;
+      case "paramsSummary": o["paramsSummary"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as DecisionSourceNode;
+}
+
+export function encodeCBORImportCandidate(v: ImportCandidate): Uint8Array {
+  const out: number[] = [];
+  appendCBORImportCandidate(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORImportCandidate(out: number[], v: ImportCandidate): void {
+  let n = 4;
+  writeHead(out, 5, n);
+  writeText(out, "tier");
+  writeText(out, v.tier);
+  writeText(out, "score");
+  writeFloat(out, v.score);
+  writeText(out, "signals");
+  appendCBORCandidateSignals(out, v.signals);
+  writeText(out, "componentName");
+  writeText(out, v.componentName);
+}
+
+export function decodeCBORImportCandidate(data: Uint8Array): ImportCandidate {
+  const dec = new CborDec(data);
+  return decodeCBORImportCandidateFrom(dec);
+}
+
+export function decodeCBORImportCandidateFrom(dec: CborDec): ImportCandidate {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "componentName": o["componentName"] = dec.readText(); break;
+      case "score": o["score"] = dec.readFloat(); break;
+      case "tier": o["tier"] = dec.readText(); break;
+      case "signals": o["signals"] = decodeCBORCandidateSignalsFrom(dec); break;
+      default: dec.skip();
+    }
+  }
+  return o as ImportCandidate;
+}
+
+export function encodeCBORCandidateSignals(v: CandidateSignals): Uint8Array {
+  const out: number[] = [];
+  appendCBORCandidateSignals(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORCandidateSignals(out: number[], v: CandidateSignals): void {
+  let n = 5;
+  writeHead(out, 5, n);
+  writeText(out, "name");
+  writeFloat(out, v.name);
+  writeText(out, "shape");
+  writeFloat(out, v.shape);
+  writeText(out, "table");
+  writeFloat(out, v.table);
+  writeText(out, "category");
+  writeFloat(out, v.category);
+  writeText(out, "domainLabels");
+  writeFloat(out, v.domainLabels);
+}
+
+export function decodeCBORCandidateSignals(data: Uint8Array): CandidateSignals {
+  const dec = new CborDec(data);
+  return decodeCBORCandidateSignalsFrom(dec);
+}
+
+export function decodeCBORCandidateSignalsFrom(dec: CborDec): CandidateSignals {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "table": o["table"] = dec.readFloat(); break;
+      case "category": o["category"] = dec.readFloat(); break;
+      case "domainLabels": o["domainLabels"] = dec.readFloat(); break;
+      case "shape": o["shape"] = dec.readFloat(); break;
+      case "name": o["name"] = dec.readFloat(); break;
+      default: dec.skip();
+    }
+  }
+  return o as CandidateSignals;
+}
+
+export function encodeCBORDecisionChoice(v: DecisionChoice): Uint8Array {
+  const out: number[] = [];
+  appendCBORDecisionChoice(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORDecisionChoice(out: number[], v: DecisionChoice): void {
+  let n = 3;
+  writeHead(out, 5, n);
+  writeText(out, "mode");
+  writeText(out, v.mode);
+  writeText(out, "tier");
+  writeText(out, v.tier);
+  writeText(out, "target");
+  writeText(out, v.target);
+}
+
+export function decodeCBORDecisionChoice(data: Uint8Array): DecisionChoice {
+  const dec = new CborDec(data);
+  return decodeCBORDecisionChoiceFrom(dec);
+}
+
+export function decodeCBORDecisionChoiceFrom(dec: CborDec): DecisionChoice {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "target": o["target"] = dec.readText(); break;
+      case "mode": o["mode"] = dec.readText(); break;
+      case "tier": o["tier"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as DecisionChoice;
+}
+
+export function encodeCBORScaffoldFile(v: ScaffoldFile): Uint8Array {
+  const out: number[] = [];
+  appendCBORScaffoldFile(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORScaffoldFile(out: number[], v: ScaffoldFile): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "path");
+  writeText(out, v.path);
+  writeText(out, "content");
+  writeText(out, v.content);
+}
+
+export function decodeCBORScaffoldFile(data: Uint8Array): ScaffoldFile {
+  const dec = new CborDec(data);
+  return decodeCBORScaffoldFileFrom(dec);
+}
+
+export function decodeCBORScaffoldFileFrom(dec: CborDec): ScaffoldFile {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "path": o["path"] = dec.readText(); break;
+      case "content": o["content"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as ScaffoldFile;
 }
 

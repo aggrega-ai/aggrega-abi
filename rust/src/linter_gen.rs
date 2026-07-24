@@ -87,3 +87,306 @@ pub struct NarrowingExemption {
     pub reason: String,
 }
 
+
+impl LinterInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 4;
+        if self.parent.is_some() { n += 1; }
+        if self.previous.is_some() { n += 1; }
+        if !self.source_path.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if let Some(ref x) = self.parent {
+            crate::cbor_gen::write_text(out, "parent");
+            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
+        crate::cbor_gen::write_text(out, "rule_id");
+        crate::cbor_gen::write_text(out, &self.rule_id);
+        crate::cbor_gen::write_text(out, "policies");
+        self.policies.append_cbor(out)?;
+        if let Some(ref x) = self.previous {
+            crate::cbor_gen::write_text(out, "previous");
+            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
+        crate::cbor_gen::write_text(out, "proposed");
+        crate::cbor_gen::write_bytes(out, &self.proposed.get().as_bytes());
+        crate::cbor_gen::write_text(out, "entity_kind");
+        crate::cbor_gen::write_text(out, &self.entity_kind);
+        if !self.source_path.is_empty() {
+            crate::cbor_gen::write_text(out, "source_path");
+            crate::cbor_gen::write_text(out, &self.source_path);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_rule_id: Option<String> = None;
+        let mut f_entity_kind: Option<String> = None;
+        let mut f_proposed: Option<Box<RawValue>> = None;
+        let mut f_previous: Option<Box<RawValue>> = None;
+        let mut f_parent: Option<Box<RawValue>> = None;
+        let mut f_source_path: String = String::new();
+        let mut f_policies: Policies = Policies::default();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "rule_id" => f_rule_id = Some(dec.read_text()?),
+                "entity_kind" => f_entity_kind = Some(dec.read_text()?),
+                "proposed" => f_proposed = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "previous" => f_previous = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "parent" => f_parent = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "source_path" => f_source_path = dec.read_text()?,
+                "policies" => f_policies = Policies::decode_cbor_from(dec)?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            rule_id: f_rule_id.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field rule_id".to_string()))?,
+            entity_kind: f_entity_kind.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field entity_kind".to_string()))?,
+            proposed: f_proposed.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field proposed".to_string()))?,
+            previous: f_previous,
+            parent: f_parent,
+            source_path: f_source_path,
+            policies: f_policies,
+        })
+    }
+}
+
+impl LinterOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if !self.error.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        crate::cbor_gen::write_text(out, "findings");
+        {
+            let c = &self.findings;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_findings: Option<Vec<Diagnostic>> = None;
+        let mut f_error: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "findings" => f_findings = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv }),
+                "error" => f_error = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            findings: f_findings.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field findings".to_string()))?,
+            error: f_error,
+        })
+    }
+}
+
+impl Policies {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if self.allow_dynamic_refs { n += 1; }
+        if self.allow_id_overrides { n += 1; }
+        if self.enforce_immutability { n += 1; }
+        if !self.narrowing_exemptions.is_empty() { n += 1; }
+        if self.allow_aggrega_ai_prefix { n += 1; }
+        if self.allow_nonstandard_names { n += 1; }
+        if self.allow_category_mismatches { n += 1; }
+        if self.enforce_monotonic_narrowing { n += 1; }
+        if self.allow_direct_x_aggrega_extensions { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if self.allow_dynamic_refs {
+            crate::cbor_gen::write_text(out, "allow_dynamic_refs");
+            crate::cbor_gen::write_bool(out, *&self.allow_dynamic_refs);
+        }
+        if self.allow_id_overrides {
+            crate::cbor_gen::write_text(out, "allow_id_overrides");
+            crate::cbor_gen::write_bool(out, *&self.allow_id_overrides);
+        }
+        if self.enforce_immutability {
+            crate::cbor_gen::write_text(out, "enforce_immutability");
+            crate::cbor_gen::write_bool(out, *&self.enforce_immutability);
+        }
+        if !self.narrowing_exemptions.is_empty() {
+            crate::cbor_gen::write_text(out, "narrowing_exemptions");
+            {
+                let c = &self.narrowing_exemptions;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        if self.allow_aggrega_ai_prefix {
+            crate::cbor_gen::write_text(out, "allow_aggrega_ai_prefix");
+            crate::cbor_gen::write_bool(out, *&self.allow_aggrega_ai_prefix);
+        }
+        if self.allow_nonstandard_names {
+            crate::cbor_gen::write_text(out, "allow_nonstandard_names");
+            crate::cbor_gen::write_bool(out, *&self.allow_nonstandard_names);
+        }
+        if self.allow_category_mismatches {
+            crate::cbor_gen::write_text(out, "allow_category_mismatches");
+            crate::cbor_gen::write_bool(out, *&self.allow_category_mismatches);
+        }
+        if self.enforce_monotonic_narrowing {
+            crate::cbor_gen::write_text(out, "enforce_monotonic_narrowing");
+            crate::cbor_gen::write_bool(out, *&self.enforce_monotonic_narrowing);
+        }
+        if self.allow_direct_x_aggrega_extensions {
+            crate::cbor_gen::write_text(out, "allow_direct_x_aggrega_extensions");
+            crate::cbor_gen::write_bool(out, *&self.allow_direct_x_aggrega_extensions);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_enforce_monotonic_narrowing: bool = false;
+        let mut f_enforce_immutability: bool = false;
+        let mut f_narrowing_exemptions: Vec<NarrowingExemption> = Vec::new();
+        let mut f_allow_dynamic_refs: bool = false;
+        let mut f_allow_id_overrides: bool = false;
+        let mut f_allow_direct_x_aggrega_extensions: bool = false;
+        let mut f_allow_aggrega_ai_prefix: bool = false;
+        let mut f_allow_nonstandard_names: bool = false;
+        let mut f_allow_category_mismatches: bool = false;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "enforce_monotonic_narrowing" => f_enforce_monotonic_narrowing = dec.read_bool()?,
+                "enforce_immutability" => f_enforce_immutability = dec.read_bool()?,
+                "narrowing_exemptions" => f_narrowing_exemptions = { let sn = dec.read_array_header()?; let mut sv: Vec<NarrowingExemption> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(NarrowingExemption::decode_cbor_from(dec)?); } sv },
+                "allow_dynamic_refs" => f_allow_dynamic_refs = dec.read_bool()?,
+                "allow_id_overrides" => f_allow_id_overrides = dec.read_bool()?,
+                "allow_direct_x_aggrega_extensions" => f_allow_direct_x_aggrega_extensions = dec.read_bool()?,
+                "allow_aggrega_ai_prefix" => f_allow_aggrega_ai_prefix = dec.read_bool()?,
+                "allow_nonstandard_names" => f_allow_nonstandard_names = dec.read_bool()?,
+                "allow_category_mismatches" => f_allow_category_mismatches = dec.read_bool()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            enforce_monotonic_narrowing: f_enforce_monotonic_narrowing,
+            enforce_immutability: f_enforce_immutability,
+            narrowing_exemptions: f_narrowing_exemptions,
+            allow_dynamic_refs: f_allow_dynamic_refs,
+            allow_id_overrides: f_allow_id_overrides,
+            allow_direct_x_aggrega_extensions: f_allow_direct_x_aggrega_extensions,
+            allow_aggrega_ai_prefix: f_allow_aggrega_ai_prefix,
+            allow_nonstandard_names: f_allow_nonstandard_names,
+            allow_category_mismatches: f_allow_category_mismatches,
+        })
+    }
+}
+
+impl NarrowingExemption {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 3;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "paths");
+        {
+            let c = &self.paths;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                crate::cbor_gen::write_text(out, ev);
+            }
+        }
+        crate::cbor_gen::write_text(out, "entity");
+        crate::cbor_gen::write_text(out, &self.entity);
+        crate::cbor_gen::write_text(out, "reason");
+        crate::cbor_gen::write_text(out, &self.reason);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_entity: Option<String> = None;
+        let mut f_paths: Option<Vec<String>> = None;
+        let mut f_reason: Option<String> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "entity" => f_entity = Some(dec.read_text()?),
+                "paths" => f_paths = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }),
+                "reason" => f_reason = Some(dec.read_text()?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            entity: f_entity.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field entity".to_string()))?,
+            paths: f_paths.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field paths".to_string()))?,
+            reason: f_reason.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field reason".to_string()))?,
+        })
+    }
+}
+

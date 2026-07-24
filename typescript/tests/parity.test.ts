@@ -3,15 +3,15 @@
 
 // Cross-language wire-parity tests for the generated socket codecs.
 //
-// The goldens under testdata/ are the canonical wire bytes — the same goldens
-// the Go and Rust codecs validate against, so a byte-match here is a
-// cross-language parity assertion: the three codecs are generated from one
-// schema and produce one wire. Each golden carries the determinism-sensitive
-// cases (sorted map keys, verbatim opaque carry, omitted empty fields), so a
-// codec regression breaks the byte-compare loudly.
+// The goldens under the shared ../../testdata tree are the canonical wire bytes —
+// the same tree the Go and Rust harnesses validate against, so a match here is a
+// cross-language parity assertion: the three codecs are generated from one schema
+// and produce one wire. Each vector carries a JSON document (<Name>.golden.json)
+// and the canonical CBOR bytes (<Name>.cbor.hex).
 //
-// The contract proven per payload: decode the golden through the generated
-// codec, re-encode, and assert byte-identical output.
+// Two contracts are proven per vector: the JSON wire round-trips byte-identical
+// through the generated codec, and the generated CBOR encoder reproduces the
+// committed canonical bytes and decodes back to a byte-stable value.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -19,228 +19,101 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import {
-  encodeCLIRunInput,
-  decodeCLIRunInput,
-  encodeFRPStepInput,
-  decodeFRPStepInput,
-  encodeFRPStepOutput,
-  decodeFRPStepOutput,
-  encodeMutatorInput,
-  decodeMutatorInput,
-  encodeMutatorOutput,
-  decodeMutatorOutput,
-  encodeLinterInput,
-  decodeLinterInput,
-  encodeLinterOutput,
-  decodeLinterOutput,
-  encodeIRGraph,
-  decodeIRGraph,
-  encodePolicyInput,
-  decodePolicyInput,
-  encodePolicyOutput,
-  decodePolicyOutput,
-  encodeRenderNodeInput,
-  decodeRenderNodeInput,
-  encodeRenderNodeOutput,
-  decodeRenderNodeOutput,
-  encodeAssembleBoundaryInput,
-  decodeAssembleBoundaryInput,
-  encodeAssembleBoundaryOutput,
-  decodeAssembleBoundaryOutput,
-  encodeLinkPublishInput,
-  decodeLinkPublishInput,
-  encodeLinkPublishOutput,
-  decodeLinkPublishOutput,
-  encodeLinkResolveInput,
-  decodeLinkResolveInput,
-  encodeLinkResolveOutput,
-  decodeLinkResolveOutput,
-  encodePluginDescriptor,
-  decodePluginDescriptor,
-  encodeParseInput,
-  decodeParseInput,
-  encodeParseOutput,
-  decodeParseOutput,
-  encodeImportInput,
-  decodeImportInput,
-  encodeImportOutput,
-  decodeImportOutput,
-  encodeParseSourceResponse,
-  decodeParseSourceResponse,
-  encodeFetchExternalInputResponse,
-  decodeFetchExternalInputResponse,
-} from "../src/index.ts";
+import * as abi from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const testdata = join(here, "..", "..", "testdata");
 
-function golden(name: string): string {
-  return readFileSync(join(here, "..", "testdata", name), "utf8").trim();
+function goldenJson(name: string): string {
+  return readFileSync(join(testdata, `${name}.golden.json`), "utf8").trim();
 }
 
-test("CLIRunInput wire parity", () => {
-  const want = golden("CLIRunInput.golden.json");
-  assert.equal(encodeCLIRunInput(decodeCLIRunInput(want)), want);
-});
+function goldenCbor(name: string): string {
+  return readFileSync(join(testdata, `${name}.cbor.hex`), "utf8").trim();
+}
 
-test("FRPStepInput wire parity", () => {
-  const want = golden("FRPStepInput.golden.json");
-  assert.equal(encodeFRPStepInput(decodeFRPStepInput(want)), want);
-});
+function toHex(u8: Uint8Array): string {
+  let s = "";
+  for (const b of u8) s += b.toString(16).padStart(2, "0");
+  return s;
+}
 
-test("FRPStepOutput wire parity", () => {
-  const want = golden("FRPStepOutput.golden.json");
-  assert.equal(encodeFRPStepOutput(decodeFRPStepOutput(want)), want);
-});
+// The vectors, mapping each golden file to the interface type whose codec it
+// exercises. The codec functions are resolved by name off the module namespace.
+const vectors: Array<[string, string]> = [
+  ["CLIRunInput", "CLIRunInput"],
+  ["FRPStepInput", "FRPStepInput"],
+  ["FRPStepOutput", "FRPStepOutput"],
+  ["MutatorInput", "MutatorInput"],
+  ["MutatorOutput", "MutatorOutput"],
+  ["LinterInput", "LinterInput"],
+  ["LinterOutput", "LinterOutput"],
+  ["IRGraph", "IRGraph"],
+  ["PolicyInput", "PolicyInput"],
+  ["PolicyOutput", "PolicyOutput"],
+  ["RenderNodeInput", "RenderNodeInput"],
+  ["RenderNodeOutput", "RenderNodeOutput"],
+  ["AssembleBoundaryInput", "AssembleBoundaryInput"],
+  ["AssembleBoundaryOutput", "AssembleBoundaryOutput"],
+  ["LinkPublishInput", "LinkPublishInput"],
+  ["LinkPublishOutput", "LinkPublishOutput"],
+  ["LinkResolveInput", "LinkResolveInput"],
+  ["LinkResolveOutput", "LinkResolveOutput"],
+  ["PluginDescriptorCLI", "PluginDescriptor"],
+  ["PluginDescriptorProvider", "PluginDescriptor"],
+  ["PluginDescriptorMinimal", "PluginDescriptor"],
+  ["PluginDescriptorMoo", "PluginDescriptor"],
+  ["ParseInput", "ParseInput"],
+  ["ParseOutput", "ParseOutput"],
+  ["ParseOutputBare", "ParseOutput"],
+  ["ImportInput", "ImportInput"],
+  ["ImportOutput", "ImportOutput"],
+  ["ParseSourceResponse", "ParseSourceResponse"],
+  ["FetchExternalInputResponse", "FetchExternalInputResponse"],
+  ["FetchExternalInputResponseContent", "FetchExternalInputResponse"],
+];
 
-test("MutatorInput wire parity", () => {
-  const want = golden("MutatorInput.golden.json");
-  assert.equal(encodeMutatorInput(decodeMutatorInput(want)), want);
-});
+const m = abi as Record<string, (arg: unknown) => unknown>;
 
-test("MutatorOutput wire parity", () => {
-  const want = golden("MutatorOutput.golden.json");
-  assert.equal(encodeMutatorOutput(decodeMutatorOutput(want)), want);
-});
+for (const [file, type] of vectors) {
+  test(`${file} JSON+CBOR parity`, () => {
+    const wantJson = goldenJson(file);
+    const decodeJson = m[`decode${type}`];
+    const encodeJson = m[`encode${type}`];
+    const v = decodeJson(wantJson);
+    assert.equal(encodeJson(v), wantJson, `${file} JSON wire`);
 
-test("LinterInput wire parity", () => {
-  const want = golden("LinterInput.golden.json");
-  assert.equal(encodeLinterInput(decodeLinterInput(want)), want);
-});
+    const wantCbor = goldenCbor(file);
+    const encodeCbor = m[`encodeCBOR${type}`];
+    const decodeCbor = m[`decodeCBOR${type}`];
+    const enc = encodeCbor(v) as Uint8Array;
+    assert.equal(toHex(enc), wantCbor, `${file} CBOR encode`);
+    const rt = encodeCbor(decodeCbor(enc)) as Uint8Array;
+    assert.equal(toHex(rt), wantCbor, `${file} CBOR round-trip`);
+  });
+}
 
-test("LinterOutput wire parity", () => {
-  const want = golden("LinterOutput.golden.json");
-  assert.equal(encodeLinterOutput(decodeLinterOutput(want)), want);
-});
+// The float-boundary suite carries values a JSON number cannot express (NaN,
+// ±Inf, −0.0) as the raw f64 bits, so the CBOR CDE §4.2 float rule is proven
+// cross-language on exactly those cases. Each entry's five-field CandidateSignals
+// must encode to the committed canonical bytes.
+function f64FromBits(hexBits: string): number {
+  const dv = new DataView(new ArrayBuffer(8));
+  for (let i = 0; i < 8; i++) dv.setUint8(i, parseInt(hexBits.substr(i * 2, 2), 16));
+  return dv.getFloat64(0);
+}
 
-test("IRGraph wire parity", () => {
-  const want = golden("IRGraph.golden.json");
-  assert.equal(encodeIRGraph(decodeIRGraph(want)), want);
-});
-
-test("PolicyInput wire parity", () => {
-  const want = golden("PolicyInput.golden.json");
-  assert.equal(encodePolicyInput(decodePolicyInput(want)), want);
-});
-
-test("PolicyOutput wire parity", () => {
-  const want = golden("PolicyOutput.golden.json");
-  assert.equal(encodePolicyOutput(decodePolicyOutput(want)), want);
-});
-
-test("RenderNodeInput wire parity", () => {
-  const want = golden("RenderNodeInput.golden.json");
-  assert.equal(encodeRenderNodeInput(decodeRenderNodeInput(want)), want);
-});
-
-test("RenderNodeOutput wire parity", () => {
-  const want = golden("RenderNodeOutput.golden.json");
-  assert.equal(encodeRenderNodeOutput(decodeRenderNodeOutput(want)), want);
-});
-
-test("AssembleBoundaryInput wire parity", () => {
-  const want = golden("AssembleBoundaryInput.golden.json");
-  assert.equal(encodeAssembleBoundaryInput(decodeAssembleBoundaryInput(want)), want);
-});
-
-test("AssembleBoundaryOutput wire parity", () => {
-  const want = golden("AssembleBoundaryOutput.golden.json");
-  assert.equal(encodeAssembleBoundaryOutput(decodeAssembleBoundaryOutput(want)), want);
-});
-
-test("LinkPublishInput wire parity", () => {
-  const want = golden("LinkPublishInput.golden.json");
-  assert.equal(encodeLinkPublishInput(decodeLinkPublishInput(want)), want);
-});
-
-test("LinkPublishOutput wire parity", () => {
-  const want = golden("LinkPublishOutput.golden.json");
-  assert.equal(encodeLinkPublishOutput(decodeLinkPublishOutput(want)), want);
-});
-
-test("LinkResolveInput wire parity", () => {
-  const want = golden("LinkResolveInput.golden.json");
-  assert.equal(encodeLinkResolveInput(decodeLinkResolveInput(want)), want);
-});
-
-test("LinkResolveOutput wire parity", () => {
-  const want = golden("LinkResolveOutput.golden.json");
-  assert.equal(encodeLinkResolveOutput(decodeLinkResolveOutput(want)), want);
-});
-
-test("PluginDescriptor CLI wire parity", () => {
-  const want = golden("PluginDescriptorCLI.golden.json");
-  assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
-});
-
-test("PluginDescriptor provider wire parity", () => {
-  const want = golden("PluginDescriptorProvider.golden.json");
-  assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
-});
-
-// A descriptor declaring none of the optional nested objects: the codec must omit
-// every absent optional rather than emit an empty placeholder.
-test("PluginDescriptor minimal wire parity", () => {
-  const want = golden("PluginDescriptorMinimal.golden.json");
-  assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
-});
-
-// The wire a real CLI plugin (moo) produces: no contract, metadata present.
-test("PluginDescriptor moo wire parity", () => {
-  const want = golden("PluginDescriptorMoo.golden.json");
-  assert.equal(encodePluginDescriptor(decodePluginDescriptor(want)), want);
-});
-
-test("ParseInput wire parity", () => {
-  const want = golden("ParseInput.golden.json");
-  assert.equal(encodeParseInput(decodeParseInput(want)), want);
-});
-
-test("ParseOutput wire parity", () => {
-  const want = golden("ParseOutput.golden.json");
-  assert.equal(encodeParseOutput(decodeParseOutput(want)), want);
-});
-
-// A parser output that omits every optional (no diagnostics, no spans) and
-// carries a top-level-array tree: the codec must omit absent optionals and
-// carry a non-object tree verbatim.
-test("ParseOutput bare wire parity", () => {
-  const want = golden("ParseOutputBare.golden.json");
-  assert.equal(encodeParseOutput(decodeParseOutput(want)), want);
-});
-
-test("ImportInput wire parity", () => {
-  const want = golden("ImportInput.golden.json");
-  assert.equal(encodeImportInput(decodeImportInput(want)), want);
-});
-
-test("ImportOutput wire parity", () => {
-  const want = golden("ImportOutput.golden.json");
-  assert.equal(encodeImportOutput(decodeImportOutput(want)), want);
-});
-
-// The host-function reply goldens carry a failure envelope: the free-form error
-// message plus the machine-matchable error_code, proving the code crosses the
-// wire byte-identically across the three codecs.
-test("ParseSourceResponse wire parity", () => {
-  const want = golden("ParseSourceResponse.golden.json");
-  assert.equal(encodeParseSourceResponse(decodeParseSourceResponse(want)), want);
-});
-
-test("FetchExternalInputResponse wire parity", () => {
-  const want = golden("FetchExternalInputResponse.golden.json");
-  assert.equal(
-    encodeFetchExternalInputResponse(decodeFetchExternalInputResponse(want)),
-    want,
-  );
-});
-
-// The content golden is the success path: the pointer-to-scalar content field
-// round-trips a base64 content string across the three codecs.
-test("FetchExternalInputResponse content wire parity", () => {
-  const want = golden("FetchExternalInputResponseContent.golden.json");
-  assert.equal(
-    encodeFetchExternalInputResponse(decodeFetchExternalInputResponse(want)),
-    want,
-  );
+test("float-boundary vectors", () => {
+  const raw = readFileSync(join(testdata, "float_vectors.json"), "utf8");
+  const vecs = JSON.parse(raw) as Array<{ label: string; bits: string; cbor: string }>;
+  const encodeCbor = m["encodeCBORCandidateSignals"];
+  const decodeCbor = m["decodeCBORCandidateSignals"];
+  for (const fv of vecs) {
+    const f = f64FromBits(fv.bits);
+    const v = { table: f, category: f, domainLabels: f, shape: f, name: f };
+    const enc = encodeCbor(v) as Uint8Array;
+    assert.equal(toHex(enc), fv.cbor, `${fv.label} CBOR float`);
+    const rt = encodeCbor(decodeCbor(enc)) as Uint8Array;
+    assert.equal(toHex(rt), fv.cbor, `${fv.label} float round-trip`);
+  }
 });

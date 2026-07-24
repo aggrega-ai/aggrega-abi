@@ -6,6 +6,11 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -111,5 +116,179 @@ export function encodeSpan(v: Span): string {
 
 export function decodeSpan(data: string): Span {
   return JSON.parse(data) as Span;
+}
+
+export function encodeCBORDiagnostic(v: Diagnostic): Uint8Array {
+  const out: number[] = [];
+  appendCBORDiagnostic(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORDiagnostic(out: number[], v: Diagnostic): void {
+  let n = 2;
+  if (v.code !== undefined && v.code !== "") n++;
+  if (v.rule_id !== undefined && v.rule_id !== "") n++;
+  if (v.suggest !== undefined && v.suggest !== "") n++;
+  if (v.location !== undefined && v.location !== null) n++;
+  if (v.source_ref !== undefined && v.source_ref !== "") n++;
+  if (v.classification !== undefined && v.classification !== "") n++;
+  writeHead(out, 5, n);
+  if (v.code !== undefined && v.code !== "") {
+    writeText(out, "code");
+    writeText(out, v.code);
+  }
+  writeText(out, "message");
+  writeText(out, v.message);
+  if (v.rule_id !== undefined && v.rule_id !== "") {
+    writeText(out, "rule_id");
+    writeText(out, v.rule_id);
+  }
+  if (v.suggest !== undefined && v.suggest !== "") {
+    writeText(out, "suggest");
+    writeText(out, v.suggest);
+  }
+  if (v.location !== undefined && v.location !== null) {
+    writeText(out, "location");
+    appendCBORLocation(out, v.location);
+  }
+  writeText(out, "severity");
+  writeText(out, v.severity);
+  if (v.source_ref !== undefined && v.source_ref !== "") {
+    writeText(out, "source_ref");
+    writeText(out, v.source_ref);
+  }
+  if (v.classification !== undefined && v.classification !== "") {
+    writeText(out, "classification");
+    writeText(out, v.classification);
+  }
+}
+
+export function decodeCBORDiagnostic(data: Uint8Array): Diagnostic {
+  const dec = new CborDec(data);
+  return decodeCBORDiagnosticFrom(dec);
+}
+
+export function decodeCBORDiagnosticFrom(dec: CborDec): Diagnostic {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "severity": o["severity"] = dec.readText(); break;
+      case "message": o["message"] = dec.readText(); break;
+      case "code": o["code"] = dec.readText(); break;
+      case "rule_id": o["rule_id"] = dec.readText(); break;
+      case "classification": o["classification"] = dec.readText(); break;
+      case "source_ref": o["source_ref"] = dec.readText(); break;
+      case "location": o["location"] = decodeCBORLocationFrom(dec); break;
+      case "suggest": o["suggest"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as Diagnostic;
+}
+
+export function encodeCBORLocation(v: Location): Uint8Array {
+  const out: number[] = [];
+  appendCBORLocation(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORLocation(out: number[], v: Location): void {
+  let n = 0;
+  if (v.uri !== undefined && v.uri !== "") n++;
+  if (v.kind !== undefined && v.kind !== "") n++;
+  if (v.line !== undefined && v.line !== 0) n++;
+  if (v.span !== undefined && v.span !== null) n++;
+  if (v.key_path !== undefined && v.key_path !== "") n++;
+  writeHead(out, 5, n);
+  if (v.uri !== undefined && v.uri !== "") {
+    writeText(out, "uri");
+    writeText(out, v.uri);
+  }
+  if (v.kind !== undefined && v.kind !== "") {
+    writeText(out, "kind");
+    writeText(out, v.kind);
+  }
+  if (v.line !== undefined && v.line !== 0) {
+    writeText(out, "line");
+    writeInt(out, v.line);
+  }
+  if (v.span !== undefined && v.span !== null) {
+    writeText(out, "span");
+    appendCBORSpan(out, v.span);
+  }
+  if (v.key_path !== undefined && v.key_path !== "") {
+    writeText(out, "key_path");
+    writeText(out, v.key_path);
+  }
+}
+
+export function decodeCBORLocation(data: Uint8Array): Location {
+  const dec = new CborDec(data);
+  return decodeCBORLocationFrom(dec);
+}
+
+export function decodeCBORLocationFrom(dec: CborDec): Location {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "span": o["span"] = decodeCBORSpanFrom(dec); break;
+      case "key_path": o["key_path"] = dec.readText(); break;
+      case "uri": o["uri"] = dec.readText(); break;
+      case "line": o["line"] = dec.readInt(); break;
+      case "kind": o["kind"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as Location;
+}
+
+export function encodeCBORSpan(v: Span): Uint8Array {
+  const out: number[] = [];
+  appendCBORSpan(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORSpan(out: number[], v: Span): void {
+  let n = 6;
+  writeHead(out, 5, n);
+  writeText(out, "end_line");
+  writeInt(out, v.end_line);
+  writeText(out, "end_column");
+  writeInt(out, v.end_column);
+  writeText(out, "end_offset");
+  writeInt(out, v.end_offset);
+  writeText(out, "start_line");
+  writeInt(out, v.start_line);
+  writeText(out, "start_column");
+  writeInt(out, v.start_column);
+  writeText(out, "start_offset");
+  writeInt(out, v.start_offset);
+}
+
+export function decodeCBORSpan(data: Uint8Array): Span {
+  const dec = new CborDec(data);
+  return decodeCBORSpanFrom(dec);
+}
+
+export function decodeCBORSpanFrom(dec: CborDec): Span {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "start_offset": o["start_offset"] = dec.readInt(); break;
+      case "end_offset": o["end_offset"] = dec.readInt(); break;
+      case "start_line": o["start_line"] = dec.readInt(); break;
+      case "start_column": o["start_column"] = dec.readInt(); break;
+      case "end_line": o["end_line"] = dec.readInt(); break;
+      case "end_column": o["end_column"] = dec.readInt(); break;
+      default: dec.skip();
+    }
+  }
+  return o as Span;
 }
 

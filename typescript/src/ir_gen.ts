@@ -6,6 +6,11 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -349,5 +354,819 @@ export function encodeIRGraph(v: IRGraph): string {
 
 export function decodeIRGraph(data: string): IRGraph {
   return JSON.parse(data) as IRGraph;
+}
+
+export function encodeCBORMaintainer(v: Maintainer): Uint8Array {
+  const out: number[] = [];
+  appendCBORMaintainer(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORMaintainer(out: number[], v: Maintainer): void {
+  let n = 0;
+  if (v.url !== undefined && v.url !== "") n++;
+  if (v.name !== undefined && v.name !== "") n++;
+  if (v.email !== undefined && v.email !== "") n++;
+  writeHead(out, 5, n);
+  if (v.url !== undefined && v.url !== "") {
+    writeText(out, "url");
+    writeText(out, v.url);
+  }
+  if (v.name !== undefined && v.name !== "") {
+    writeText(out, "name");
+    writeText(out, v.name);
+  }
+  if (v.email !== undefined && v.email !== "") {
+    writeText(out, "email");
+    writeText(out, v.email);
+  }
+}
+
+export function decodeCBORMaintainer(data: Uint8Array): Maintainer {
+  const dec = new CborDec(data);
+  return decodeCBORMaintainerFrom(dec);
+}
+
+export function decodeCBORMaintainerFrom(dec: CborDec): Maintainer {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "name": o["name"] = dec.readText(); break;
+      case "email": o["email"] = dec.readText(); break;
+      case "url": o["url"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as Maintainer;
+}
+
+export function encodeCBORFieldProvenance(v: FieldProvenance): Uint8Array {
+  const out: number[] = [];
+  appendCBORFieldProvenance(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORFieldProvenance(out: number[], v: FieldProvenance): void {
+  let n = 1;
+  if (v.side !== undefined && v.side !== "") n++;
+  if (v.annotation_key !== undefined && v.annotation_key !== "") n++;
+  if (v.annotation_source !== undefined && v.annotation_source !== "") n++;
+  if (v.overrides_annotation !== undefined && v.overrides_annotation !== null) n++;
+  writeHead(out, 5, n);
+  if (v.side !== undefined && v.side !== "") {
+    writeText(out, "side");
+    writeText(out, v.side);
+  }
+  writeText(out, "origin");
+  writeText(out, v.origin);
+  if (v.annotation_key !== undefined && v.annotation_key !== "") {
+    writeText(out, "annotation_key");
+    writeText(out, v.annotation_key);
+  }
+  if (v.annotation_source !== undefined && v.annotation_source !== "") {
+    writeText(out, "annotation_source");
+    writeText(out, v.annotation_source);
+  }
+  if (v.overrides_annotation !== undefined && v.overrides_annotation !== null) {
+    writeText(out, "overrides_annotation");
+    appendCBORFieldProvenance(out, v.overrides_annotation);
+  }
+}
+
+export function decodeCBORFieldProvenance(data: Uint8Array): FieldProvenance {
+  const dec = new CborDec(data);
+  return decodeCBORFieldProvenanceFrom(dec);
+}
+
+export function decodeCBORFieldProvenanceFrom(dec: CborDec): FieldProvenance {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "origin": o["origin"] = dec.readText(); break;
+      case "side": o["side"] = dec.readText(); break;
+      case "annotation_key": o["annotation_key"] = dec.readText(); break;
+      case "annotation_source": o["annotation_source"] = dec.readText(); break;
+      case "overrides_annotation": o["overrides_annotation"] = decodeCBORFieldProvenanceFrom(dec); break;
+      default: dec.skip();
+    }
+  }
+  return o as FieldProvenance;
+}
+
+export function encodeCBORIRFeatureEntry(v: IRFeatureEntry): Uint8Array {
+  const out: number[] = [];
+  appendCBORIRFeatureEntry(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void {
+  let n = 2;
+  if (v.infra !== undefined && v.infra !== null) n++;
+  if (v.inject !== undefined && v.inject !== null) n++;
+  if (v.origin !== undefined && v.origin !== "") n++;
+  if (v.values !== undefined && v.values !== null) n++;
+  if (v.secrets !== undefined && Object.keys(v.secrets).length > 0) n++;
+  if (v.annotation_key !== undefined && v.annotation_key !== "") n++;
+  if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) n++;
+  if (v.annotation_source !== undefined && v.annotation_source !== "") n++;
+  if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) n++;
+  writeHead(out, 5, n);
+  writeText(out, "type");
+  writeText(out, v.type);
+  if (v.infra !== undefined && v.infra !== null) {
+    writeText(out, "infra");
+    writeBytes(out, utf8Encode(JSON.stringify(v.infra)));
+  }
+  if (v.inject !== undefined && v.inject !== null) {
+    writeText(out, "inject");
+    writeBytes(out, utf8Encode(JSON.stringify(v.inject)));
+  }
+  if (v.origin !== undefined && v.origin !== "") {
+    writeText(out, "origin");
+    writeText(out, v.origin);
+  }
+  if (v.values !== undefined && v.values !== null) {
+    writeText(out, "values");
+    writeBytes(out, utf8Encode(JSON.stringify(v.values)));
+  }
+  if (v.secrets !== undefined && Object.keys(v.secrets).length > 0) {
+    writeText(out, "secrets");
+    {
+      const m0 = v.secrets;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        appendCBORIRFeatureEntry(out, m0[kk0]);
+      }
+    }
+  }
+  if (v.annotation_key !== undefined && v.annotation_key !== "") {
+    writeText(out, "annotation_key");
+    writeText(out, v.annotation_key);
+  }
+  if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) {
+    writeText(out, "infra_provenance");
+    {
+      const m0 = v.infra_provenance;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        appendCBORFieldProvenance(out, m0[kk0]);
+      }
+    }
+  }
+  writeText(out, "resolved_version");
+  writeText(out, v.resolved_version);
+  if (v.annotation_source !== undefined && v.annotation_source !== "") {
+    writeText(out, "annotation_source");
+    writeText(out, v.annotation_source);
+  }
+  if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) {
+    writeText(out, "values_provenance");
+    {
+      const m0 = v.values_provenance;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        appendCBORFieldProvenance(out, m0[kk0]);
+      }
+    }
+  }
+}
+
+export function decodeCBORIRFeatureEntry(data: Uint8Array): IRFeatureEntry {
+  const dec = new CborDec(data);
+  return decodeCBORIRFeatureEntryFrom(dec);
+}
+
+export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "type": o["type"] = dec.readText(); break;
+      case "resolved_version": o["resolved_version"] = dec.readText(); break;
+      case "values": o["values"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "inject": o["inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "secrets": o["secrets"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRFeatureEntryFrom(dec); } return m; })(); break;
+      case "origin": o["origin"] = dec.readText(); break;
+      case "annotation_key": o["annotation_key"] = dec.readText(); break;
+      case "annotation_source": o["annotation_source"] = dec.readText(); break;
+      case "values_provenance": o["values_provenance"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORFieldProvenanceFrom(dec); } return m; })(); break;
+      case "infra_provenance": o["infra_provenance"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORFieldProvenanceFrom(dec); } return m; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as IRFeatureEntry;
+}
+
+export function encodeCBORIRBoundaryFeature(v: IRBoundaryFeature): Uint8Array {
+  const out: number[] = [];
+  appendCBORIRBoundaryFeature(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORIRBoundaryFeature(out: number[], v: IRBoundaryFeature): void {
+  let n = 1;
+  if (v.infra !== undefined && v.infra !== null) n++;
+  writeHead(out, 5, n);
+  writeText(out, "type");
+  writeText(out, v.type);
+  if (v.infra !== undefined && v.infra !== null) {
+    writeText(out, "infra");
+    writeBytes(out, utf8Encode(JSON.stringify(v.infra)));
+  }
+}
+
+export function decodeCBORIRBoundaryFeature(data: Uint8Array): IRBoundaryFeature {
+  const dec = new CborDec(data);
+  return decodeCBORIRBoundaryFeatureFrom(dec);
+}
+
+export function decodeCBORIRBoundaryFeatureFrom(dec: CborDec): IRBoundaryFeature {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "type": o["type"] = dec.readText(); break;
+      case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as IRBoundaryFeature;
+}
+
+export function encodeCBORCatalogMetadata(v: CatalogMetadata): Uint8Array {
+  const out: number[] = [];
+  appendCBORCatalogMetadata(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORCatalogMetadata(out: number[], v: CatalogMetadata): void {
+  let n = 0;
+  if (v.home !== undefined && v.home !== "") n++;
+  if (v.license !== undefined && v.license !== "") n++;
+  if (v.keywords !== undefined && v.keywords.length > 0) n++;
+  if (v.deprecated !== undefined && v.deprecated !== false) n++;
+  if (v.repository !== undefined && v.repository !== "") n++;
+  if (v.maintainers !== undefined && v.maintainers.length > 0) n++;
+  writeHead(out, 5, n);
+  if (v.home !== undefined && v.home !== "") {
+    writeText(out, "home");
+    writeText(out, v.home);
+  }
+  if (v.license !== undefined && v.license !== "") {
+    writeText(out, "license");
+    writeText(out, v.license);
+  }
+  if (v.keywords !== undefined && v.keywords.length > 0) {
+    writeText(out, "keywords");
+    {
+      const a0 = v.keywords;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+  if (v.deprecated !== undefined && v.deprecated !== false) {
+    writeText(out, "deprecated");
+    writeBool(out, v.deprecated);
+  }
+  if (v.repository !== undefined && v.repository !== "") {
+    writeText(out, "repository");
+    writeText(out, v.repository);
+  }
+  if (v.maintainers !== undefined && v.maintainers.length > 0) {
+    writeText(out, "maintainers");
+    {
+      const a0 = v.maintainers;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORMaintainer(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORCatalogMetadata(data: Uint8Array): CatalogMetadata {
+  const dec = new CborDec(data);
+  return decodeCBORCatalogMetadataFrom(dec);
+}
+
+export function decodeCBORCatalogMetadataFrom(dec: CborDec): CatalogMetadata {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "maintainers": o["maintainers"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORMaintainerFrom(dec)); } return a; })(); break;
+      case "license": o["license"] = dec.readText(); break;
+      case "repository": o["repository"] = dec.readText(); break;
+      case "home": o["home"] = dec.readText(); break;
+      case "keywords": o["keywords"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "deprecated": o["deprecated"] = dec.readBool(); break;
+      default: dec.skip();
+    }
+  }
+  return o as CatalogMetadata;
+}
+
+export function encodeCBORIRNode(v: IRNode): Uint8Array {
+  const out: number[] = [];
+  appendCBORIRNode(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORIRNode(out: number[], v: IRNode): void {
+  let n = 3;
+  if (v.sync_wave !== undefined && v.sync_wave !== 0) n++;
+  if (v.description !== undefined && v.description !== "") n++;
+  if (v.self_inject !== undefined && v.self_inject !== null) n++;
+  if (v.source_file !== undefined && v.source_file !== "") n++;
+  if (v.boundary_path !== undefined && v.boundary_path !== "") n++;
+  if (v.subsystem_path !== undefined && v.subsystem_path !== "") n++;
+  if (v.catalog_metadata !== undefined && v.catalog_metadata !== null) n++;
+  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) n++;
+  if (v.release_annotations !== undefined && Object.keys(v.release_annotations).length > 0) n++;
+  if (v.synthesized_boundary !== undefined && v.synthesized_boundary !== false) n++;
+  if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) n++;
+  if (v.synthesized_subsystem !== undefined && v.synthesized_subsystem !== false) n++;
+  writeHead(out, 5, n);
+  writeText(out, "labels");
+  {
+    const m0 = v.labels;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      writeText(out, m0[kk0]);
+    }
+  }
+  writeText(out, "component");
+  writeText(out, v.component);
+  if (v.sync_wave !== undefined && v.sync_wave !== 0) {
+    writeText(out, "sync_wave");
+    writeInt(out, v.sync_wave);
+  }
+  if (v.description !== undefined && v.description !== "") {
+    writeText(out, "description");
+    writeText(out, v.description);
+  }
+  if (v.self_inject !== undefined && v.self_inject !== null) {
+    writeText(out, "self_inject");
+    writeBytes(out, utf8Encode(JSON.stringify(v.self_inject)));
+  }
+  if (v.source_file !== undefined && v.source_file !== "") {
+    writeText(out, "source_file");
+    writeText(out, v.source_file);
+  }
+  if (v.boundary_path !== undefined && v.boundary_path !== "") {
+    writeText(out, "boundary_path");
+    writeText(out, v.boundary_path);
+  }
+  if (v.subsystem_path !== undefined && v.subsystem_path !== "") {
+    writeText(out, "subsystem_path");
+    writeText(out, v.subsystem_path);
+  }
+  if (v.catalog_metadata !== undefined && v.catalog_metadata !== null) {
+    writeText(out, "catalog_metadata");
+    appendCBORCatalogMetadata(out, v.catalog_metadata);
+  }
+  writeText(out, "resolved_version");
+  writeText(out, v.resolved_version);
+  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) {
+    writeText(out, "catalog_annotations");
+    {
+      const m0 = v.catalog_annotations;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
+  if (v.release_annotations !== undefined && Object.keys(v.release_annotations).length > 0) {
+    writeText(out, "release_annotations");
+    {
+      const m0 = v.release_annotations;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
+  if (v.synthesized_boundary !== undefined && v.synthesized_boundary !== false) {
+    writeText(out, "synthesized_boundary");
+    writeBool(out, v.synthesized_boundary);
+  }
+  if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) {
+    writeText(out, "aggregate_annotations");
+    {
+      const m0 = v.aggregate_annotations;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
+  if (v.synthesized_subsystem !== undefined && v.synthesized_subsystem !== false) {
+    writeText(out, "synthesized_subsystem");
+    writeBool(out, v.synthesized_subsystem);
+  }
+}
+
+export function decodeCBORIRNode(data: Uint8Array): IRNode {
+  const dec = new CborDec(data);
+  return decodeCBORIRNodeFrom(dec);
+}
+
+export function decodeCBORIRNodeFrom(dec: CborDec): IRNode {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "description": o["description"] = dec.readText(); break;
+      case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "component": o["component"] = dec.readText(); break;
+      case "resolved_version": o["resolved_version"] = dec.readText(); break;
+      case "sync_wave": o["sync_wave"] = dec.readInt(); break;
+      case "boundary_path": o["boundary_path"] = dec.readText(); break;
+      case "subsystem_path": o["subsystem_path"] = dec.readText(); break;
+      case "synthesized_subsystem": o["synthesized_subsystem"] = dec.readBool(); break;
+      case "synthesized_boundary": o["synthesized_boundary"] = dec.readBool(); break;
+      case "source_file": o["source_file"] = dec.readText(); break;
+      case "catalog_metadata": o["catalog_metadata"] = decodeCBORCatalogMetadataFrom(dec); break;
+      case "catalog_annotations": o["catalog_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "release_annotations": o["release_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "aggregate_annotations": o["aggregate_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "self_inject": o["self_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as IRNode;
+}
+
+export function encodeCBORIREdge(v: IREdge): Uint8Array {
+  const out: number[] = [];
+  appendCBORIREdge(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORIREdge(out: number[], v: IREdge): void {
+  let n = 2;
+  if (v.alias !== undefined && v.alias !== "") n++;
+  if (v.infra !== undefined && v.infra !== null) n++;
+  if (v.inject !== undefined && v.inject !== null) n++;
+  if (v.socket !== undefined && v.socket !== "") n++;
+  if (v.values !== undefined && v.values !== null) n++;
+  if (v.origin_feature !== undefined && v.origin_feature !== "") n++;
+  if (v.origin_release !== undefined && v.origin_release !== false) n++;
+  if (v.origin_feature_instance !== undefined && v.origin_feature_instance !== "") n++;
+  writeHead(out, 5, n);
+  if (v.alias !== undefined && v.alias !== "") {
+    writeText(out, "alias");
+    writeText(out, v.alias);
+  }
+  if (v.infra !== undefined && v.infra !== null) {
+    writeText(out, "infra");
+    writeBytes(out, utf8Encode(JSON.stringify(v.infra)));
+  }
+  if (v.inject !== undefined && v.inject !== null) {
+    writeText(out, "inject");
+    writeBytes(out, utf8Encode(JSON.stringify(v.inject)));
+  }
+  if (v.socket !== undefined && v.socket !== "") {
+    writeText(out, "socket");
+    writeText(out, v.socket);
+  }
+  writeText(out, "source");
+  writeText(out, v.source);
+  writeText(out, "target");
+  writeText(out, v.target);
+  if (v.values !== undefined && v.values !== null) {
+    writeText(out, "values");
+    writeBytes(out, utf8Encode(JSON.stringify(v.values)));
+  }
+  if (v.origin_feature !== undefined && v.origin_feature !== "") {
+    writeText(out, "origin_feature");
+    writeText(out, v.origin_feature);
+  }
+  if (v.origin_release !== undefined && v.origin_release !== false) {
+    writeText(out, "origin_release");
+    writeBool(out, v.origin_release);
+  }
+  if (v.origin_feature_instance !== undefined && v.origin_feature_instance !== "") {
+    writeText(out, "origin_feature_instance");
+    writeText(out, v.origin_feature_instance);
+  }
+}
+
+export function decodeCBORIREdge(data: Uint8Array): IREdge {
+  const dec = new CborDec(data);
+  return decodeCBORIREdgeFrom(dec);
+}
+
+export function decodeCBORIREdgeFrom(dec: CborDec): IREdge {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "source": o["source"] = dec.readText(); break;
+      case "target": o["target"] = dec.readText(); break;
+      case "socket": o["socket"] = dec.readText(); break;
+      case "alias": o["alias"] = dec.readText(); break;
+      case "origin_feature": o["origin_feature"] = dec.readText(); break;
+      case "origin_feature_instance": o["origin_feature_instance"] = dec.readText(); break;
+      case "origin_release": o["origin_release"] = dec.readBool(); break;
+      case "values": o["values"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "inject": o["inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as IREdge;
+}
+
+export function encodeCBORIRMetadata(v: IRMetadata): Uint8Array {
+  const out: number[] = [];
+  appendCBORIRMetadata(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORIRMetadata(out: number[], v: IRMetadata): void {
+  let n = 1;
+  writeHead(out, 5, n);
+  writeText(out, "aggregate_name");
+  writeText(out, v.aggregate_name);
+}
+
+export function decodeCBORIRMetadata(data: Uint8Array): IRMetadata {
+  const dec = new CborDec(data);
+  return decodeCBORIRMetadataFrom(dec);
+}
+
+export function decodeCBORIRMetadataFrom(dec: CborDec): IRMetadata {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "aggregate_name": o["aggregate_name"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as IRMetadata;
+}
+
+export function encodeCBORIRProvenance(v: IRProvenance): Uint8Array {
+  const out: number[] = [];
+  appendCBORIRProvenance(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORIRProvenance(out: number[], v: IRProvenance): void {
+  let n = 6;
+  writeHead(out, 5, n);
+  writeText(out, "schema_version");
+  writeText(out, v.schema_version);
+  writeText(out, "release_version");
+  writeText(out, v.release_version);
+  writeText(out, "compiler_version");
+  writeText(out, v.compiler_version);
+  writeText(out, "manifest_version");
+  writeText(out, v.manifest_version);
+  writeText(out, "aggregate_version");
+  writeText(out, v.aggregate_version);
+  writeText(out, "source_identifiers");
+  {
+    const a0 = v.source_identifiers;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      writeText(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORIRProvenance(data: Uint8Array): IRProvenance {
+  const dec = new CborDec(data);
+  return decodeCBORIRProvenanceFrom(dec);
+}
+
+export function decodeCBORIRProvenanceFrom(dec: CborDec): IRProvenance {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "schema_version": o["schema_version"] = dec.readText(); break;
+      case "compiler_version": o["compiler_version"] = dec.readText(); break;
+      case "aggregate_version": o["aggregate_version"] = dec.readText(); break;
+      case "manifest_version": o["manifest_version"] = dec.readText(); break;
+      case "release_version": o["release_version"] = dec.readText(); break;
+      case "source_identifiers": o["source_identifiers"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as IRProvenance;
+}
+
+export function encodeCBORIRSpec(v: IRSpec): Uint8Array {
+  const out: number[] = [];
+  appendCBORIRSpec(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORIRSpec(out: number[], v: IRSpec): void {
+  let n = 8;
+  if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) n++;
+  writeHead(out, 5, n);
+  writeText(out, "edges");
+  {
+    const a0 = v.edges;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORIREdge(out, ee0);
+    }
+  }
+  writeText(out, "nodes");
+  {
+    const m0 = v.nodes;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      appendCBORIRNode(out, m0[kk0]);
+    }
+  }
+  writeText(out, "secrets");
+  {
+    const m0 = v.secrets;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      {
+        const m1 = m0[kk0];
+        const ks1 = Object.keys(m1); sortKeys(ks1);
+        writeHead(out, 5, ks1.length);
+        for (const kk1 of ks1) {
+          writeText(out, kk1);
+          appendCBORIRFeatureEntry(out, m1[kk1]);
+        }
+      }
+    }
+  }
+  writeText(out, "provenance");
+  appendCBORIRProvenance(out, v.provenance);
+  writeText(out, "infra_mapping");
+  {
+    const m0 = v.infra_mapping;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+    }
+  }
+  writeText(out, "values_mapping");
+  {
+    const m0 = v.values_mapping;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+    }
+  }
+  writeText(out, "feature_markers");
+  {
+    const a0 = v.feature_markers;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      writeText(out, ee0);
+    }
+  }
+  if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) {
+    writeText(out, "boundary_features");
+    {
+      const m0 = v.boundary_features;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        {
+          const m1 = m0[kk0];
+          const ks1 = Object.keys(m1); sortKeys(ks1);
+          writeHead(out, 5, ks1.length);
+          for (const kk1 of ks1) {
+            writeText(out, kk1);
+            appendCBORIRBoundaryFeature(out, m1[kk1]);
+          }
+        }
+      }
+    }
+  }
+  writeText(out, "feature_values_mapping");
+  {
+    const m0 = v.feature_values_mapping;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      {
+        const m1 = m0[kk0];
+        const ks1 = Object.keys(m1); sortKeys(ks1);
+        writeHead(out, 5, ks1.length);
+        for (const kk1 of ks1) {
+          writeText(out, kk1);
+          appendCBORIRFeatureEntry(out, m1[kk1]);
+        }
+      }
+    }
+  }
+}
+
+export function decodeCBORIRSpec(data: Uint8Array): IRSpec {
+  const dec = new CborDec(data);
+  return decodeCBORIRSpecFrom(dec);
+}
+
+export function decodeCBORIRSpecFrom(dec: CborDec): IRSpec {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "nodes": o["nodes"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRNodeFrom(dec); } return m; })(); break;
+      case "edges": o["edges"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORIREdgeFrom(dec)); } return a; })(); break;
+      case "feature_markers": o["feature_markers"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "values_mapping": o["values_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "infra_mapping": o["infra_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "feature_values_mapping": o["feature_values_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRFeatureEntryFrom(dec); } return m; })(); } return m; })(); break;
+      case "secrets": o["secrets"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRFeatureEntryFrom(dec); } return m; })(); } return m; })(); break;
+      case "boundary_features": o["boundary_features"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRBoundaryFeatureFrom(dec); } return m; })(); } return m; })(); break;
+      case "provenance": o["provenance"] = decodeCBORIRProvenanceFrom(dec); break;
+      default: dec.skip();
+    }
+  }
+  return o as IRSpec;
+}
+
+export function encodeCBORIRGraph(v: IRGraph): Uint8Array {
+  const out: number[] = [];
+  appendCBORIRGraph(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORIRGraph(out: number[], v: IRGraph): void {
+  let n = 4;
+  writeHead(out, 5, n);
+  writeText(out, "kind");
+  writeText(out, v.kind);
+  writeText(out, "spec");
+  appendCBORIRSpec(out, v.spec);
+  writeText(out, "metadata");
+  appendCBORIRMetadata(out, v.metadata);
+  writeText(out, "apiVersion");
+  writeText(out, v.apiVersion);
+}
+
+export function decodeCBORIRGraph(data: Uint8Array): IRGraph {
+  const dec = new CborDec(data);
+  return decodeCBORIRGraphFrom(dec);
+}
+
+export function decodeCBORIRGraphFrom(dec: CborDec): IRGraph {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "apiVersion": o["apiVersion"] = dec.readText(); break;
+      case "kind": o["kind"] = dec.readText(); break;
+      case "metadata": o["metadata"] = decodeCBORIRMetadataFrom(dec); break;
+      case "spec": o["spec"] = decodeCBORIRSpecFrom(dec); break;
+      default: dec.skip();
+    }
+  }
+  return o as IRGraph;
 }
 

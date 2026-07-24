@@ -16,9 +16,9 @@ import (
 // CLIRunInput The payload the host hands a CLI plugin on each invocation: the argument vector following the resolved subcommand name. The guest parses these tokens as its own flags and positional arguments, exactly as a standalone command-line program reads the arguments after its name.
 type CLIRunInput struct {
 	// Command The resolved subcommand name the host dispatched to this invocation. A plugin that contributes several commands routes on this name to select the behavior to run; a single-command plugin receives its own command name here. The host resolves the name from the command line before invoking the guest and carries it verbatim.
-	Command string `json:"command" yaml:"command"`
+	Command string `json:"command" yaml:"command" cbor:"command"`
 	// Args The argument vector the guest receives, in invocation order — the tokens that follow the resolved subcommand name on the command line. Order is preserved so the payload is byte-identical across runs of identical input.
-	Args []string `json:"args" yaml:"args"`
+	Args []string `json:"args" yaml:"args" cbor:"args"`
 }
 
 // MarshalJSON encodes CLIRunInput in field-declaration order, omitting
@@ -96,6 +96,80 @@ func (t *CLIRunInput) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes CLIRunInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t CLIRunInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends CLIRunInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t CLIRunInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "args")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Args)))
+	for i := range t.Args {
+		ev := t.Args[i]
+		dst = appendCBORTextString(dst, ev)
+	}
+	dst = appendCBORTextString(dst, "command")
+	dst = appendCBORTextString(dst, t.Command)
+	return dst, nil
+}
+
+// DecodeCBOR decodes CLIRunInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *CLIRunInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *CLIRunInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "command":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Command = s
+			}
+		case "args":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.Args = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

@@ -17,51 +17,51 @@ import (
 // AnnotationTransformInput The payload the host hands the annotation-transform plugin on each invocation: the resolved injection targets with their current annotations, the Manifest's registered annotation-binding keys, and the attachment's own pinned sources and settings.
 type AnnotationTransformInput struct {
 	// Targets The injection targets — the resolved components the plugin may inject annotations onto, each with its current annotation set so the plugin can decide what to add without clobbering an existing key. Ordered deterministically by the host.
-	Targets []AnnotationTarget `json:"targets" yaml:"targets"`
+	Targets []AnnotationTarget `json:"targets" yaml:"targets" cbor:"targets"`
 	// BindingKeys The annotation keys the Manifest registers a binding for, in author order. An injection whose key is registered expands into a Feature attachment; the plugin reads this list so it injects only keys that will bind. The host does not require an injection to name a registered key — an unregistered injected annotation behaves exactly as an authored unbound annotation.
-	BindingKeys []string `json:"binding_keys" yaml:"binding_keys"`
+	BindingKeys []string `json:"binding_keys" yaml:"binding_keys" cbor:"binding_keys"`
 	// Sources Definition files the host reads and hands to the plugin verbatim, as an ordered list sorted by path. The host reads the bytes as opaque content and does not parse them. Absent when the attachment declares no sources.
-	Sources []AnnotationSource `json:"sources,omitempty" yaml:"sources,omitempty"`
+	Sources []AnnotationSource `json:"sources,omitempty" yaml:"sources,omitempty" cbor:"sources,omitempty"`
 	// Settings A free-form settings object the host hands to the plugin verbatim. The host does not parse or act on its content. Absent when the attachment declares no settings.
-	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty"`
+	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty" cbor:"settings,omitempty"`
 }
 
 // AnnotationTransformOutput The response shape the annotation-transform plugin emits: a list of annotation injections the host applies to the named targets. The host applies only annotation additions to existing target coordinates with string values; an injection naming a non-existent coordinate halts the build loudly.
 type AnnotationTransformOutput struct {
 	// Injections Annotation injections to apply, in order. Each names an existing target coordinate and the annotation key and string value to add there.
-	Injections []AnnotationInjection `json:"injections" yaml:"injections"`
+	Injections []AnnotationInjection `json:"injections" yaml:"injections" cbor:"injections"`
 	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
-	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
 
 // AnnotationTarget One resolved injection target the plugin may inject annotations onto: its boundary path and component name, and the annotation set the component already carries.
 type AnnotationTarget struct {
 	// BoundaryPath The slash-separated boundary path the component sits under in the Release.
-	BoundaryPath string `json:"boundary_path" yaml:"boundary_path"`
+	BoundaryPath string `json:"boundary_path" yaml:"boundary_path" cbor:"boundary_path"`
 	// ComponentName The component's name within its boundary.
-	ComponentName string `json:"component_name" yaml:"component_name"`
+	ComponentName string `json:"component_name" yaml:"component_name" cbor:"component_name"`
 	// Annotations The component's current scalar annotation set, keyed by annotation key.
-	Annotations map[string]string `json:"annotations" yaml:"annotations"`
+	Annotations map[string]string `json:"annotations" yaml:"annotations" cbor:"annotations"`
 }
 
 // AnnotationInjection One annotation to inject onto a target: the target coordinate plus the annotation key and its string value.
 type AnnotationInjection struct {
 	// BoundaryPath The slash-separated boundary path of the target component. Must name a target the host supplied; an unknown coordinate halts the build.
-	BoundaryPath string `json:"boundary_path" yaml:"boundary_path"`
+	BoundaryPath string `json:"boundary_path" yaml:"boundary_path" cbor:"boundary_path"`
 	// ComponentName The name of the target component. Must name a target the host supplied; an unknown coordinate halts the build.
-	ComponentName string `json:"component_name" yaml:"component_name"`
+	ComponentName string `json:"component_name" yaml:"component_name" cbor:"component_name"`
 	// AnnotationKey The annotation key to add on the target component.
-	AnnotationKey string `json:"annotation_key" yaml:"annotation_key"`
+	AnnotationKey string `json:"annotation_key" yaml:"annotation_key" cbor:"annotation_key"`
 	// AnnotationValue The annotation's string value. Values are strings only; the host rejects any other shape.
-	AnnotationValue string `json:"annotation_value" yaml:"annotation_value"`
+	AnnotationValue string `json:"annotation_value" yaml:"annotation_value" cbor:"annotation_value"`
 }
 
 // AnnotationSource One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
 type AnnotationSource struct {
 	// Path The base name of the source file. The host supplies the base name only, never an absolute host path, so the wire is portable and deterministic.
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path" yaml:"path" cbor:"path"`
 	// Content The source file's content, carried verbatim as an opaque string.
-	Content string `json:"content" yaml:"content"`
+	Content string `json:"content" yaml:"content" cbor:"content"`
 }
 
 // MarshalJSON encodes AnnotationTransformInput in field-declaration order, omitting
@@ -552,6 +552,445 @@ func (t *AnnotationSource) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes AnnotationTransformInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t AnnotationTransformInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends AnnotationTransformInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t AnnotationTransformInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.Sources) != 0 {
+		n++
+	}
+	if len(t.Settings) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if len(t.Sources) != 0 {
+		dst = appendCBORTextString(dst, "sources")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Sources)))
+		for i := range t.Sources {
+			ev := t.Sources[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	dst = appendCBORTextString(dst, "targets")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Targets)))
+	for i := range t.Targets {
+		ev := t.Targets[i]
+		if dst, err = ev.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	if len(t.Settings) != 0 {
+		dst = appendCBORTextString(dst, "settings")
+		dst = appendCBORByteString(dst, t.Settings)
+	}
+	dst = appendCBORTextString(dst, "binding_keys")
+	dst = appendCBORHead(dst, 4, uint64(len(t.BindingKeys)))
+	for i := range t.BindingKeys {
+		ev := t.BindingKeys[i]
+		dst = appendCBORTextString(dst, ev)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes AnnotationTransformInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *AnnotationTransformInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *AnnotationTransformInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "targets":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]AnnotationTarget, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev AnnotationTarget
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Targets = s
+			}
+		case "binding_keys":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.BindingKeys = s
+			}
+		case "sources":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]AnnotationSource, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev AnnotationSource
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Sources = s
+			}
+		case "settings":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Settings = json.RawMessage(v)
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes AnnotationTransformOutput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t AnnotationTransformOutput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends AnnotationTransformOutput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t AnnotationTransformOutput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if t.Error != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Error != "" {
+		dst = appendCBORTextString(dst, "error")
+		dst = appendCBORTextString(dst, t.Error)
+	}
+	dst = appendCBORTextString(dst, "injections")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Injections)))
+	for i := range t.Injections {
+		ev := t.Injections[i]
+		if dst, err = ev.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes AnnotationTransformOutput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *AnnotationTransformOutput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *AnnotationTransformOutput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "injections":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]AnnotationInjection, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev AnnotationInjection
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Injections = s
+			}
+		case "error":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Error = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes AnnotationTarget as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t AnnotationTarget) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends AnnotationTarget's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t AnnotationTarget) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "annotations")
+	{
+		keys := make([]string, 0, len(t.Annotations))
+		for k := range t.Annotations {
+			keys = append(keys, k)
+		}
+		sortCBORKeys(keys)
+		dst = appendCBORHead(dst, 5, uint64(len(keys)))
+		for _, k := range keys {
+			dst = appendCBORTextString(dst, k)
+			mv := t.Annotations[k]
+			dst = appendCBORTextString(dst, mv)
+		}
+	}
+	dst = appendCBORTextString(dst, "boundary_path")
+	dst = appendCBORTextString(dst, t.BoundaryPath)
+	dst = appendCBORTextString(dst, "component_name")
+	dst = appendCBORTextString(dst, t.ComponentName)
+	return dst, nil
+}
+
+// DecodeCBOR decodes AnnotationTarget from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *AnnotationTarget) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *AnnotationTarget) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "boundary_path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.BoundaryPath = s
+			}
+		case "component_name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ComponentName = s
+			}
+		case "annotations":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.Annotations = m
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes AnnotationInjection as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t AnnotationInjection) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends AnnotationInjection's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t AnnotationInjection) appendCBOR(dst []byte) ([]byte, error) {
+	n := 4
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "boundary_path")
+	dst = appendCBORTextString(dst, t.BoundaryPath)
+	dst = appendCBORTextString(dst, "annotation_key")
+	dst = appendCBORTextString(dst, t.AnnotationKey)
+	dst = appendCBORTextString(dst, "component_name")
+	dst = appendCBORTextString(dst, t.ComponentName)
+	dst = appendCBORTextString(dst, "annotation_value")
+	dst = appendCBORTextString(dst, t.AnnotationValue)
+	return dst, nil
+}
+
+// DecodeCBOR decodes AnnotationInjection from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *AnnotationInjection) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *AnnotationInjection) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "boundary_path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.BoundaryPath = s
+			}
+		case "component_name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.ComponentName = s
+			}
+		case "annotation_key":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AnnotationKey = s
+			}
+		case "annotation_value":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AnnotationValue = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes AnnotationSource as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t AnnotationSource) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends AnnotationSource's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t AnnotationSource) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "path")
+	dst = appendCBORTextString(dst, t.Path)
+	dst = appendCBORTextString(dst, "content")
+	dst = appendCBORTextString(dst, t.Content)
+	return dst, nil
+}
+
+// DecodeCBOR decodes AnnotationSource from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *AnnotationSource) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *AnnotationSource) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Path = s
+			}
+		case "content":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Content = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

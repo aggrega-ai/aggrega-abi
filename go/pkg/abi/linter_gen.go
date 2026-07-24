@@ -16,56 +16,56 @@ import (
 // LinterInput The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. policies carries the per-workspace publishing-discipline configuration the rule consults.
 type LinterInput struct {
 	// RuleID The rule the plugin should dispatch to. At v0.1.0 the only recognised value is 'schema-evolution'; the recognised set expands as further rules ship. Unknown rule_ids produce an 'unknown_rule' finding in the output.
-	RuleID string `json:"rule_id" yaml:"rule_id"`
+	RuleID string `json:"rule_id" yaml:"rule_id" cbor:"rule_id"`
 	// EntityKind The entity kind the proposed/previous values encode. The schema-evolution rule's classification varies per kind; structural rules scope to specific kinds.
-	EntityKind string `json:"entity_kind" yaml:"entity_kind"`
+	EntityKind string `json:"entity_kind" yaml:"entity_kind" cbor:"entity_kind"`
 	// Proposed Parsed structure of the entity being classified. YAML → JSON conversion happens host-side; the plugin consumes the structured value via serde_json.
-	Proposed json.RawMessage `json:"proposed" yaml:"proposed"`
+	Proposed json.RawMessage `json:"proposed" yaml:"proposed" cbor:"proposed"`
 	// Previous Parsed structure of the previous-version entity, for rules that perform pairwise comparison (schema-evolution). Omitted when the rule does not need a previous-version reference (e.g., first publication, structural-only rules).
-	Previous json.RawMessage `json:"previous,omitempty" yaml:"previous,omitempty"`
+	Previous json.RawMessage `json:"previous,omitempty" yaml:"previous,omitempty" cbor:"previous,omitempty"`
 	// Parent Parsed structure of the resolved parent entity in the extends chain, for rules that perform child-vs-parent comparison (narrowing). The host caller resolves the entity's spec.extends URI before invocation. Omitted when no parent exists or the rule does not need parent context.
-	Parent json.RawMessage `json:"parent,omitempty" yaml:"parent,omitempty"`
+	Parent json.RawMessage `json:"parent,omitempty" yaml:"parent,omitempty" cbor:"parent,omitempty"`
 	// SourcePath Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
-	SourcePath string `json:"source_path,omitempty" yaml:"source_path,omitempty"`
+	SourcePath string `json:"source_path,omitempty" yaml:"source_path,omitempty" cbor:"source_path,omitempty"`
 	// Policies The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
-	Policies Policies `json:"policies,omitempty" yaml:"policies,omitempty"`
+	Policies Policies `json:"policies,omitempty" yaml:"policies,omitempty" cbor:"policies,omitempty"`
 }
 
 // LinterOutput The response shape the publishing-linter plugin emits. findings carries one entry per rule invocation that produced a result. The schema-evolution rule emits exactly one finding (the classification verdict); structural rules may emit zero (no violations) or many (one per offence).
 type LinterOutput struct {
 	// Findings Per-rule findings produced by the plugin invocation, in plugin emit order.
-	Findings []Diagnostic `json:"findings" yaml:"findings"`
+	Findings []Diagnostic `json:"findings" yaml:"findings" cbor:"findings"`
 	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
-	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
 
 // Policies Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.
 type Policies struct {
 	// EnforceMonotonicNarrowing When true, the narrowing rule enforces the monotonic-narrowing invariant: every extending entity narrows the parent's schema (no widening, no semantic divergence). When false, the rule is suppressed.
-	EnforceMonotonicNarrowing bool `json:"enforce_monotonic_narrowing,omitempty" yaml:"enforce_monotonic_narrowing,omitempty"`
+	EnforceMonotonicNarrowing bool `json:"enforce_monotonic_narrowing,omitempty" yaml:"enforce_monotonic_narrowing,omitempty" cbor:"enforce_monotonic_narrowing,omitempty"`
 	// EnforceImmutability When true, published artefacts are immutable at the registry path; re-publishing the same version is rejected. When false, the rule is suppressed (development-only).
-	EnforceImmutability bool `json:"enforce_immutability,omitempty" yaml:"enforce_immutability,omitempty"`
+	EnforceImmutability bool `json:"enforce_immutability,omitempty" yaml:"enforce_immutability,omitempty" cbor:"enforce_immutability,omitempty"`
 	// NarrowingExemptions Per-entity exemptions from the narrowing-violation rule. Each entry names an entity and the specific schema paths that may legitimately widen.
-	NarrowingExemptions []NarrowingExemption `json:"narrowing_exemptions,omitempty" yaml:"narrowing_exemptions,omitempty"`
+	NarrowingExemptions []NarrowingExemption `json:"narrowing_exemptions,omitempty" yaml:"narrowing_exemptions,omitempty" cbor:"narrowing_exemptions,omitempty"`
 	// AllowDynamicRefs When true, $dynamicAnchor / $dynamicRef usage in SchemaLibrary entries is permitted (suppresses the dynamic_refs rule). Default false.
-	AllowDynamicRefs bool `json:"allow_dynamic_refs,omitempty" yaml:"allow_dynamic_refs,omitempty"`
+	AllowDynamicRefs bool `json:"allow_dynamic_refs,omitempty" yaml:"allow_dynamic_refs,omitempty" cbor:"allow_dynamic_refs,omitempty"`
 	// AllowIDOverrides When true, $id overrides in SchemaLibrary entries are permitted (suppresses the id_overrides rule). Default false.
-	AllowIDOverrides bool `json:"allow_id_overrides,omitempty" yaml:"allow_id_overrides,omitempty"`
+	AllowIDOverrides bool `json:"allow_id_overrides,omitempty" yaml:"allow_id_overrides,omitempty" cbor:"allow_id_overrides,omitempty"`
 	// AllowDirectXAggregaExtensions When true, direct x-aggrega-selector / x-aggrega-inject authoring is permitted (suppresses the x_aggrega_discouragement rule). Default false.
-	AllowDirectXAggregaExtensions bool `json:"allow_direct_x_aggrega_extensions,omitempty" yaml:"allow_direct_x_aggrega_extensions,omitempty"`
+	AllowDirectXAggregaExtensions bool `json:"allow_direct_x_aggrega_extensions,omitempty" yaml:"allow_direct_x_aggrega_extensions,omitempty" cbor:"allow_direct_x_aggrega_extensions,omitempty"`
 	// AllowAggregaAiPrefix When true, the annotation-prefix rule is suppressed entirely (both the bare aggrega.ai/ check and the feature.aggrega.ai/ kind-conditional check). Default false. Mirrors workspaceconfig.PublishingDisciplineConfig.AllowAggregaAIPrefix; the host serialises the field through the LinterInput.policies passthrough.
-	AllowAggregaAiPrefix bool `json:"allow_aggrega_ai_prefix,omitempty" yaml:"allow_aggrega_ai_prefix,omitempty"`
+	AllowAggregaAiPrefix bool `json:"allow_aggrega_ai_prefix,omitempty" yaml:"allow_aggrega_ai_prefix,omitempty" cbor:"allow_aggrega_ai_prefix,omitempty"`
 	// AllowNonstandardNames When true, name-shape violations are permitted (suppresses the name_shape rule). Default false.
-	AllowNonstandardNames bool `json:"allow_nonstandard_names,omitempty" yaml:"allow_nonstandard_names,omitempty"`
+	AllowNonstandardNames bool `json:"allow_nonstandard_names,omitempty" yaml:"allow_nonstandard_names,omitempty" cbor:"allow_nonstandard_names,omitempty"`
 	// AllowCategoryMismatches When true, suppress the category-matches-directory rule's findings. The standard-catalog convention requires Components under core/<category>/ to declare component.aggrega.ai/category={category} matching the directory segment, where {category} is one of the 15 closed-set values. Workspaces with legitimate persistent exceptions opt out here. Default false.
-	AllowCategoryMismatches bool `json:"allow_category_mismatches,omitempty" yaml:"allow_category_mismatches,omitempty"`
+	AllowCategoryMismatches bool `json:"allow_category_mismatches,omitempty" yaml:"allow_category_mismatches,omitempty" cbor:"allow_category_mismatches,omitempty"`
 }
 
 // NarrowingExemption One per-entity exemption from the narrowing-violation rule. entity names the catalog entity; paths enumerates the schema paths within that entity that may legitimately widen; reason is the human-readable justification surfaced to reviewers.
 type NarrowingExemption struct {
-	Entity string   `json:"entity" yaml:"entity"`
-	Paths  []string `json:"paths" yaml:"paths"`
-	Reason string   `json:"reason" yaml:"reason"`
+	Entity string   `json:"entity" yaml:"entity" cbor:"entity"`
+	Paths  []string `json:"paths" yaml:"paths" cbor:"paths"`
+	Reason string   `json:"reason" yaml:"reason" cbor:"reason"`
 }
 
 // MarshalJSON encodes LinterInput in field-declaration order, omitting
@@ -593,6 +593,458 @@ func (t *NarrowingExemption) UnmarshalJSON(data []byte) error {
 	}
 	if err := expectDelim(dec, '}'); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EncodeCBOR encodes LinterInput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t LinterInput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends LinterInput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t LinterInput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 4
+	if len(t.Parent) != 0 {
+		n++
+	}
+	if len(t.Previous) != 0 {
+		n++
+	}
+	if t.SourcePath != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if len(t.Parent) != 0 {
+		dst = appendCBORTextString(dst, "parent")
+		dst = appendCBORByteString(dst, t.Parent)
+	}
+	dst = appendCBORTextString(dst, "rule_id")
+	dst = appendCBORTextString(dst, t.RuleID)
+	dst = appendCBORTextString(dst, "policies")
+	if dst, err = t.Policies.appendCBOR(dst); err != nil {
+		return nil, err
+	}
+	if len(t.Previous) != 0 {
+		dst = appendCBORTextString(dst, "previous")
+		dst = appendCBORByteString(dst, t.Previous)
+	}
+	dst = appendCBORTextString(dst, "proposed")
+	dst = appendCBORByteString(dst, t.Proposed)
+	dst = appendCBORTextString(dst, "entity_kind")
+	dst = appendCBORTextString(dst, t.EntityKind)
+	if t.SourcePath != "" {
+		dst = appendCBORTextString(dst, "source_path")
+		dst = appendCBORTextString(dst, t.SourcePath)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes LinterInput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *LinterInput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *LinterInput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "rule_id":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.RuleID = s
+			}
+		case "entity_kind":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.EntityKind = s
+			}
+		case "proposed":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Proposed = json.RawMessage(v)
+			}
+		case "previous":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Previous = json.RawMessage(v)
+			}
+		case "parent":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Parent = json.RawMessage(v)
+			}
+		case "source_path":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SourcePath = s
+			}
+		case "policies":
+			if err := (&t.Policies).decodeCBOR(dec); err != nil {
+				return err
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes LinterOutput as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t LinterOutput) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends LinterOutput's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t LinterOutput) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	if t.Error != "" {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.Error != "" {
+		dst = appendCBORTextString(dst, "error")
+		dst = appendCBORTextString(dst, t.Error)
+	}
+	dst = appendCBORTextString(dst, "findings")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Findings)))
+	for i := range t.Findings {
+		ev := t.Findings[i]
+		if dst, err = ev.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes LinterOutput from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *LinterOutput) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *LinterOutput) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "findings":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]Diagnostic, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev Diagnostic
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Findings = s
+			}
+		case "error":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Error = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes Policies as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t Policies) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends Policies's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t Policies) appendCBOR(dst []byte) ([]byte, error) {
+	n := 0
+	if t.AllowDynamicRefs != false {
+		n++
+	}
+	if t.AllowIDOverrides != false {
+		n++
+	}
+	if t.EnforceImmutability != false {
+		n++
+	}
+	if len(t.NarrowingExemptions) != 0 {
+		n++
+	}
+	if t.AllowAggregaAiPrefix != false {
+		n++
+	}
+	if t.AllowNonstandardNames != false {
+		n++
+	}
+	if t.AllowCategoryMismatches != false {
+		n++
+	}
+	if t.EnforceMonotonicNarrowing != false {
+		n++
+	}
+	if t.AllowDirectXAggregaExtensions != false {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	if t.AllowDynamicRefs != false {
+		dst = appendCBORTextString(dst, "allow_dynamic_refs")
+		dst = appendCBORBool(dst, t.AllowDynamicRefs)
+	}
+	if t.AllowIDOverrides != false {
+		dst = appendCBORTextString(dst, "allow_id_overrides")
+		dst = appendCBORBool(dst, t.AllowIDOverrides)
+	}
+	if t.EnforceImmutability != false {
+		dst = appendCBORTextString(dst, "enforce_immutability")
+		dst = appendCBORBool(dst, t.EnforceImmutability)
+	}
+	if len(t.NarrowingExemptions) != 0 {
+		dst = appendCBORTextString(dst, "narrowing_exemptions")
+		dst = appendCBORHead(dst, 4, uint64(len(t.NarrowingExemptions)))
+		for i := range t.NarrowingExemptions {
+			ev := t.NarrowingExemptions[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if t.AllowAggregaAiPrefix != false {
+		dst = appendCBORTextString(dst, "allow_aggrega_ai_prefix")
+		dst = appendCBORBool(dst, t.AllowAggregaAiPrefix)
+	}
+	if t.AllowNonstandardNames != false {
+		dst = appendCBORTextString(dst, "allow_nonstandard_names")
+		dst = appendCBORBool(dst, t.AllowNonstandardNames)
+	}
+	if t.AllowCategoryMismatches != false {
+		dst = appendCBORTextString(dst, "allow_category_mismatches")
+		dst = appendCBORBool(dst, t.AllowCategoryMismatches)
+	}
+	if t.EnforceMonotonicNarrowing != false {
+		dst = appendCBORTextString(dst, "enforce_monotonic_narrowing")
+		dst = appendCBORBool(dst, t.EnforceMonotonicNarrowing)
+	}
+	if t.AllowDirectXAggregaExtensions != false {
+		dst = appendCBORTextString(dst, "allow_direct_x_aggrega_extensions")
+		dst = appendCBORBool(dst, t.AllowDirectXAggregaExtensions)
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes Policies from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *Policies) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *Policies) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "enforce_monotonic_narrowing":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.EnforceMonotonicNarrowing = v
+			}
+		case "enforce_immutability":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.EnforceImmutability = v
+			}
+		case "narrowing_exemptions":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]NarrowingExemption, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev NarrowingExemption
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.NarrowingExemptions = s
+			}
+		case "allow_dynamic_refs":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.AllowDynamicRefs = v
+			}
+		case "allow_id_overrides":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.AllowIDOverrides = v
+			}
+		case "allow_direct_x_aggrega_extensions":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.AllowDirectXAggregaExtensions = v
+			}
+		case "allow_aggrega_ai_prefix":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.AllowAggregaAiPrefix = v
+			}
+		case "allow_nonstandard_names":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.AllowNonstandardNames = v
+			}
+		case "allow_category_mismatches":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.AllowCategoryMismatches = v
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// EncodeCBOR encodes NarrowingExemption as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t NarrowingExemption) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends NarrowingExemption's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t NarrowingExemption) appendCBOR(dst []byte) ([]byte, error) {
+	n := 3
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "paths")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Paths)))
+	for i := range t.Paths {
+		ev := t.Paths[i]
+		dst = appendCBORTextString(dst, ev)
+	}
+	dst = appendCBORTextString(dst, "entity")
+	dst = appendCBORTextString(dst, t.Entity)
+	dst = appendCBORTextString(dst, "reason")
+	dst = appendCBORTextString(dst, t.Reason)
+	return dst, nil
+}
+
+// DecodeCBOR decodes NarrowingExemption from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *NarrowingExemption) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *NarrowingExemption) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "entity":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Entity = s
+			}
+		case "paths":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.Paths = s
+			}
+		case "reason":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Reason = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

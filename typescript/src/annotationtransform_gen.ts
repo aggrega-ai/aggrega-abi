@@ -6,6 +6,11 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import {
+  writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+} from "./cbor_gen.ts";
+
 function jstr(s: string): string {
   return JSON.stringify(s);
 }
@@ -125,5 +130,231 @@ export function encodeAnnotationSource(v: AnnotationSource): string {
 
 export function decodeAnnotationSource(data: string): AnnotationSource {
   return JSON.parse(data) as AnnotationSource;
+}
+
+export function encodeCBORAnnotationTransformInput(v: AnnotationTransformInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORAnnotationTransformInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORAnnotationTransformInput(out: number[], v: AnnotationTransformInput): void {
+  let n = 2;
+  if (v.sources !== undefined && v.sources.length > 0) n++;
+  if (v.settings !== undefined && v.settings !== null) n++;
+  writeHead(out, 5, n);
+  if (v.sources !== undefined && v.sources.length > 0) {
+    writeText(out, "sources");
+    {
+      const a0 = v.sources;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORAnnotationSource(out, ee0);
+      }
+    }
+  }
+  writeText(out, "targets");
+  {
+    const a0 = v.targets;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORAnnotationTarget(out, ee0);
+    }
+  }
+  if (v.settings !== undefined && v.settings !== null) {
+    writeText(out, "settings");
+    writeBytes(out, utf8Encode(JSON.stringify(v.settings)));
+  }
+  writeText(out, "binding_keys");
+  {
+    const a0 = v.binding_keys;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      writeText(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORAnnotationTransformInput(data: Uint8Array): AnnotationTransformInput {
+  const dec = new CborDec(data);
+  return decodeCBORAnnotationTransformInputFrom(dec);
+}
+
+export function decodeCBORAnnotationTransformInputFrom(dec: CborDec): AnnotationTransformInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "targets": o["targets"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORAnnotationTargetFrom(dec)); } return a; })(); break;
+      case "binding_keys": o["binding_keys"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "sources": o["sources"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORAnnotationSourceFrom(dec)); } return a; })(); break;
+      case "settings": o["settings"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      default: dec.skip();
+    }
+  }
+  return o as AnnotationTransformInput;
+}
+
+export function encodeCBORAnnotationTransformOutput(v: AnnotationTransformOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORAnnotationTransformOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORAnnotationTransformOutput(out: number[], v: AnnotationTransformOutput): void {
+  let n = 1;
+  if (v.error !== undefined && v.error !== "") n++;
+  writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  writeText(out, "injections");
+  {
+    const a0 = v.injections;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORAnnotationInjection(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORAnnotationTransformOutput(data: Uint8Array): AnnotationTransformOutput {
+  const dec = new CborDec(data);
+  return decodeCBORAnnotationTransformOutputFrom(dec);
+}
+
+export function decodeCBORAnnotationTransformOutputFrom(dec: CborDec): AnnotationTransformOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "injections": o["injections"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORAnnotationInjectionFrom(dec)); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as AnnotationTransformOutput;
+}
+
+export function encodeCBORAnnotationTarget(v: AnnotationTarget): Uint8Array {
+  const out: number[] = [];
+  appendCBORAnnotationTarget(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORAnnotationTarget(out: number[], v: AnnotationTarget): void {
+  let n = 3;
+  writeHead(out, 5, n);
+  writeText(out, "annotations");
+  {
+    const m0 = v.annotations;
+    const ks0 = Object.keys(m0); sortKeys(ks0);
+    writeHead(out, 5, ks0.length);
+    for (const kk0 of ks0) {
+      writeText(out, kk0);
+      writeText(out, m0[kk0]);
+    }
+  }
+  writeText(out, "boundary_path");
+  writeText(out, v.boundary_path);
+  writeText(out, "component_name");
+  writeText(out, v.component_name);
+}
+
+export function decodeCBORAnnotationTarget(data: Uint8Array): AnnotationTarget {
+  const dec = new CborDec(data);
+  return decodeCBORAnnotationTargetFrom(dec);
+}
+
+export function decodeCBORAnnotationTargetFrom(dec: CborDec): AnnotationTarget {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "boundary_path": o["boundary_path"] = dec.readText(); break;
+      case "component_name": o["component_name"] = dec.readText(); break;
+      case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as AnnotationTarget;
+}
+
+export function encodeCBORAnnotationInjection(v: AnnotationInjection): Uint8Array {
+  const out: number[] = [];
+  appendCBORAnnotationInjection(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORAnnotationInjection(out: number[], v: AnnotationInjection): void {
+  let n = 4;
+  writeHead(out, 5, n);
+  writeText(out, "boundary_path");
+  writeText(out, v.boundary_path);
+  writeText(out, "annotation_key");
+  writeText(out, v.annotation_key);
+  writeText(out, "component_name");
+  writeText(out, v.component_name);
+  writeText(out, "annotation_value");
+  writeText(out, v.annotation_value);
+}
+
+export function decodeCBORAnnotationInjection(data: Uint8Array): AnnotationInjection {
+  const dec = new CborDec(data);
+  return decodeCBORAnnotationInjectionFrom(dec);
+}
+
+export function decodeCBORAnnotationInjectionFrom(dec: CborDec): AnnotationInjection {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "boundary_path": o["boundary_path"] = dec.readText(); break;
+      case "component_name": o["component_name"] = dec.readText(); break;
+      case "annotation_key": o["annotation_key"] = dec.readText(); break;
+      case "annotation_value": o["annotation_value"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as AnnotationInjection;
+}
+
+export function encodeCBORAnnotationSource(v: AnnotationSource): Uint8Array {
+  const out: number[] = [];
+  appendCBORAnnotationSource(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORAnnotationSource(out: number[], v: AnnotationSource): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "path");
+  writeText(out, v.path);
+  writeText(out, "content");
+  writeText(out, v.content);
+}
+
+export function decodeCBORAnnotationSource(data: Uint8Array): AnnotationSource {
+  const dec = new CborDec(data);
+  return decodeCBORAnnotationSourceFrom(dec);
+}
+
+export function decodeCBORAnnotationSourceFrom(dec: CborDec): AnnotationSource {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "path": o["path"] = dec.readText(); break;
+      case "content": o["content"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as AnnotationSource;
 }
 

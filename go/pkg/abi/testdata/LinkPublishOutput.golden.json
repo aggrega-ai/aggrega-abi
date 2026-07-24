@@ -1,1 +1,0 @@
-{"handle":{"export_name":"payments-db-endpoint","ref":"payments-db--databases","stack":"payments-data"},"patches":[{"file":"boundary.yaml","ops":[{"scope":"own","key":"boundary.yaml","op":"add","path":"/published","value":"payments-db--databases"}]}]}

@@ -28,9 +28,13 @@ import (
 // decode leg (token-walk into the typed value) and the encode leg (manual
 // field-ordered marshal honouring omit semantics).
 
+// readGolden reads a shared vector document from the one testdata tree the Go,
+// Rust, and TypeScript harnesses all validate against. The tree lives at the
+// aggrega-abi root, above this Go module, reached by relative path (os.ReadFile,
+// not embed, so the cross-directory read needs no module membership).
 func readGolden(t *testing.T, name string) []byte {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", name))
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", name))
 	if err != nil {
 		t.Fatalf("read golden %s: %v", name, err)
 	}
@@ -46,7 +50,7 @@ func readGolden(t *testing.T, name string) []byte {
 // preserved.
 func TestGoldenParity_FRPStepInput(t *testing.T) {
 	t.Parallel()
-	golden := readGolden(t, "frpstepinput.golden.json")
+	golden := readGolden(t, "FRPStepInput.golden.json")
 
 	var in abi.FRPStepInput
 	if err := json.Unmarshal(golden, &in); err != nil {
@@ -70,7 +74,7 @@ func TestGoldenParity_FRPStepInput(t *testing.T) {
 // passthrough.
 func TestGoldenParity_FRPStepOutput(t *testing.T) {
 	t.Parallel()
-	golden := readGolden(t, "frpstepoutput.golden.json")
+	golden := readGolden(t, "FRPStepOutput.golden.json")
 
 	var out abi.FRPStepOutput
 	if err := json.Unmarshal(golden, &out); err != nil {
