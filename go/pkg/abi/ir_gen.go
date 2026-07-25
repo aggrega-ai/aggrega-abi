@@ -124,9 +124,9 @@ type IREdge struct {
 	OriginFeatureInstance string `json:"origin_feature_instance,omitempty" yaml:"origin_feature_instance,omitempty" cbor:"origin_feature_instance,omitempty"`
 	// OriginRelease True when this edge was created by a Release wiring a declared-but-unbound socket to an existing component. Marks edge AUTHORSHIP, not configuration: a developer-declared edge that a Release merely supplied infra for stays Aggregate-origin (origin_release unset; its Release infra appears in the edge's infra map). origin_feature set => Feature-origin; origin_release true => Release-origin; neither => Aggregate-origin.
 	OriginRelease bool `json:"origin_release,omitempty" yaml:"origin_release,omitempty" cbor:"origin_release,omitempty"`
-	// Values Resolved per-connection developer values for this edge (from the Aggregate edge), validated against the target socket's valueSchema at Step 1 and projected into the consuming node's render context at .uses.<socket>.<alias>.values.
+	// Values Resolved per-connection developer values for this edge (from the Aggregate edge), validated at Step 1 against the valueSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected into the consuming node's render context at .uses.<alias>.values. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
 	Values json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
-	// Infra Resolved per-connection infra for this edge (Aggregate-seeded and/or Release-supplied), validated against the target socket's infraSchema at Step 1 and projected at .uses.<socket>.<alias>.infra.
+	// Infra Resolved per-connection infra for this edge (Aggregate-seeded and/or Release-supplied), validated at Step 1 against the infraSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected at .uses.<alias>.infra. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
 	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 	// Inject Agnostic injection routing. Maps local variables to Target provides keys.
 	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty" cbor:"inject,omitempty"`
