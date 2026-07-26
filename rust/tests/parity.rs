@@ -48,7 +48,7 @@ fn hex_decode(s: &str) -> Vec<u8> {
             _ => panic!("bad hex byte {c}"),
         }
     };
-    (0..b.len() / 2).map(|i| nib(b[2 * i]) << 4 | nib(b[2 * i + 1])).collect()
+    (0..b.len() / 2).map(|i| (nib(b[2 * i]) << 4) | nib(b[2 * i + 1])).collect()
 }
 
 fn hex_encode(b: &[u8]) -> String {
@@ -184,7 +184,7 @@ fn float_boundary_vectors() {
         assert_eq!(bits.len(), 8, "{}: bad bits", fv.label);
         let mut u: u64 = 0;
         for b in &bits {
-            u = u << 8 | *b as u64;
+            u = (u << 8) | *b as u64;
         }
         let f = f64::from_bits(u);
         let v = CandidateSignals {
