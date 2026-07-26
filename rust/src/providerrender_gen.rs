@@ -252,9 +252,9 @@ pub struct FetchExternalInputResponse {
 pub struct WorkloadProjection {
     /// The host-evaluated, post-validation Workload the guest synthesizes; opaque at this schema layer so the socket schema does not rebind the Workload entity contract.
     pub workload: Box<RawValue>,
-    /// The per-slot secret provides the synthesis consumes, keyed by secret slot; each slot's provides carries the generated Secret's identity a workload secret reference resolves to.
+    /// Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub secrets: BTreeMap<String, BTreeMap<String, String>>,
+    pub attachment_provides: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// The pre-evaluated artifact set the host hands a Provider guest to place into the node's output. The host has already resolved each entry's source (inline content or an imported file it read), evaluated it as a Go template against the render context using the guest's declared artifact-template delimiter pair, and computed the build-provenance label and annotation key sets. The guest owns the format decision, the provenance placement, the on-disk path, and the final bytes. Entries preserve author order so the placed output is byte-identical across runs of identical input.
@@ -1601,12 +1601,14 @@ impl WorkloadProjection {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
-        if !self.secrets.is_empty() { n += 1; }
+        if !self.attachment_provides.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
-        if !self.secrets.is_empty() {
-            crate::cbor_gen::write_text(out, "secrets");
+        crate::cbor_gen::write_text(out, "workload");
+        crate::cbor_gen::write_bytes(out, &self.workload.get().as_bytes());
+        if !self.attachment_provides.is_empty() {
+            crate::cbor_gen::write_text(out, "attachment_provides");
             {
-                let c = &self.secrets;
+                let c = &self.attachment_provides;
                 let mut ks: Vec<&String> = c.keys().collect();
                 crate::cbor_gen::sort_keys(&mut ks);
                 crate::cbor_gen::write_head(out, 5, ks.len() as u64);
@@ -1627,8 +1629,6 @@ impl WorkloadProjection {
                 }
             }
         }
-        crate::cbor_gen::write_text(out, "workload");
-        crate::cbor_gen::write_bytes(out, &self.workload.get().as_bytes());
         Ok(())
     }
 
@@ -1641,19 +1641,19 @@ impl WorkloadProjection {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_workload: Option<Box<RawValue>> = None;
-        let mut f_secrets: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+        let mut f_attachment_provides: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "workload" => f_workload = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
-                "secrets" => f_secrets = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
+                "attachment_provides" => f_attachment_provides = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             workload: f_workload.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field workload".to_string()))?,
-            secrets: f_secrets,
+            attachment_provides: f_attachment_provides,
         })
     }
 }

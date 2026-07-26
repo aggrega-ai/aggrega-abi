@@ -196,8 +196,8 @@ type FetchExternalInputResponse struct {
 type WorkloadProjection struct {
 	// Workload The host-evaluated, post-validation Workload the guest synthesizes; opaque at this schema layer so the socket schema does not rebind the Workload entity contract.
 	Workload json.RawMessage `json:"workload" yaml:"workload" cbor:"workload"`
-	// Secrets The per-slot secret provides the synthesis consumes, keyed by secret slot; each slot's provides carries the generated Secret's identity a workload secret reference resolves to.
-	Secrets map[string]map[string]string `json:"secrets,omitempty" yaml:"secrets,omitempty" cbor:"secrets,omitempty"`
+	// AttachmentProvides Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced.
+	AttachmentProvides map[string]map[string]string `json:"attachment_provides,omitempty" yaml:"attachment_provides,omitempty" cbor:"attachment_provides,omitempty"`
 }
 
 // ArtifactsProjection The pre-evaluated artifact set the host hands a Provider guest to place into the node's output. The host has already resolved each entry's source (inline content or an imported file it read), evaluated it as a Go template against the render context using the guest's declared artifact-template delimiter pair, and computed the build-provenance label and annotation key sets. The guest owns the format decision, the provenance placement, the on-disk path, and the final bytes. Entries preserve author order so the placed output is byte-identical across runs of identical input.
@@ -2241,15 +2241,15 @@ func (t WorkloadProjection) MarshalJSON() ([]byte, error) {
 	first = false
 	buf.WriteString("\"workload\":")
 	buf.Write(t.Workload)
-	if len(t.Secrets) != 0 {
+	if len(t.AttachmentProvides) != 0 {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
-		buf.WriteString("\"secrets\":")
+		buf.WriteString("\"attachment_provides\":")
 		{
-			keys := make([]string, 0, len(t.Secrets))
-			for k := range t.Secrets {
+			keys := make([]string, 0, len(t.AttachmentProvides))
+			for k := range t.AttachmentProvides {
 				keys = append(keys, k)
 			}
 			sort.Strings(keys)
@@ -2260,7 +2260,7 @@ func (t WorkloadProjection) MarshalJSON() ([]byte, error) {
 				}
 				writeJSONString(&buf, k)
 				buf.WriteByte(':')
-				mv := t.Secrets[k]
+				mv := t.AttachmentProvides[k]
 				{
 					keys := make([]string, 0, len(mv))
 					for k := range mv {
@@ -2307,8 +2307,8 @@ func (t *WorkloadProjection) UnmarshalJSON(data []byte) error {
 			} else {
 				t.Workload = raw
 			}
-		case "secrets":
-			t.Secrets = make(map[string]map[string]string)
+		case "attachment_provides":
+			t.AttachmentProvides = make(map[string]map[string]string)
 			if err := expectDelim(dec, '{'); err != nil {
 				return err
 			}
@@ -2327,7 +2327,7 @@ func (t *WorkloadProjection) UnmarshalJSON(data []byte) error {
 						return err
 					}
 				}
-				t.Secrets[mk] = mv
+				t.AttachmentProvides[mk] = mv
 			}
 			if err := expectDelim(dec, '}'); err != nil {
 				return err
@@ -6346,22 +6346,24 @@ func (t WorkloadProjection) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t WorkloadProjection) appendCBOR(dst []byte) ([]byte, error) {
 	n := 1
-	if len(t.Secrets) != 0 {
+	if len(t.AttachmentProvides) != 0 {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
-	if len(t.Secrets) != 0 {
-		dst = appendCBORTextString(dst, "secrets")
+	dst = appendCBORTextString(dst, "workload")
+	dst = appendCBORByteString(dst, t.Workload)
+	if len(t.AttachmentProvides) != 0 {
+		dst = appendCBORTextString(dst, "attachment_provides")
 		{
-			keys := make([]string, 0, len(t.Secrets))
-			for k := range t.Secrets {
+			keys := make([]string, 0, len(t.AttachmentProvides))
+			for k := range t.AttachmentProvides {
 				keys = append(keys, k)
 			}
 			sortCBORKeys(keys)
 			dst = appendCBORHead(dst, 5, uint64(len(keys)))
 			for _, k := range keys {
 				dst = appendCBORTextString(dst, k)
-				mv := t.Secrets[k]
+				mv := t.AttachmentProvides[k]
 				{
 					keys := make([]string, 0, len(mv))
 					for k := range mv {
@@ -6378,8 +6380,6 @@ func (t WorkloadProjection) appendCBOR(dst []byte) ([]byte, error) {
 			}
 		}
 	}
-	dst = appendCBORTextString(dst, "workload")
-	dst = appendCBORByteString(dst, t.Workload)
 	return dst, nil
 }
 
@@ -6407,7 +6407,7 @@ func (t *WorkloadProjection) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.Workload = json.RawMessage(v)
 			}
-		case "secrets":
+		case "attachment_provides":
 			{
 				mn, err := dec.readMapHeader()
 				if err != nil {
@@ -6443,7 +6443,7 @@ func (t *WorkloadProjection) decodeCBOR(dec *cborDec) error {
 					}
 					m[mk] = mv
 				}
-				t.Secrets = m
+				t.AttachmentProvides = m
 			}
 		default:
 			if err := dec.skip(); err != nil {
