@@ -42,9 +42,9 @@ export interface FieldProvenance {
   overridden_annotation?: FieldProvenance;
 }
 
-// One resolved attachment for a node. Shared shape for a Feature (in feature_values_mapping) and a credential request (in the secrets bucket): a credential is a Feature labeled kind=secret, partitioned into the secrets bucket rather than given a lossier shape. Values carries vault pointers for credentials, never resolved plaintext.
+// One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature (labeled kind=secret), an identity Feature — so no family gets a lossier projection than another. For a credential, values carries pointers into a secret store, never resolved plaintext.
 export interface IRFeatureEntry {
-  // URI of the Catalog Feature; in the secrets bucket, the credential Feature interface.
+  // URI of the Catalog Feature this attachment requests.
   type: string;
   // The exact semantic version resolved during compilation.
   resolved_version: string;
@@ -54,8 +54,6 @@ export interface IRFeatureEntry {
   infra?: unknown;
   // Agnostic injection routing. Maps local variables to Target provides keys.
   inject?: unknown;
-  // Credentials scoped explicitly to this attachment.
-  secrets?: Record<string, IRFeatureEntry>;
   // Distinguishes attachments authored in a features: block (explicit) from synthetic attachments produced by the annotation-driven expansion pass (annotation), or mixed when the attachment's value/infra leaves carry a mix of both (per-leaf detail then lives in the provenance maps).
   origin?: string;
   // Annotation name that triggered a synthetic attachment. Empty when origin is explicit.
@@ -169,10 +167,8 @@ export interface IRSpec {
   values_mapping: Record<string, unknown>;
   // The physical sizing payload injected from the Release, mapped by node ID.
   infra_mapping: Record<string, unknown>;
-  // Normalized map of Node IDs to their attached Feature configurations.
+  // Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment.
   feature_values_mapping: Record<string, Record<string, IRFeatureEntry>>;
-  // Validated credential requests mapped by component node ID, cleanly separated from the standard payload.
-  secrets: Record<string, Record<string, IRFeatureEntry>>;
   // Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
   boundary_features?: Record<string, Record<string, IRBoundaryFeature>>;
   provenance: IRProvenance;
@@ -218,7 +214,6 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   if (v.values !== undefined && v.values !== null) parts.push(`${jstr("values")}:${encodeOpaque(v.values)}`);
   if (v.infra !== undefined && v.infra !== null) parts.push(`${jstr("infra")}:${encodeOpaque(v.infra)}`);
   if (v.inject !== undefined && v.inject !== null) parts.push(`${jstr("inject")}:${encodeOpaque(v.inject)}`);
-  if (v.secrets !== undefined && Object.keys(v.secrets).length > 0) parts.push(`${jstr("secrets")}:${`{${Object.keys(v.secrets!).sort().map((k0) => `${jstr(k0)}:${encodeIRFeatureEntry(v.secrets![k0])}`).join(",")}}`}`);
   if (v.origin !== undefined && v.origin !== "") parts.push(`${jstr("origin")}:${jstr(v.origin)}`);
   if (v.annotation_key !== undefined && v.annotation_key !== "") parts.push(`${jstr("annotation_key")}:${jstr(v.annotation_key)}`);
   if (v.annotation_source !== undefined && v.annotation_source !== "") parts.push(`${jstr("annotation_source")}:${jstr(v.annotation_source)}`);
@@ -333,7 +328,6 @@ export function encodeIRSpec(v: IRSpec): string {
   parts.push(`${jstr("values_mapping")}:${`{${Object.keys(v.values_mapping!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values_mapping![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("infra_mapping")}:${`{${Object.keys(v.infra_mapping!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.infra_mapping![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("feature_values_mapping")}:${`{${Object.keys(v.feature_values_mapping!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.feature_values_mapping![k0]!).sort().map((k1) => `${jstr(k1)}:${encodeIRFeatureEntry(v.feature_values_mapping![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
-  parts.push(`${jstr("secrets")}:${`{${Object.keys(v.secrets!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.secrets![k0]!).sort().map((k1) => `${jstr(k1)}:${encodeIRFeatureEntry(v.secrets![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
   if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) parts.push(`${jstr("boundary_features")}:${`{${Object.keys(v.boundary_features!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.boundary_features![k0]!).sort().map((k1) => `${jstr(k1)}:${encodeIRBoundaryFeature(v.boundary_features![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
   parts.push(`${jstr("provenance")}:${encodeIRProvenance(v.provenance)}`);
   return `{${parts.join(",")}}`;
@@ -469,7 +463,6 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.inject !== undefined && v.inject !== null) n++;
   if (v.origin !== undefined && v.origin !== "") n++;
   if (v.values !== undefined && v.values !== null) n++;
-  if (v.secrets !== undefined && Object.keys(v.secrets).length > 0) n++;
   if (v.annotation_key !== undefined && v.annotation_key !== "") n++;
   if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) n++;
   if (v.annotation_source !== undefined && v.annotation_source !== "") n++;
@@ -492,18 +485,6 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.values !== undefined && v.values !== null) {
     writeText(out, "values");
     writeBytes(out, utf8Encode(JSON.stringify(v.values)));
-  }
-  if (v.secrets !== undefined && Object.keys(v.secrets).length > 0) {
-    writeText(out, "secrets");
-    {
-      const m0 = v.secrets;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
-        writeText(out, kk0);
-        appendCBORIRFeatureEntry(out, m0[kk0]);
-      }
-    }
   }
   if (v.annotation_key !== undefined && v.annotation_key !== "") {
     writeText(out, "annotation_key");
@@ -557,7 +538,6 @@ export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
       case "values": o["values"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "inject": o["inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
-      case "secrets": o["secrets"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRFeatureEntryFrom(dec); } return m; })(); break;
       case "origin": o["origin"] = dec.readText(); break;
       case "annotation_key": o["annotation_key"] = dec.readText(); break;
       case "annotation_source": o["annotation_source"] = dec.readText(); break;
@@ -995,7 +975,7 @@ export function encodeCBORIRSpec(v: IRSpec): Uint8Array {
 }
 
 export function appendCBORIRSpec(out: number[], v: IRSpec): void {
-  let n = 8;
+  let n = 7;
   if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "edges");
@@ -1014,24 +994,6 @@ export function appendCBORIRSpec(out: number[], v: IRSpec): void {
     for (const kk0 of ks0) {
       writeText(out, kk0);
       appendCBORIRNode(out, m0[kk0]);
-    }
-  }
-  writeText(out, "secrets");
-  {
-    const m0 = v.secrets;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
-      writeText(out, kk0);
-      {
-        const m1 = m0[kk0];
-        const ks1 = Object.keys(m1); sortKeys(ks1);
-        writeHead(out, 5, ks1.length);
-        for (const kk1 of ks1) {
-          writeText(out, kk1);
-          appendCBORIRFeatureEntry(out, m1[kk1]);
-        }
-      }
     }
   }
   writeText(out, "provenance");
@@ -1121,7 +1083,6 @@ export function decodeCBORIRSpecFrom(dec: CborDec): IRSpec {
       case "values_mapping": o["values_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       case "infra_mapping": o["infra_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       case "feature_values_mapping": o["feature_values_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRFeatureEntryFrom(dec); } return m; })(); } return m; })(); break;
-      case "secrets": o["secrets"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRFeatureEntryFrom(dec); } return m; })(); } return m; })(); break;
       case "boundary_features": o["boundary_features"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRBoundaryFeatureFrom(dec); } return m; })(); } return m; })(); break;
       case "provenance": o["provenance"] = decodeCBORIRProvenanceFrom(dec); break;
       default: dec.skip();

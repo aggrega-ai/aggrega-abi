@@ -35,9 +35,9 @@ type FieldProvenance struct {
 	OverriddenAnnotation *FieldProvenance `json:"overridden_annotation,omitempty" yaml:"overridden_annotation,omitempty" cbor:"overridden_annotation,omitempty"`
 }
 
-// IRFeatureEntry One resolved attachment for a node. Shared shape for a Feature (in feature_values_mapping) and a credential request (in the secrets bucket): a credential is a Feature labeled kind=secret, partitioned into the secrets bucket rather than given a lossier shape. Values carries vault pointers for credentials, never resolved plaintext.
+// IRFeatureEntry One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature (labeled kind=secret), an identity Feature — so no family gets a lossier projection than another. For a credential, values carries pointers into a secret store, never resolved plaintext.
 type IRFeatureEntry struct {
-	// Type URI of the Catalog Feature; in the secrets bucket, the credential Feature interface.
+	// Type URI of the Catalog Feature this attachment requests.
 	Type string `json:"type" yaml:"type" cbor:"type"`
 	// ResolvedVersion The exact semantic version resolved during compilation.
 	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
@@ -47,8 +47,6 @@ type IRFeatureEntry struct {
 	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 	// Inject Agnostic injection routing. Maps local variables to Target provides keys.
 	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty" cbor:"inject,omitempty"`
-	// Secrets Credentials scoped explicitly to this attachment.
-	Secrets map[string]IRFeatureEntry `json:"secrets,omitempty" yaml:"secrets,omitempty" cbor:"secrets,omitempty"`
 	// Origin Distinguishes attachments authored in a features: block (explicit) from synthetic attachments produced by the annotation-driven expansion pass (annotation), or mixed when the attachment's value/infra leaves carry a mix of both (per-leaf detail then lives in the provenance maps).
 	Origin string `json:"origin,omitempty" yaml:"origin,omitempty" cbor:"origin,omitempty"`
 	// AnnotationKey Annotation name that triggered a synthetic attachment. Empty when origin is explicit.
@@ -162,10 +160,8 @@ type IRSpec struct {
 	ValuesMapping map[string]json.RawMessage `json:"values_mapping" yaml:"values_mapping" cbor:"values_mapping"`
 	// InfraMapping The physical sizing payload injected from the Release, mapped by node ID.
 	InfraMapping map[string]json.RawMessage `json:"infra_mapping" yaml:"infra_mapping" cbor:"infra_mapping"`
-	// FeatureValuesMapping Normalized map of Node IDs to their attached Feature configurations.
+	// FeatureValuesMapping Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment.
 	FeatureValuesMapping map[string]map[string]IRFeatureEntry `json:"feature_values_mapping" yaml:"feature_values_mapping" cbor:"feature_values_mapping"`
-	// Secrets Validated credential requests mapped by component node ID, cleanly separated from the standard payload.
-	Secrets map[string]map[string]IRFeatureEntry `json:"secrets" yaml:"secrets" cbor:"secrets"`
 	// BoundaryFeatures Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
 	BoundaryFeatures map[string]map[string]IRBoundaryFeature `json:"boundary_features,omitempty" yaml:"boundary_features,omitempty" cbor:"boundary_features,omitempty"`
 	Provenance       IRProvenance                            `json:"provenance" yaml:"provenance" cbor:"provenance"`
@@ -410,35 +406,6 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"inject\":")
 		buf.Write(t.Inject)
 	}
-	if len(t.Secrets) != 0 {
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.WriteString("\"secrets\":")
-		{
-			keys := make([]string, 0, len(t.Secrets))
-			for k := range t.Secrets {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Secrets[k]
-				if enc, err := mv.MarshalJSON(); err != nil {
-					return nil, err
-				} else {
-					buf.Write(enc)
-				}
-			}
-			buf.WriteByte('}')
-		}
-	}
 	if t.Origin != "" {
 		if !first {
 			buf.WriteByte(',')
@@ -568,29 +535,6 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.Inject = raw
-			}
-		case "secrets":
-			t.Secrets = make(map[string]IRFeatureEntry)
-			if err := expectDelim(dec, '{'); err != nil {
-				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
-					return err
-				}
-				var mv IRFeatureEntry
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					if err := mv.UnmarshalJSON(raw); err != nil {
-						return err
-					}
-				}
-				t.Secrets[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "origin":
 			if s, err := readString(dec); err != nil {
@@ -1788,50 +1732,6 @@ func (t IRSpec) MarshalJSON() ([]byte, error) {
 		}
 		buf.WriteByte('}')
 	}
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
-	buf.WriteString("\"secrets\":")
-	{
-		keys := make([]string, 0, len(t.Secrets))
-		for k := range t.Secrets {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Secrets[k]
-			{
-				keys := make([]string, 0, len(mv))
-				for k := range mv {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				buf.WriteByte('{')
-				for i, k := range keys {
-					if i > 0 {
-						buf.WriteByte(',')
-					}
-					writeJSONString(&buf, k)
-					buf.WriteByte(':')
-					mv := mv[k]
-					if enc, err := mv.MarshalJSON(); err != nil {
-						return nil, err
-					} else {
-						buf.Write(enc)
-					}
-				}
-				buf.WriteByte('}')
-			}
-		}
-		buf.WriteByte('}')
-	}
 	if len(t.BoundaryFeatures) != 0 {
 		if !first {
 			buf.WriteByte(',')
@@ -2028,31 +1928,6 @@ func (t *IRSpec) UnmarshalJSON(data []byte) error {
 					}
 				}
 				t.FeatureValuesMapping[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
-			}
-		case "secrets":
-			t.Secrets = make(map[string]map[string]IRFeatureEntry)
-			if err := expectDelim(dec, '{'); err != nil {
-				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
-					return err
-				}
-				var mv map[string]IRFeatureEntry
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					dec2 := json.NewDecoder(bytes.NewReader(raw))
-					dec2.UseNumber()
-					if err := dec2.Decode(&mv); err != nil {
-						return err
-					}
-				}
-				t.Secrets[mk] = mv
 			}
 			if err := expectDelim(dec, '}'); err != nil {
 				return err
@@ -2411,9 +2286,6 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Values) != 0 {
 		n++
 	}
-	if len(t.Secrets) != 0 {
-		n++
-	}
 	if t.AnnotationKey != "" {
 		n++
 	}
@@ -2445,24 +2317,6 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Values) != 0 {
 		dst = appendCBORTextString(dst, "values")
 		dst = appendCBORByteString(dst, t.Values)
-	}
-	if len(t.Secrets) != 0 {
-		dst = appendCBORTextString(dst, "secrets")
-		{
-			keys := make([]string, 0, len(t.Secrets))
-			for k := range t.Secrets {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Secrets[k]
-				if dst, err = mv.appendCBOR(dst); err != nil {
-					return nil, err
-				}
-			}
-		}
 	}
 	if t.AnnotationKey != "" {
 		dst = appendCBORTextString(dst, "annotation_key")
@@ -2560,26 +2414,6 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 				return err
 			} else {
 				t.Inject = json.RawMessage(v)
-			}
-		case "secrets":
-			{
-				mn, err := dec.readMapHeader()
-				if err != nil {
-					return err
-				}
-				m := make(map[string]IRFeatureEntry, mn)
-				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
-					if err != nil {
-						return err
-					}
-					var mv IRFeatureEntry
-					if err := (&mv).decodeCBOR(dec); err != nil {
-						return err
-					}
-					m[mk] = mv
-				}
-				t.Secrets = m
 			}
 		case "origin":
 			if s, err := dec.readTextString(); err != nil {
@@ -3533,7 +3367,7 @@ func (t IRSpec) EncodeCBOR() ([]byte, error) {
 // canonical key order (fixed at generation time), omitting empty
 // non-required fields so the map head's pair count matches.
 func (t IRSpec) appendCBOR(dst []byte) ([]byte, error) {
-	n := 8
+	n := 7
 	if len(t.BoundaryFeatures) != 0 {
 		n++
 	}
@@ -3560,34 +3394,6 @@ func (t IRSpec) appendCBOR(dst []byte) ([]byte, error) {
 			mv := t.Nodes[k]
 			if dst, err = mv.appendCBOR(dst); err != nil {
 				return nil, err
-			}
-		}
-	}
-	dst = appendCBORTextString(dst, "secrets")
-	{
-		keys := make([]string, 0, len(t.Secrets))
-		for k := range t.Secrets {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.Secrets[k]
-			{
-				keys := make([]string, 0, len(mv))
-				for k := range mv {
-					keys = append(keys, k)
-				}
-				sortCBORKeys(keys)
-				dst = appendCBORHead(dst, 5, uint64(len(keys)))
-				for _, k := range keys {
-					dst = appendCBORTextString(dst, k)
-					mv := mv[k]
-					if dst, err = mv.appendCBOR(dst); err != nil {
-						return nil, err
-					}
-				}
 			}
 		}
 	}
@@ -3841,42 +3647,6 @@ func (t *IRSpec) decodeCBOR(dec *cborDec) error {
 					m[mk] = mv
 				}
 				t.FeatureValuesMapping = m
-			}
-		case "secrets":
-			{
-				mn, err := dec.readMapHeader()
-				if err != nil {
-					return err
-				}
-				m := make(map[string]map[string]IRFeatureEntry, mn)
-				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
-					if err != nil {
-						return err
-					}
-					var mv map[string]IRFeatureEntry
-					{
-						mn, err := dec.readMapHeader()
-						if err != nil {
-							return err
-						}
-						m := make(map[string]IRFeatureEntry, mn)
-						for mi := 0; mi < mn; mi++ {
-							mk, err := dec.readTextString()
-							if err != nil {
-								return err
-							}
-							var mv IRFeatureEntry
-							if err := (&mv).decodeCBOR(dec); err != nil {
-								return err
-							}
-							m[mk] = mv
-						}
-						mv = m
-					}
-					m[mk] = mv
-				}
-				t.Secrets = m
 			}
 		case "boundary_features":
 			{

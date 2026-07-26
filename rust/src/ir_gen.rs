@@ -43,10 +43,10 @@ pub struct FieldProvenance {
     pub overridden_annotation: Option<Box<FieldProvenance>>,
 }
 
-/// One resolved attachment for a node. Shared shape for a Feature (in feature_values_mapping) and a credential request (in the secrets bucket): a credential is a Feature labeled kind=secret, partitioned into the secrets bucket rather than given a lossier shape. Values carries vault pointers for credentials, never resolved plaintext.
+/// One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature (labeled kind=secret), an identity Feature — so no family gets a lossier projection than another. For a credential, values carries pointers into a secret store, never resolved plaintext.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRFeatureEntry {
-    /// URI of the Catalog Feature; in the secrets bucket, the credential Feature interface.
+    /// URI of the Catalog Feature this attachment requests.
     #[serde(rename = "type")]
     pub r#type: String,
     /// The exact semantic version resolved during compilation.
@@ -60,9 +60,6 @@ pub struct IRFeatureEntry {
     /// Agnostic injection routing. Maps local variables to Target provides keys.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inject: Option<Box<RawValue>>,
-    /// Credentials scoped explicitly to this attachment.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub secrets: BTreeMap<String, IRFeatureEntry>,
     /// Distinguishes attachments authored in a features: block (explicit) from synthetic attachments produced by the annotation-driven expansion pass (annotation), or mixed when the attachment's value/infra leaves carry a mix of both (per-leaf detail then lives in the provenance maps).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub origin: String,
@@ -216,10 +213,8 @@ pub struct IRSpec {
     pub values_mapping: BTreeMap<String, Box<RawValue>>,
     /// The physical sizing payload injected from the Release, mapped by node ID.
     pub infra_mapping: BTreeMap<String, Box<RawValue>>,
-    /// Normalized map of Node IDs to their attached Feature configurations.
+    /// Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment.
     pub feature_values_mapping: BTreeMap<String, BTreeMap<String, IRFeatureEntry>>,
-    /// Validated credential requests mapped by component node ID, cleanly separated from the standard payload.
-    pub secrets: BTreeMap<String, BTreeMap<String, IRFeatureEntry>>,
     /// Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub boundary_features: BTreeMap<String, BTreeMap<String, IRBoundaryFeature>>,
@@ -382,7 +377,6 @@ impl IRFeatureEntry {
         if self.inject.is_some() { n += 1; }
         if !self.origin.is_empty() { n += 1; }
         if self.values.is_some() { n += 1; }
-        if !self.secrets.is_empty() { n += 1; }
         if !self.annotation_key.is_empty() { n += 1; }
         if !self.infra_provenance.is_empty() { n += 1; }
         if !self.annotation_source.is_empty() { n += 1; }
@@ -405,20 +399,6 @@ impl IRFeatureEntry {
         if let Some(ref x) = self.values {
             crate::cbor_gen::write_text(out, "values");
             crate::cbor_gen::write_bytes(out, x.get().as_bytes());
-        }
-        if !self.secrets.is_empty() {
-            crate::cbor_gen::write_text(out, "secrets");
-            {
-                let c = &self.secrets;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
-                    crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
-                    mv.append_cbor(out)?;
-                }
-            }
         }
         if !self.annotation_key.is_empty() {
             crate::cbor_gen::write_text(out, "annotation_key");
@@ -474,7 +454,6 @@ impl IRFeatureEntry {
         let mut f_values: Option<Box<RawValue>> = None;
         let mut f_infra: Option<Box<RawValue>> = None;
         let mut f_inject: Option<Box<RawValue>> = None;
-        let mut f_secrets: BTreeMap<String, IRFeatureEntry> = BTreeMap::new();
         let mut f_origin: String = String::new();
         let mut f_annotation_key: String = String::new();
         let mut f_annotation_source: String = String::new();
@@ -489,7 +468,6 @@ impl IRFeatureEntry {
                 "values" => f_values = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "infra" => f_infra = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "inject" => f_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
-                "secrets" => f_secrets = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRFeatureEntry> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRFeatureEntry::decode_cbor_from(dec)?; m.insert(mk, mv); } m },
                 "origin" => f_origin = dec.read_text()?,
                 "annotation_key" => f_annotation_key = dec.read_text()?,
                 "annotation_source" => f_annotation_source = dec.read_text()?,
@@ -504,7 +482,6 @@ impl IRFeatureEntry {
             values: f_values,
             infra: f_infra,
             inject: f_inject,
-            secrets: f_secrets,
             origin: f_origin,
             annotation_key: f_annotation_key,
             annotation_source: f_annotation_source,
@@ -1073,7 +1050,7 @@ impl IRSpec {
     }
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let mut n: u64 = 8;
+        let mut n: u64 = 7;
         if !self.boundary_features.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "edges");
@@ -1094,28 +1071,6 @@ impl IRSpec {
                 crate::cbor_gen::write_text(out, k);
                 let mv = &c[k];
                 mv.append_cbor(out)?;
-            }
-        }
-        crate::cbor_gen::write_text(out, "secrets");
-        {
-            let c = &self.secrets;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
-                crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
-                {
-                    let c = mv;
-                    let mut ks: Vec<&String> = c.keys().collect();
-                    crate::cbor_gen::sort_keys(&mut ks);
-                    crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                    for k in ks {
-                        crate::cbor_gen::write_text(out, k);
-                        let mv = &c[k];
-                        mv.append_cbor(out)?;
-                    }
-                }
             }
         }
         crate::cbor_gen::write_text(out, "provenance");
@@ -1215,7 +1170,6 @@ impl IRSpec {
         let mut f_values_mapping: Option<BTreeMap<String, Box<RawValue>>> = None;
         let mut f_infra_mapping: Option<BTreeMap<String, Box<RawValue>>> = None;
         let mut f_feature_values_mapping: Option<BTreeMap<String, BTreeMap<String, IRFeatureEntry>>> = None;
-        let mut f_secrets: Option<BTreeMap<String, BTreeMap<String, IRFeatureEntry>>> = None;
         let mut f_boundary_features: BTreeMap<String, BTreeMap<String, IRBoundaryFeature>> = BTreeMap::new();
         let mut f_provenance: Option<IRProvenance> = None;
         let n = dec.read_map_header()?;
@@ -1228,7 +1182,6 @@ impl IRSpec {
                 "values_mapping" => f_values_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m }),
                 "infra_mapping" => f_infra_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m }),
                 "feature_values_mapping" => f_feature_values_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, IRFeatureEntry>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRFeatureEntry> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRFeatureEntry::decode_cbor_from(dec)?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m }),
-                "secrets" => f_secrets = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, IRFeatureEntry>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRFeatureEntry> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRFeatureEntry::decode_cbor_from(dec)?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m }),
                 "boundary_features" => f_boundary_features = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, IRBoundaryFeature>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRBoundaryFeature> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRBoundaryFeature::decode_cbor_from(dec)?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
                 "provenance" => f_provenance = Some(IRProvenance::decode_cbor_from(dec)?),
                 _ => dec.skip()?,
@@ -1241,7 +1194,6 @@ impl IRSpec {
             values_mapping: f_values_mapping.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field values_mapping".to_string()))?,
             infra_mapping: f_infra_mapping.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field infra_mapping".to_string()))?,
             feature_values_mapping: f_feature_values_mapping.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field feature_values_mapping".to_string()))?,
-            secrets: f_secrets.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field secrets".to_string()))?,
             boundary_features: f_boundary_features,
             provenance: f_provenance.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field provenance".to_string()))?,
         })
