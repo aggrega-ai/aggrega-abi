@@ -31,8 +31,8 @@ type FieldProvenance struct {
 	AnnotationKey string `json:"annotation_key,omitempty" yaml:"annotation_key,omitempty" cbor:"annotation_key,omitempty"`
 	// AnnotationSource Source location of the annotation declaration as <file-path>:<dotted-yaml-key-path>; empty for explicit leaves.
 	AnnotationSource string `json:"annotation_source,omitempty" yaml:"annotation_source,omitempty" cbor:"annotation_source,omitempty"`
-	// OverridesAnnotation When an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced.
-	OverridesAnnotation *FieldProvenance `json:"overrides_annotation,omitempty" yaml:"overrides_annotation,omitempty" cbor:"overrides_annotation,omitempty"`
+	// OverriddenAnnotation The annotation contribution that lost this leaf to an explicit one: when an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced. Singular — exactly one suppressed contribution is ever retained.
+	OverriddenAnnotation *FieldProvenance `json:"overridden_annotation,omitempty" yaml:"overridden_annotation,omitempty" cbor:"overridden_annotation,omitempty"`
 }
 
 // IRFeatureEntry One resolved attachment for a node. Shared shape for a Feature (in feature_values_mapping) and a credential request (in the secrets bucket): a credential is a Feature labeled kind=secret, partitioned into the secrets bucket rather than given a lossier shape. Values carries vault pointers for credentials, never resolved plaintext.
@@ -292,13 +292,13 @@ func (t FieldProvenance) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"annotation_source\":")
 		writeJSONString(&buf, t.AnnotationSource)
 	}
-	if t.OverridesAnnotation != nil {
+	if t.OverriddenAnnotation != nil {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
-		buf.WriteString("\"overrides_annotation\":")
-		if enc, err := t.OverridesAnnotation.MarshalJSON(); err != nil {
+		buf.WriteString("\"overridden_annotation\":")
+		if enc, err := t.OverriddenAnnotation.MarshalJSON(); err != nil {
 			return nil, err
 		} else {
 			buf.Write(enc)
@@ -346,7 +346,7 @@ func (t *FieldProvenance) UnmarshalJSON(data []byte) error {
 			} else {
 				t.AnnotationSource = s
 			}
-		case "overrides_annotation":
+		case "overridden_annotation":
 			if raw, err := readRaw(dec, data); err != nil {
 				return err
 			} else {
@@ -354,7 +354,7 @@ func (t *FieldProvenance) UnmarshalJSON(data []byte) error {
 				if err := v.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				t.OverridesAnnotation = v
+				t.OverriddenAnnotation = v
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -2299,7 +2299,7 @@ func (t FieldProvenance) appendCBOR(dst []byte) ([]byte, error) {
 	if t.AnnotationSource != "" {
 		n++
 	}
-	if t.OverridesAnnotation != nil {
+	if t.OverriddenAnnotation != nil {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
@@ -2318,11 +2318,11 @@ func (t FieldProvenance) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "annotation_source")
 		dst = appendCBORTextString(dst, t.AnnotationSource)
 	}
-	if t.OverridesAnnotation != nil {
-		dst = appendCBORTextString(dst, "overrides_annotation")
-		if t.OverridesAnnotation == nil {
+	if t.OverriddenAnnotation != nil {
+		dst = appendCBORTextString(dst, "overridden_annotation")
+		if t.OverriddenAnnotation == nil {
 			dst = append(dst, 0xf6)
-		} else if dst, err = t.OverridesAnnotation.appendCBOR(dst); err != nil {
+		} else if dst, err = t.OverriddenAnnotation.appendCBOR(dst); err != nil {
 			return nil, err
 		}
 	}
@@ -2371,13 +2371,13 @@ func (t *FieldProvenance) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.AnnotationSource = s
 			}
-		case "overrides_annotation":
+		case "overridden_annotation":
 			{
 				v := new(FieldProvenance)
 				if err := v.decodeCBOR(dec); err != nil {
 					return err
 				}
-				t.OverridesAnnotation = v
+				t.OverriddenAnnotation = v
 			}
 		default:
 			if err := dec.skip(); err != nil {

@@ -38,9 +38,9 @@ pub struct FieldProvenance {
     /// Source location of the annotation declaration as <file-path>:<dotted-yaml-key-path>; empty for explicit leaves.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub annotation_source: String,
-    /// When an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced.
+    /// The annotation contribution that lost this leaf to an explicit one: when an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced. Singular — exactly one suppressed contribution is ever retained.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub overrides_annotation: Option<Box<FieldProvenance>>,
+    pub overridden_annotation: Option<Box<FieldProvenance>>,
 }
 
 /// One resolved attachment for a node. Shared shape for a Feature (in feature_values_mapping) and a credential request (in the secrets bucket): a credential is a Feature labeled kind=secret, partitioned into the secrets bucket rather than given a lossier shape. Values carries vault pointers for credentials, never resolved plaintext.
@@ -309,7 +309,7 @@ impl FieldProvenance {
         if !self.side.is_empty() { n += 1; }
         if !self.annotation_key.is_empty() { n += 1; }
         if !self.annotation_source.is_empty() { n += 1; }
-        if self.overrides_annotation.is_some() { n += 1; }
+        if self.overridden_annotation.is_some() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.side.is_empty() {
             crate::cbor_gen::write_text(out, "side");
@@ -325,8 +325,8 @@ impl FieldProvenance {
             crate::cbor_gen::write_text(out, "annotation_source");
             crate::cbor_gen::write_text(out, &self.annotation_source);
         }
-        if let Some(ref x) = self.overrides_annotation {
-            crate::cbor_gen::write_text(out, "overrides_annotation");
+        if let Some(ref x) = self.overridden_annotation {
+            crate::cbor_gen::write_text(out, "overridden_annotation");
             x.append_cbor(out)?;
         }
         Ok(())
@@ -344,7 +344,7 @@ impl FieldProvenance {
         let mut f_side: String = String::new();
         let mut f_annotation_key: String = String::new();
         let mut f_annotation_source: String = String::new();
-        let mut f_overrides_annotation: Option<Box<FieldProvenance>> = None;
+        let mut f_overridden_annotation: Option<Box<FieldProvenance>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -353,7 +353,7 @@ impl FieldProvenance {
                 "side" => f_side = dec.read_text()?,
                 "annotation_key" => f_annotation_key = dec.read_text()?,
                 "annotation_source" => f_annotation_source = dec.read_text()?,
-                "overrides_annotation" => f_overrides_annotation = Some(Box::new(FieldProvenance::decode_cbor_from(dec)?)),
+                "overridden_annotation" => f_overridden_annotation = Some(Box::new(FieldProvenance::decode_cbor_from(dec)?)),
                 _ => dec.skip()?,
             }
         }
@@ -362,7 +362,7 @@ impl FieldProvenance {
             side: f_side,
             annotation_key: f_annotation_key,
             annotation_source: f_annotation_source,
-            overrides_annotation: f_overrides_annotation,
+            overridden_annotation: f_overridden_annotation,
         })
     }
 }

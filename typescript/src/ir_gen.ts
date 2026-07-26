@@ -38,8 +38,8 @@ export interface FieldProvenance {
   annotation_key?: string;
   // Source location of the annotation declaration as <file-path>:<dotted-yaml-key-path>; empty for explicit leaves.
   annotation_source?: string;
-  // When an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced.
-  overrides_annotation?: FieldProvenance;
+  // The annotation contribution that lost this leaf to an explicit one: when an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced. Singular — exactly one suppressed contribution is ever retained.
+  overridden_annotation?: FieldProvenance;
 }
 
 // One resolved attachment for a node. Shared shape for a Feature (in feature_values_mapping) and a credential request (in the secrets bucket): a credential is a Feature labeled kind=secret, partitioned into the secrets bucket rather than given a lossier shape. Values carries vault pointers for credentials, never resolved plaintext.
@@ -203,7 +203,7 @@ export function encodeFieldProvenance(v: FieldProvenance): string {
   if (v.side !== undefined && v.side !== "") parts.push(`${jstr("side")}:${jstr(v.side)}`);
   if (v.annotation_key !== undefined && v.annotation_key !== "") parts.push(`${jstr("annotation_key")}:${jstr(v.annotation_key)}`);
   if (v.annotation_source !== undefined && v.annotation_source !== "") parts.push(`${jstr("annotation_source")}:${jstr(v.annotation_source)}`);
-  if (v.overrides_annotation !== undefined && v.overrides_annotation !== null) parts.push(`${jstr("overrides_annotation")}:${encodeFieldProvenance(v.overrides_annotation)}`);
+  if (v.overridden_annotation !== undefined && v.overridden_annotation !== null) parts.push(`${jstr("overridden_annotation")}:${encodeFieldProvenance(v.overridden_annotation)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -413,7 +413,7 @@ export function appendCBORFieldProvenance(out: number[], v: FieldProvenance): vo
   if (v.side !== undefined && v.side !== "") n++;
   if (v.annotation_key !== undefined && v.annotation_key !== "") n++;
   if (v.annotation_source !== undefined && v.annotation_source !== "") n++;
-  if (v.overrides_annotation !== undefined && v.overrides_annotation !== null) n++;
+  if (v.overridden_annotation !== undefined && v.overridden_annotation !== null) n++;
   writeHead(out, 5, n);
   if (v.side !== undefined && v.side !== "") {
     writeText(out, "side");
@@ -429,9 +429,9 @@ export function appendCBORFieldProvenance(out: number[], v: FieldProvenance): vo
     writeText(out, "annotation_source");
     writeText(out, v.annotation_source);
   }
-  if (v.overrides_annotation !== undefined && v.overrides_annotation !== null) {
-    writeText(out, "overrides_annotation");
-    appendCBORFieldProvenance(out, v.overrides_annotation);
+  if (v.overridden_annotation !== undefined && v.overridden_annotation !== null) {
+    writeText(out, "overridden_annotation");
+    appendCBORFieldProvenance(out, v.overridden_annotation);
   }
 }
 
@@ -450,7 +450,7 @@ export function decodeCBORFieldProvenanceFrom(dec: CborDec): FieldProvenance {
       case "side": o["side"] = dec.readText(); break;
       case "annotation_key": o["annotation_key"] = dec.readText(); break;
       case "annotation_source": o["annotation_source"] = dec.readText(); break;
-      case "overrides_annotation": o["overrides_annotation"] = decodeCBORFieldProvenanceFrom(dec); break;
+      case "overridden_annotation": o["overridden_annotation"] = decodeCBORFieldProvenanceFrom(dec); break;
       default: dec.skip();
     }
   }
