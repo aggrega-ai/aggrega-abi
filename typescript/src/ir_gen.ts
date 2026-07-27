@@ -64,6 +64,10 @@ export interface IRFeatureEntry {
   values_provenance?: Record<string, FieldProvenance>;
   // Per-leaf origin for the infra payload, keyed by dotted leaf path.
   infra_provenance?: Record<string, FieldProvenance>;
+  // True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the host Component's attachment slot of the same name declares the material it carries sensitive. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
+  sensitive?: boolean;
+  // The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
+  sensitive_inject?: unknown;
 }
 
 // A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -219,6 +223,8 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   if (v.annotation_source !== undefined && v.annotation_source !== "") parts.push(`${jstr("annotation_source")}:${jstr(v.annotation_source)}`);
   if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) parts.push(`${jstr("values_provenance")}:${`{${Object.keys(v.values_provenance!).sort().map((k0) => `${jstr(k0)}:${encodeFieldProvenance(v.values_provenance![k0])}`).join(",")}}`}`);
   if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) parts.push(`${jstr("infra_provenance")}:${`{${Object.keys(v.infra_provenance!).sort().map((k0) => `${jstr(k0)}:${encodeFieldProvenance(v.infra_provenance![k0])}`).join(",")}}`}`);
+  if (v.sensitive !== undefined && v.sensitive !== false) parts.push(`${jstr("sensitive")}:${String(v.sensitive)}`);
+  if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) parts.push(`${jstr("sensitive_inject")}:${encodeOpaque(v.sensitive_inject)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -463,8 +469,10 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.inject !== undefined && v.inject !== null) n++;
   if (v.origin !== undefined && v.origin !== "") n++;
   if (v.values !== undefined && v.values !== null) n++;
+  if (v.sensitive !== undefined && v.sensitive !== false) n++;
   if (v.annotation_key !== undefined && v.annotation_key !== "") n++;
   if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) n++;
+  if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) n++;
   if (v.annotation_source !== undefined && v.annotation_source !== "") n++;
   if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) n++;
   writeHead(out, 5, n);
@@ -486,6 +494,10 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
     writeText(out, "values");
     writeBytes(out, utf8Encode(JSON.stringify(v.values)));
   }
+  if (v.sensitive !== undefined && v.sensitive !== false) {
+    writeText(out, "sensitive");
+    writeBool(out, v.sensitive);
+  }
   if (v.annotation_key !== undefined && v.annotation_key !== "") {
     writeText(out, "annotation_key");
     writeText(out, v.annotation_key);
@@ -504,6 +516,10 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   }
   writeText(out, "resolved_version");
   writeText(out, v.resolved_version);
+  if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) {
+    writeText(out, "sensitive_inject");
+    writeBytes(out, utf8Encode(JSON.stringify(v.sensitive_inject)));
+  }
   if (v.annotation_source !== undefined && v.annotation_source !== "") {
     writeText(out, "annotation_source");
     writeText(out, v.annotation_source);
@@ -543,6 +559,8 @@ export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
       case "annotation_source": o["annotation_source"] = dec.readText(); break;
       case "values_provenance": o["values_provenance"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORFieldProvenanceFrom(dec); } return m; })(); break;
       case "infra_provenance": o["infra_provenance"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORFieldProvenanceFrom(dec); } return m; })(); break;
+      case "sensitive": o["sensitive"] = dec.readBool(); break;
+      case "sensitive_inject": o["sensitive_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       default: dec.skip();
     }
   }

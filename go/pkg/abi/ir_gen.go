@@ -57,6 +57,10 @@ type IRFeatureEntry struct {
 	ValuesProvenance map[string]FieldProvenance `json:"values_provenance,omitempty" yaml:"values_provenance,omitempty" cbor:"values_provenance,omitempty"`
 	// InfraProvenance Per-leaf origin for the infra payload, keyed by dotted leaf path.
 	InfraProvenance map[string]FieldProvenance `json:"infra_provenance,omitempty" yaml:"infra_provenance,omitempty" cbor:"infra_provenance,omitempty"`
+	// Sensitive True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the host Component's attachment slot of the same name declares the material it carries sensitive. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
+	Sensitive bool `json:"sensitive,omitempty" yaml:"sensitive,omitempty" cbor:"sensitive,omitempty"`
+	// SensitiveInject The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
+	SensitiveInject json.RawMessage `json:"sensitive_inject,omitempty" yaml:"sensitive_inject,omitempty" cbor:"sensitive_inject,omitempty"`
 }
 
 // IRBoundaryFeature A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -488,6 +492,26 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 			buf.WriteByte('}')
 		}
 	}
+	if t.Sensitive != false {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"sensitive\":")
+		if t.Sensitive {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+	}
+	if len(t.SensitiveInject) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"sensitive_inject\":")
+		buf.Write(t.SensitiveInject)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -599,6 +623,18 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 			}
 			if err := expectDelim(dec, '}'); err != nil {
 				return err
+			}
+		case "sensitive":
+			if v, err := readBool(dec); err != nil {
+				return err
+			} else {
+				t.Sensitive = v
+			}
+		case "sensitive_inject":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				t.SensitiveInject = raw
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -2286,10 +2322,16 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Values) != 0 {
 		n++
 	}
+	if t.Sensitive != false {
+		n++
+	}
 	if t.AnnotationKey != "" {
 		n++
 	}
 	if len(t.InfraProvenance) != 0 {
+		n++
+	}
+	if len(t.SensitiveInject) != 0 {
 		n++
 	}
 	if t.AnnotationSource != "" {
@@ -2318,6 +2360,10 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "values")
 		dst = appendCBORByteString(dst, t.Values)
 	}
+	if t.Sensitive != false {
+		dst = appendCBORTextString(dst, "sensitive")
+		dst = appendCBORBool(dst, t.Sensitive)
+	}
 	if t.AnnotationKey != "" {
 		dst = appendCBORTextString(dst, "annotation_key")
 		dst = appendCBORTextString(dst, t.AnnotationKey)
@@ -2342,6 +2388,10 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	}
 	dst = appendCBORTextString(dst, "resolved_version")
 	dst = appendCBORTextString(dst, t.ResolvedVersion)
+	if len(t.SensitiveInject) != 0 {
+		dst = appendCBORTextString(dst, "sensitive_inject")
+		dst = appendCBORByteString(dst, t.SensitiveInject)
+	}
 	if t.AnnotationSource != "" {
 		dst = appendCBORTextString(dst, "annotation_source")
 		dst = appendCBORTextString(dst, t.AnnotationSource)
@@ -2472,6 +2522,18 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 					m[mk] = mv
 				}
 				t.InfraProvenance = m
+			}
+		case "sensitive":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.Sensitive = v
+			}
+		case "sensitive_inject":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.SensitiveInject = json.RawMessage(v)
 			}
 		default:
 			if err := dec.skip(); err != nil {

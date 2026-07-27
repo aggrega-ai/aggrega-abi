@@ -75,6 +75,12 @@ pub struct IRFeatureEntry {
     /// Per-leaf origin for the infra payload, keyed by dotted leaf path.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub infra_provenance: BTreeMap<String, FieldProvenance>,
+    /// True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the host Component's attachment slot of the same name declares the material it carries sensitive. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub sensitive: bool,
+    /// The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sensitive_inject: Option<Box<RawValue>>,
 }
 
 /// A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -377,8 +383,10 @@ impl IRFeatureEntry {
         if self.inject.is_some() { n += 1; }
         if !self.origin.is_empty() { n += 1; }
         if self.values.is_some() { n += 1; }
+        if self.sensitive { n += 1; }
         if !self.annotation_key.is_empty() { n += 1; }
         if !self.infra_provenance.is_empty() { n += 1; }
+        if self.sensitive_inject.is_some() { n += 1; }
         if !self.annotation_source.is_empty() { n += 1; }
         if !self.values_provenance.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -400,6 +408,10 @@ impl IRFeatureEntry {
             crate::cbor_gen::write_text(out, "values");
             crate::cbor_gen::write_bytes(out, x.get().as_bytes());
         }
+        if self.sensitive {
+            crate::cbor_gen::write_text(out, "sensitive");
+            crate::cbor_gen::write_bool(out, *&self.sensitive);
+        }
         if !self.annotation_key.is_empty() {
             crate::cbor_gen::write_text(out, "annotation_key");
             crate::cbor_gen::write_text(out, &self.annotation_key);
@@ -420,6 +432,10 @@ impl IRFeatureEntry {
         }
         crate::cbor_gen::write_text(out, "resolved_version");
         crate::cbor_gen::write_text(out, &self.resolved_version);
+        if let Some(ref x) = self.sensitive_inject {
+            crate::cbor_gen::write_text(out, "sensitive_inject");
+            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
         if !self.annotation_source.is_empty() {
             crate::cbor_gen::write_text(out, "annotation_source");
             crate::cbor_gen::write_text(out, &self.annotation_source);
@@ -459,6 +475,8 @@ impl IRFeatureEntry {
         let mut f_annotation_source: String = String::new();
         let mut f_values_provenance: BTreeMap<String, FieldProvenance> = BTreeMap::new();
         let mut f_infra_provenance: BTreeMap<String, FieldProvenance> = BTreeMap::new();
+        let mut f_sensitive: bool = false;
+        let mut f_sensitive_inject: Option<Box<RawValue>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -473,6 +491,8 @@ impl IRFeatureEntry {
                 "annotation_source" => f_annotation_source = dec.read_text()?,
                 "values_provenance" => f_values_provenance = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, FieldProvenance> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = FieldProvenance::decode_cbor_from(dec)?; m.insert(mk, mv); } m },
                 "infra_provenance" => f_infra_provenance = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, FieldProvenance> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = FieldProvenance::decode_cbor_from(dec)?; m.insert(mk, mv); } m },
+                "sensitive" => f_sensitive = dec.read_bool()?,
+                "sensitive_inject" => f_sensitive_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 _ => dec.skip()?,
             }
         }
@@ -487,6 +507,8 @@ impl IRFeatureEntry {
             annotation_source: f_annotation_source,
             values_provenance: f_values_provenance,
             infra_provenance: f_infra_provenance,
+            sensitive: f_sensitive,
+            sensitive_inject: f_sensitive_inject,
         })
     }
 }
