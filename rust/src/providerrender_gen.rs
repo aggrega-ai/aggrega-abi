@@ -48,7 +48,7 @@ pub struct IRNodeProjection {
     /// The node's rendered values dictionary, an author-ordered key set the guest renders from. Preserves author order so the payload is byte-identical across runs of identical input.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub values: BTreeMap<String, Box<RawValue>>,
-    /// The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
+    /// The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub features: BTreeMap<String, Box<RawValue>>,
     /// The node's outbound uses edges keyed by socket alias, each carrying the ordered target node ids bound to that socket. Preserves author order so the payload is byte-identical across runs of identical input.
@@ -255,6 +255,9 @@ pub struct WorkloadProjection {
     /// Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub attachment_provides: BTreeMap<String, BTreeMap<String, String>>,
+    /// Which of the node's attachments handle material an author declared sensitive, keyed by the same attachment instance name attachment_provides uses. Only a marked attachment appears, so an attachment absent from the map is not declared sensitive and the whole field is absent when none is. The marking is derived from declarations alone — a sensitive leaf declared on the Feature filling the attachment, or a sensitive attachment slot the attachment binds — never from a value's content. The field carries the marking so a guest whose target offers a native sensitivity primitive can mark the value there; a guest whose target offers none ignores it, and the marking changes nothing that guest emits.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub attachment_sensitive: BTreeMap<String, bool>,
 }
 
 /// The pre-evaluated artifact set the host hands a Provider guest to place into the node's output. The host has already resolved each entry's source (inline content or an imported file it read), evaluated it as a Go template against the render context using the guest's declared artifact-template delimiter pair, and computed the build-provenance label and annotation key sets. The guest owns the format decision, the provenance placement, the on-disk path, and the final bytes. Entries preserve author order so the placed output is byte-identical across runs of identical input.
@@ -1602,6 +1605,7 @@ impl WorkloadProjection {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
         if !self.attachment_provides.is_empty() { n += 1; }
+        if !self.attachment_sensitive.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "workload");
         crate::cbor_gen::write_bytes(out, &self.workload.get().as_bytes());
@@ -1629,6 +1633,20 @@ impl WorkloadProjection {
                 }
             }
         }
+        if !self.attachment_sensitive.is_empty() {
+            crate::cbor_gen::write_text(out, "attachment_sensitive");
+            {
+                let c = &self.attachment_sensitive;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bool(out, *mv);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -1642,18 +1660,21 @@ impl WorkloadProjection {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_workload: Option<Box<RawValue>> = None;
         let mut f_attachment_provides: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+        let mut f_attachment_sensitive: BTreeMap<String, bool> = BTreeMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "workload" => f_workload = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "attachment_provides" => f_attachment_provides = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
+                "attachment_sensitive" => f_attachment_sensitive = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, bool> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_bool()?; m.insert(mk, mv); } m },
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             workload: f_workload.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field workload".to_string()))?,
             attachment_provides: f_attachment_provides,
+            attachment_sensitive: f_attachment_sensitive,
         })
     }
 }

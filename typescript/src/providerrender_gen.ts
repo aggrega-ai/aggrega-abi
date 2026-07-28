@@ -49,7 +49,7 @@ export interface IRNodeProjection {
   resolved_recipe: string;
   // The node's rendered values dictionary, an author-ordered key set the guest renders from. Preserves author order so the payload is byte-identical across runs of identical input.
   values?: Record<string, unknown>;
-  // The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
+  // The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
   features?: Record<string, unknown>;
   // The node's outbound uses edges keyed by socket alias, each carrying the ordered target node ids bound to that socket. Preserves author order so the payload is byte-identical across runs of identical input.
   uses?: Record<string, string[]>;
@@ -207,6 +207,8 @@ export interface WorkloadProjection {
   workload: unknown;
   // Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced.
   attachment_provides?: Record<string, Record<string, string>>;
+  // Which of the node's attachments handle material an author declared sensitive, keyed by the same attachment instance name attachment_provides uses. Only a marked attachment appears, so an attachment absent from the map is not declared sensitive and the whole field is absent when none is. The marking is derived from declarations alone — a sensitive leaf declared on the Feature filling the attachment, or a sensitive attachment slot the attachment binds — never from a value's content. The field carries the marking so a guest whose target offers a native sensitivity primitive can mark the value there; a guest whose target offers none ignores it, and the marking changes nothing that guest emits.
+  attachment_sensitive?: Record<string, boolean>;
 }
 
 // The pre-evaluated artifact set the host hands a Provider guest to place into the node's output. The host has already resolved each entry's source (inline content or an imported file it read), evaluated it as a Go template against the render context using the guest's declared artifact-template delimiter pair, and computed the build-provenance label and annotation key sets. The guest owns the format decision, the provenance placement, the on-disk path, and the final bytes. Entries preserve author order so the placed output is byte-identical across runs of identical input.
@@ -614,6 +616,7 @@ export function encodeWorkloadProjection(v: WorkloadProjection): string {
   const parts: string[] = [];
   parts.push(`${jstr("workload")}:${encodeOpaque(v.workload)}`);
   if (v.attachment_provides !== undefined && Object.keys(v.attachment_provides).length > 0) parts.push(`${jstr("attachment_provides")}:${`{${Object.keys(v.attachment_provides!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.attachment_provides![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.attachment_provides![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
+  if (v.attachment_sensitive !== undefined && Object.keys(v.attachment_sensitive).length > 0) parts.push(`${jstr("attachment_sensitive")}:${`{${Object.keys(v.attachment_sensitive!).sort().map((k0) => `${jstr(k0)}:${String(v.attachment_sensitive![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -1712,6 +1715,7 @@ export function encodeCBORWorkloadProjection(v: WorkloadProjection): Uint8Array 
 export function appendCBORWorkloadProjection(out: number[], v: WorkloadProjection): void {
   let n = 1;
   if (v.attachment_provides !== undefined && Object.keys(v.attachment_provides).length > 0) n++;
+  if (v.attachment_sensitive !== undefined && Object.keys(v.attachment_sensitive).length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "workload");
   writeBytes(out, utf8Encode(JSON.stringify(v.workload)));
@@ -1735,6 +1739,18 @@ export function appendCBORWorkloadProjection(out: number[], v: WorkloadProjectio
       }
     }
   }
+  if (v.attachment_sensitive !== undefined && Object.keys(v.attachment_sensitive).length > 0) {
+    writeText(out, "attachment_sensitive");
+    {
+      const m0 = v.attachment_sensitive;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeBool(out, m0[kk0]);
+      }
+    }
+  }
 }
 
 export function decodeCBORWorkloadProjection(data: Uint8Array): WorkloadProjection {
@@ -1750,6 +1766,7 @@ export function decodeCBORWorkloadProjectionFrom(dec: CborDec): WorkloadProjecti
     switch (k) {
       case "workload": o["workload"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "attachment_provides": o["attachment_provides"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); } return m; })(); break;
+      case "attachment_sensitive": o["attachment_sensitive"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readBool(); } return m; })(); break;
       default: dec.skip();
     }
   }
