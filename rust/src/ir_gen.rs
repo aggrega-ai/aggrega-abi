@@ -54,6 +54,9 @@ pub struct IRFeatureEntry {
     /// The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub labels: BTreeMap<String, String>,
+    /// The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub catalog_annotations: BTreeMap<String, String>,
     /// Names the host Component attachment slot this attachment fills, or "free" when it fills no declared slot. The pairing is by name — a deployment fills a slot by attaching a Feature under the slot's name — so the value is an exact key from the resolved Component's declared slot set, never anything read out of the name itself. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub binding: String,
@@ -397,6 +400,7 @@ impl IRFeatureEntry {
         if self.sensitive_inject.is_some() { n += 1; }
         if !self.annotation_source.is_empty() { n += 1; }
         if !self.values_provenance.is_empty() { n += 1; }
+        if !self.catalog_annotations.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "type");
         crate::cbor_gen::write_text(out, &self.r#type);
@@ -480,6 +484,20 @@ impl IRFeatureEntry {
                 }
             }
         }
+        if !self.catalog_annotations.is_empty() {
+            crate::cbor_gen::write_text(out, "catalog_annotations");
+            {
+                let c = &self.catalog_annotations;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -494,6 +512,7 @@ impl IRFeatureEntry {
         let mut f_type: Option<String> = None;
         let mut f_resolved_version: Option<String> = None;
         let mut f_labels: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_catalog_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_binding: String = String::new();
         let mut f_values: Option<Box<RawValue>> = None;
         let mut f_infra: Option<Box<RawValue>> = None;
@@ -512,6 +531,7 @@ impl IRFeatureEntry {
                 "type" => f_type = Some(dec.read_text()?),
                 "resolved_version" => f_resolved_version = Some(dec.read_text()?),
                 "labels" => f_labels = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "catalog_annotations" => f_catalog_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "binding" => f_binding = dec.read_text()?,
                 "values" => f_values = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "infra" => f_infra = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
@@ -530,6 +550,7 @@ impl IRFeatureEntry {
             r#type: f_type.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field type".to_string()))?,
             resolved_version: f_resolved_version.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field resolved_version".to_string()))?,
             labels: f_labels,
+            catalog_annotations: f_catalog_annotations,
             binding: f_binding,
             values: f_values,
             infra: f_infra,

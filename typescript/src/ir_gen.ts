@@ -50,6 +50,8 @@ export interface IRFeatureEntry {
   resolved_version: string;
   // The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
   labels?: Record<string, string>;
+  // The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
+  catalog_annotations?: Record<string, string>;
   // Names the host Component attachment slot this attachment fills, or "free" when it fills no declared slot. The pairing is by name — a deployment fills a slot by attaching a Feature under the slot's name — so the value is an exact key from the resolved Component's declared slot set, never anything read out of the name itself. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
   binding?: string;
   // Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
@@ -220,6 +222,7 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
   parts.push(`${jstr("resolved_version")}:${jstr(v.resolved_version)}`);
   if (v.labels !== undefined && Object.keys(v.labels).length > 0) parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
+  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) parts.push(`${jstr("catalog_annotations")}:${`{${Object.keys(v.catalog_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.catalog_annotations![k0])}`).join(",")}}`}`);
   if (v.binding !== undefined && v.binding !== "") parts.push(`${jstr("binding")}:${jstr(v.binding)}`);
   if (v.values !== undefined && v.values !== null) parts.push(`${jstr("values")}:${encodeOpaque(v.values)}`);
   if (v.infra !== undefined && v.infra !== null) parts.push(`${jstr("infra")}:${encodeOpaque(v.infra)}`);
@@ -483,6 +486,7 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) n++;
   if (v.annotation_source !== undefined && v.annotation_source !== "") n++;
   if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) n++;
+  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "type");
   writeText(out, v.type);
@@ -560,6 +564,18 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
       }
     }
   }
+  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) {
+    writeText(out, "catalog_annotations");
+    {
+      const m0 = v.catalog_annotations;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
 }
 
 export function decodeCBORIRFeatureEntry(data: Uint8Array): IRFeatureEntry {
@@ -576,6 +592,7 @@ export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
       case "type": o["type"] = dec.readText(); break;
       case "resolved_version": o["resolved_version"] = dec.readText(); break;
       case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "catalog_annotations": o["catalog_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "binding": o["binding"] = dec.readText(); break;
       case "values": o["values"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;

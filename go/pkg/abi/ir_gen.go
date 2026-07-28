@@ -43,6 +43,8 @@ type IRFeatureEntry struct {
 	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
 	// Labels The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" cbor:"labels,omitempty"`
+	// CatalogAnnotations The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
+	CatalogAnnotations map[string]string `json:"catalog_annotations,omitempty" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
 	// Binding Names the host Component attachment slot this attachment fills, or "free" when it fills no declared slot. The pairing is by name — a deployment fills a slot by attaching a Feature under the slot's name — so the value is an exact key from the resolved Component's declared slot set, never anything read out of the name itself. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
 	Binding string `json:"binding,omitempty" yaml:"binding,omitempty" cbor:"binding,omitempty"`
 	// Values Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
@@ -415,6 +417,31 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 			buf.WriteByte('}')
 		}
 	}
+	if len(t.CatalogAnnotations) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"catalog_annotations\":")
+		{
+			keys := make([]string, 0, len(t.CatalogAnnotations))
+			for k := range t.CatalogAnnotations {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			buf.WriteByte('{')
+			for i, k := range keys {
+				if i > 0 {
+					buf.WriteByte(',')
+				}
+				writeJSONString(&buf, k)
+				buf.WriteByte(':')
+				mv := t.CatalogAnnotations[k]
+				writeJSONString(&buf, mv)
+			}
+			buf.WriteByte('}')
+		}
+	}
 	if t.Binding != "" {
 		if !first {
 			buf.WriteByte(',')
@@ -596,6 +623,27 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 					mv = s
 				}
 				t.Labels[mk] = mv
+			}
+			if err := expectDelim(dec, '}'); err != nil {
+				return err
+			}
+		case "catalog_annotations":
+			t.CatalogAnnotations = make(map[string]string)
+			if err := expectDelim(dec, '{'); err != nil {
+				return err
+			}
+			for dec.More() {
+				mk, err := readKey(dec)
+				if err != nil {
+					return err
+				}
+				var mv string
+				if s, err := readString(dec); err != nil {
+					return err
+				} else {
+					mv = s
+				}
+				t.CatalogAnnotations[mk] = mv
 			}
 			if err := expectDelim(dec, '}'); err != nil {
 				return err
@@ -2410,6 +2458,9 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.ValuesProvenance) != 0 {
 		n++
 	}
+	if len(t.CatalogAnnotations) != 0 {
+		n++
+	}
 	dst = appendCBORHead(dst, 5, uint64(n))
 	var err error
 	dst = appendCBORTextString(dst, "type")
@@ -2504,6 +2555,22 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 			}
 		}
 	}
+	if len(t.CatalogAnnotations) != 0 {
+		dst = appendCBORTextString(dst, "catalog_annotations")
+		{
+			keys := make([]string, 0, len(t.CatalogAnnotations))
+			for k := range t.CatalogAnnotations {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.CatalogAnnotations[k]
+				dst = appendCBORTextString(dst, mv)
+			}
+		}
+	}
 	return dst, nil
 }
 
@@ -2558,6 +2625,28 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 					m[mk] = mv
 				}
 				t.Labels = m
+			}
+		case "catalog_annotations":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.CatalogAnnotations = m
 			}
 		case "binding":
 			if s, err := dec.readTextString(); err != nil {
