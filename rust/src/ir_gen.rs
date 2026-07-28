@@ -43,7 +43,7 @@ pub struct FieldProvenance {
     pub overridden_annotation: Option<Box<FieldProvenance>>,
 }
 
-/// One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature (labeled kind=secret), an identity Feature — so no family gets a lossier projection than another. For a credential, values carries pointers into a secret store, never resolved plaintext.
+/// One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature, an identity Feature — so no family gets a lossier projection than another. What a credential attachment's values carries is the author's choice: a by-reference credential carries a pointer into a secret store, a by-value one carries the material itself, and the compiler carries whichever was written verbatim without resolving either.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRFeatureEntry {
     /// URI of the Catalog Feature this attachment requests.
@@ -51,7 +51,13 @@ pub struct IRFeatureEntry {
     pub r#type: String,
     /// The exact semantic version resolved during compilation.
     pub resolved_version: String,
-    /// Operational configuration payload for the attachment; vault pointers for credentials.
+    /// The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub labels: BTreeMap<String, String>,
+    /// Names the host Component attachment slot this attachment fills, or "free" when it fills no declared slot. The pairing is by name — a deployment fills a slot by attaching a Feature under the slot's name — so the value is an exact key from the resolved Component's declared slot set, never anything read out of the name itself. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub binding: String,
+    /// Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub values: Option<Box<RawValue>>,
     /// Per-instance physical sizing for this attachment.
@@ -381,8 +387,10 @@ impl IRFeatureEntry {
         let mut n: u64 = 2;
         if self.infra.is_some() { n += 1; }
         if self.inject.is_some() { n += 1; }
+        if !self.labels.is_empty() { n += 1; }
         if !self.origin.is_empty() { n += 1; }
         if self.values.is_some() { n += 1; }
+        if !self.binding.is_empty() { n += 1; }
         if self.sensitive { n += 1; }
         if !self.annotation_key.is_empty() { n += 1; }
         if !self.infra_provenance.is_empty() { n += 1; }
@@ -400,6 +408,20 @@ impl IRFeatureEntry {
             crate::cbor_gen::write_text(out, "inject");
             crate::cbor_gen::write_bytes(out, x.get().as_bytes());
         }
+        if !self.labels.is_empty() {
+            crate::cbor_gen::write_text(out, "labels");
+            {
+                let c = &self.labels;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
         if !self.origin.is_empty() {
             crate::cbor_gen::write_text(out, "origin");
             crate::cbor_gen::write_text(out, &self.origin);
@@ -407,6 +429,10 @@ impl IRFeatureEntry {
         if let Some(ref x) = self.values {
             crate::cbor_gen::write_text(out, "values");
             crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
+        if !self.binding.is_empty() {
+            crate::cbor_gen::write_text(out, "binding");
+            crate::cbor_gen::write_text(out, &self.binding);
         }
         if self.sensitive {
             crate::cbor_gen::write_text(out, "sensitive");
@@ -467,6 +493,8 @@ impl IRFeatureEntry {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_type: Option<String> = None;
         let mut f_resolved_version: Option<String> = None;
+        let mut f_labels: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_binding: String = String::new();
         let mut f_values: Option<Box<RawValue>> = None;
         let mut f_infra: Option<Box<RawValue>> = None;
         let mut f_inject: Option<Box<RawValue>> = None;
@@ -483,6 +511,8 @@ impl IRFeatureEntry {
             match k.as_str() {
                 "type" => f_type = Some(dec.read_text()?),
                 "resolved_version" => f_resolved_version = Some(dec.read_text()?),
+                "labels" => f_labels = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "binding" => f_binding = dec.read_text()?,
                 "values" => f_values = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "infra" => f_infra = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "inject" => f_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
@@ -499,6 +529,8 @@ impl IRFeatureEntry {
         Ok(Self {
             r#type: f_type.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field type".to_string()))?,
             resolved_version: f_resolved_version.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field resolved_version".to_string()))?,
+            labels: f_labels,
+            binding: f_binding,
             values: f_values,
             infra: f_infra,
             inject: f_inject,

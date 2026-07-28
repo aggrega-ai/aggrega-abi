@@ -42,13 +42,17 @@ export interface FieldProvenance {
   overridden_annotation?: FieldProvenance;
 }
 
-// One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature (labeled kind=secret), an identity Feature — so no family gets a lossier projection than another. For a credential, values carries pointers into a secret store, never resolved plaintext.
+// One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature, an identity Feature — so no family gets a lossier projection than another. What a credential attachment's values carries is the author's choice: a by-reference credential carries a pointer into a secret store, a by-value one carries the material itself, and the compiler carries whichever was written verbatim without resolving either.
 export interface IRFeatureEntry {
   // URI of the Catalog Feature this attachment requests.
   type: string;
   // The exact semantic version resolved during compilation.
   resolved_version: string;
-  // Operational configuration payload for the attachment; vault pointers for credentials.
+  // The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
+  labels?: Record<string, string>;
+  // Names the host Component attachment slot this attachment fills, or "free" when it fills no declared slot. The pairing is by name — a deployment fills a slot by attaching a Feature under the slot's name — so the value is an exact key from the resolved Component's declared slot set, never anything read out of the name itself. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
+  binding?: string;
+  // Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
   values?: unknown;
   // Per-instance physical sizing for this attachment.
   infra?: unknown;
@@ -215,6 +219,8 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   const parts: string[] = [];
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
   parts.push(`${jstr("resolved_version")}:${jstr(v.resolved_version)}`);
+  if (v.labels !== undefined && Object.keys(v.labels).length > 0) parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
+  if (v.binding !== undefined && v.binding !== "") parts.push(`${jstr("binding")}:${jstr(v.binding)}`);
   if (v.values !== undefined && v.values !== null) parts.push(`${jstr("values")}:${encodeOpaque(v.values)}`);
   if (v.infra !== undefined && v.infra !== null) parts.push(`${jstr("infra")}:${encodeOpaque(v.infra)}`);
   if (v.inject !== undefined && v.inject !== null) parts.push(`${jstr("inject")}:${encodeOpaque(v.inject)}`);
@@ -467,8 +473,10 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   let n = 2;
   if (v.infra !== undefined && v.infra !== null) n++;
   if (v.inject !== undefined && v.inject !== null) n++;
+  if (v.labels !== undefined && Object.keys(v.labels).length > 0) n++;
   if (v.origin !== undefined && v.origin !== "") n++;
   if (v.values !== undefined && v.values !== null) n++;
+  if (v.binding !== undefined && v.binding !== "") n++;
   if (v.sensitive !== undefined && v.sensitive !== false) n++;
   if (v.annotation_key !== undefined && v.annotation_key !== "") n++;
   if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) n++;
@@ -486,6 +494,18 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
     writeText(out, "inject");
     writeBytes(out, utf8Encode(JSON.stringify(v.inject)));
   }
+  if (v.labels !== undefined && Object.keys(v.labels).length > 0) {
+    writeText(out, "labels");
+    {
+      const m0 = v.labels;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
   if (v.origin !== undefined && v.origin !== "") {
     writeText(out, "origin");
     writeText(out, v.origin);
@@ -493,6 +513,10 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.values !== undefined && v.values !== null) {
     writeText(out, "values");
     writeBytes(out, utf8Encode(JSON.stringify(v.values)));
+  }
+  if (v.binding !== undefined && v.binding !== "") {
+    writeText(out, "binding");
+    writeText(out, v.binding);
   }
   if (v.sensitive !== undefined && v.sensitive !== false) {
     writeText(out, "sensitive");
@@ -551,6 +575,8 @@ export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
     switch (k) {
       case "type": o["type"] = dec.readText(); break;
       case "resolved_version": o["resolved_version"] = dec.readText(); break;
+      case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "binding": o["binding"] = dec.readText(); break;
       case "values": o["values"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "inject": o["inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;

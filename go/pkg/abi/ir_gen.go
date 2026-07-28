@@ -35,13 +35,17 @@ type FieldProvenance struct {
 	OverriddenAnnotation *FieldProvenance `json:"overridden_annotation,omitempty" yaml:"overridden_annotation,omitempty" cbor:"overridden_annotation,omitempty"`
 }
 
-// IRFeatureEntry One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature (labeled kind=secret), an identity Feature — so no family gets a lossier projection than another. For a credential, values carries pointers into a secret store, never resolved plaintext.
+// IRFeatureEntry One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature, an identity Feature — so no family gets a lossier projection than another. What a credential attachment's values carries is the author's choice: a by-reference credential carries a pointer into a secret store, a by-value one carries the material itself, and the compiler carries whichever was written verbatim without resolving either.
 type IRFeatureEntry struct {
 	// Type URI of the Catalog Feature this attachment requests.
 	Type string `json:"type" yaml:"type" cbor:"type"`
 	// ResolvedVersion The exact semantic version resolved during compilation.
 	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
-	// Values Operational configuration payload for the attachment; vault pointers for credentials.
+	// Labels The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" cbor:"labels,omitempty"`
+	// Binding Names the host Component attachment slot this attachment fills, or "free" when it fills no declared slot. The pairing is by name — a deployment fills a slot by attaching a Feature under the slot's name — so the value is an exact key from the resolved Component's declared slot set, never anything read out of the name itself. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
+	Binding string `json:"binding,omitempty" yaml:"binding,omitempty" cbor:"binding,omitempty"`
+	// Values Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
 	Values json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
 	// Infra Per-instance physical sizing for this attachment.
 	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
@@ -386,6 +390,39 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 	first = false
 	buf.WriteString("\"resolved_version\":")
 	writeJSONString(&buf, t.ResolvedVersion)
+	if len(t.Labels) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"labels\":")
+		{
+			keys := make([]string, 0, len(t.Labels))
+			for k := range t.Labels {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			buf.WriteByte('{')
+			for i, k := range keys {
+				if i > 0 {
+					buf.WriteByte(',')
+				}
+				writeJSONString(&buf, k)
+				buf.WriteByte(':')
+				mv := t.Labels[k]
+				writeJSONString(&buf, mv)
+			}
+			buf.WriteByte('}')
+		}
+	}
+	if t.Binding != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"binding\":")
+		writeJSONString(&buf, t.Binding)
+	}
 	if len(t.Values) != 0 {
 		if !first {
 			buf.WriteByte(',')
@@ -541,6 +578,33 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.ResolvedVersion = s
+			}
+		case "labels":
+			t.Labels = make(map[string]string)
+			if err := expectDelim(dec, '{'); err != nil {
+				return err
+			}
+			for dec.More() {
+				mk, err := readKey(dec)
+				if err != nil {
+					return err
+				}
+				var mv string
+				if s, err := readString(dec); err != nil {
+					return err
+				} else {
+					mv = s
+				}
+				t.Labels[mk] = mv
+			}
+			if err := expectDelim(dec, '}'); err != nil {
+				return err
+			}
+		case "binding":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Binding = s
 			}
 		case "values":
 			if raw, err := readRaw(dec, data); err != nil {
@@ -2316,10 +2380,16 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Inject) != 0 {
 		n++
 	}
+	if len(t.Labels) != 0 {
+		n++
+	}
 	if t.Origin != "" {
 		n++
 	}
 	if len(t.Values) != 0 {
+		n++
+	}
+	if t.Binding != "" {
 		n++
 	}
 	if t.Sensitive != false {
@@ -2352,6 +2422,22 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "inject")
 		dst = appendCBORByteString(dst, t.Inject)
 	}
+	if len(t.Labels) != 0 {
+		dst = appendCBORTextString(dst, "labels")
+		{
+			keys := make([]string, 0, len(t.Labels))
+			for k := range t.Labels {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.Labels[k]
+				dst = appendCBORTextString(dst, mv)
+			}
+		}
+	}
 	if t.Origin != "" {
 		dst = appendCBORTextString(dst, "origin")
 		dst = appendCBORTextString(dst, t.Origin)
@@ -2359,6 +2445,10 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Values) != 0 {
 		dst = appendCBORTextString(dst, "values")
 		dst = appendCBORByteString(dst, t.Values)
+	}
+	if t.Binding != "" {
+		dst = appendCBORTextString(dst, "binding")
+		dst = appendCBORTextString(dst, t.Binding)
 	}
 	if t.Sensitive != false {
 		dst = appendCBORTextString(dst, "sensitive")
@@ -2446,6 +2536,34 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 				return err
 			} else {
 				t.ResolvedVersion = s
+			}
+		case "labels":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.Labels = m
+			}
+		case "binding":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Binding = s
 			}
 		case "values":
 			if v, err := dec.readByteString(); err != nil {
