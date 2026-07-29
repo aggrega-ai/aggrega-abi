@@ -26,9 +26,6 @@ pub struct LinterInput {
     /// Parsed structure of the previous-version entity, for rules that perform pairwise comparison (schema-evolution). Omitted when the rule does not need a previous-version reference (e.g., first publication, structural-only rules).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous: Option<Box<RawValue>>,
-    /// Parsed structure of the resolved parent entity in the extends chain, for rules that perform child-vs-parent comparison (narrowing). The host caller resolves the entity's spec.extends URI before invocation. Omitted when no parent exists or the rule does not need parent context.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub parent: Option<Box<RawValue>>,
     /// Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_path: String,
@@ -50,15 +47,9 @@ pub struct LinterOutput {
 /// Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Policies {
-    /// When true, the narrowing rule enforces the monotonic-narrowing invariant: every extending entity narrows the parent's schema (no widening, no semantic divergence). When false, the rule is suppressed.
-    #[serde(default, skip_serializing_if = "is_default")]
-    pub enforce_monotonic_narrowing: bool,
     /// When true, published artefacts are immutable at the registry path; re-publishing the same version is rejected. When false, the rule is suppressed (development-only).
     #[serde(default, skip_serializing_if = "is_default")]
     pub enforce_immutability: bool,
-    /// Per-entity exemptions from the narrowing-violation rule. Each entry names an entity and the specific schema paths that may legitimately widen.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub narrowing_exemptions: Vec<NarrowingExemption>,
     /// When true, $dynamicAnchor / $dynamicRef usage in SchemaLibrary entries is permitted (suppresses the dynamic_refs rule). Default false.
     #[serde(default, skip_serializing_if = "is_default")]
     pub allow_dynamic_refs: bool,
@@ -79,14 +70,6 @@ pub struct Policies {
     pub allow_category_mismatches: bool,
 }
 
-/// One per-entity exemption from the narrowing-violation rule. entity names the catalog entity; paths enumerates the schema paths within that entity that may legitimately widen; reason is the human-readable justification surfaced to reviewers.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct NarrowingExemption {
-    pub entity: String,
-    pub paths: Vec<String>,
-    pub reason: String,
-}
-
 
 impl LinterInput {
     /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
@@ -99,14 +82,9 @@ impl LinterInput {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 4;
-        if self.parent.is_some() { n += 1; }
         if self.previous.is_some() { n += 1; }
         if !self.source_path.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
-        if let Some(ref x) = self.parent {
-            crate::cbor_gen::write_text(out, "parent");
-            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
-        }
         crate::cbor_gen::write_text(out, "rule_id");
         crate::cbor_gen::write_text(out, &self.rule_id);
         crate::cbor_gen::write_text(out, "policies");
@@ -138,7 +116,6 @@ impl LinterInput {
         let mut f_entity_kind: Option<String> = None;
         let mut f_proposed: Option<Box<RawValue>> = None;
         let mut f_previous: Option<Box<RawValue>> = None;
-        let mut f_parent: Option<Box<RawValue>> = None;
         let mut f_source_path: String = String::new();
         let mut f_policies: Policies = Policies::default();
         let n = dec.read_map_header()?;
@@ -149,7 +126,6 @@ impl LinterInput {
                 "entity_kind" => f_entity_kind = Some(dec.read_text()?),
                 "proposed" => f_proposed = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "previous" => f_previous = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
-                "parent" => f_parent = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "source_path" => f_source_path = dec.read_text()?,
                 "policies" => f_policies = Policies::decode_cbor_from(dec)?,
                 _ => dec.skip()?,
@@ -160,7 +136,6 @@ impl LinterInput {
             entity_kind: f_entity_kind.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field entity_kind".to_string()))?,
             proposed: f_proposed.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field proposed".to_string()))?,
             previous: f_previous,
-            parent: f_parent,
             source_path: f_source_path,
             policies: f_policies,
         })
@@ -235,11 +210,9 @@ impl Policies {
         if self.allow_dynamic_refs { n += 1; }
         if self.allow_id_overrides { n += 1; }
         if self.enforce_immutability { n += 1; }
-        if !self.narrowing_exemptions.is_empty() { n += 1; }
         if self.allow_aggrega_ai_prefix { n += 1; }
         if self.allow_nonstandard_names { n += 1; }
         if self.allow_category_mismatches { n += 1; }
-        if self.enforce_monotonic_narrowing { n += 1; }
         if self.allow_direct_x_aggrega_extensions { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if self.allow_dynamic_refs {
@@ -254,16 +227,6 @@ impl Policies {
             crate::cbor_gen::write_text(out, "enforce_immutability");
             crate::cbor_gen::write_bool(out, *&self.enforce_immutability);
         }
-        if !self.narrowing_exemptions.is_empty() {
-            crate::cbor_gen::write_text(out, "narrowing_exemptions");
-            {
-                let c = &self.narrowing_exemptions;
-                crate::cbor_gen::write_head(out, 4, c.len() as u64);
-                for ev in c {
-                    ev.append_cbor(out)?;
-                }
-            }
-        }
         if self.allow_aggrega_ai_prefix {
             crate::cbor_gen::write_text(out, "allow_aggrega_ai_prefix");
             crate::cbor_gen::write_bool(out, *&self.allow_aggrega_ai_prefix);
@@ -275,10 +238,6 @@ impl Policies {
         if self.allow_category_mismatches {
             crate::cbor_gen::write_text(out, "allow_category_mismatches");
             crate::cbor_gen::write_bool(out, *&self.allow_category_mismatches);
-        }
-        if self.enforce_monotonic_narrowing {
-            crate::cbor_gen::write_text(out, "enforce_monotonic_narrowing");
-            crate::cbor_gen::write_bool(out, *&self.enforce_monotonic_narrowing);
         }
         if self.allow_direct_x_aggrega_extensions {
             crate::cbor_gen::write_text(out, "allow_direct_x_aggrega_extensions");
@@ -295,9 +254,7 @@ impl Policies {
     }
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_enforce_monotonic_narrowing: bool = false;
         let mut f_enforce_immutability: bool = false;
-        let mut f_narrowing_exemptions: Vec<NarrowingExemption> = Vec::new();
         let mut f_allow_dynamic_refs: bool = false;
         let mut f_allow_id_overrides: bool = false;
         let mut f_allow_direct_x_aggrega_extensions: bool = false;
@@ -308,9 +265,7 @@ impl Policies {
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
-                "enforce_monotonic_narrowing" => f_enforce_monotonic_narrowing = dec.read_bool()?,
                 "enforce_immutability" => f_enforce_immutability = dec.read_bool()?,
-                "narrowing_exemptions" => f_narrowing_exemptions = { let sn = dec.read_array_header()?; let mut sv: Vec<NarrowingExemption> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(NarrowingExemption::decode_cbor_from(dec)?); } sv },
                 "allow_dynamic_refs" => f_allow_dynamic_refs = dec.read_bool()?,
                 "allow_id_overrides" => f_allow_id_overrides = dec.read_bool()?,
                 "allow_direct_x_aggrega_extensions" => f_allow_direct_x_aggrega_extensions = dec.read_bool()?,
@@ -321,71 +276,13 @@ impl Policies {
             }
         }
         Ok(Self {
-            enforce_monotonic_narrowing: f_enforce_monotonic_narrowing,
             enforce_immutability: f_enforce_immutability,
-            narrowing_exemptions: f_narrowing_exemptions,
             allow_dynamic_refs: f_allow_dynamic_refs,
             allow_id_overrides: f_allow_id_overrides,
             allow_direct_x_aggrega_extensions: f_allow_direct_x_aggrega_extensions,
             allow_aggrega_ai_prefix: f_allow_aggrega_ai_prefix,
             allow_nonstandard_names: f_allow_nonstandard_names,
             allow_category_mismatches: f_allow_category_mismatches,
-        })
-    }
-}
-
-impl NarrowingExemption {
-    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
-    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
-    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
-        let mut out = Vec::new();
-        self.append_cbor(&mut out)?;
-        Ok(out)
-    }
-
-    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let n: u64 = 3;
-        crate::cbor_gen::write_head(out, 5, n);
-        crate::cbor_gen::write_text(out, "paths");
-        {
-            let c = &self.paths;
-            crate::cbor_gen::write_head(out, 4, c.len() as u64);
-            for ev in c {
-                crate::cbor_gen::write_text(out, ev);
-            }
-        }
-        crate::cbor_gen::write_text(out, "entity");
-        crate::cbor_gen::write_text(out, &self.entity);
-        crate::cbor_gen::write_text(out, "reason");
-        crate::cbor_gen::write_text(out, &self.reason);
-        Ok(())
-    }
-
-    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
-    /// skipped.
-    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut dec = crate::cbor_gen::CborDec::new(data);
-        Self::decode_cbor_from(&mut dec)
-    }
-
-    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_entity: Option<String> = None;
-        let mut f_paths: Option<Vec<String>> = None;
-        let mut f_reason: Option<String> = None;
-        let n = dec.read_map_header()?;
-        for _ in 0..n {
-            let k = dec.read_text()?;
-            match k.as_str() {
-                "entity" => f_entity = Some(dec.read_text()?),
-                "paths" => f_paths = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }),
-                "reason" => f_reason = Some(dec.read_text()?),
-                _ => dec.skip()?,
-            }
-        }
-        Ok(Self {
-            entity: f_entity.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field entity".to_string()))?,
-            paths: f_paths.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field paths".to_string()))?,
-            reason: f_reason.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field reason".to_string()))?,
         })
     }
 }

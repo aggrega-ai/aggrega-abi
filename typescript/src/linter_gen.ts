@@ -34,8 +34,6 @@ export interface LinterInput {
   proposed: unknown;
   // Parsed structure of the previous-version entity, for rules that perform pairwise comparison (schema-evolution). Omitted when the rule does not need a previous-version reference (e.g., first publication, structural-only rules).
   previous?: unknown;
-  // Parsed structure of the resolved parent entity in the extends chain, for rules that perform child-vs-parent comparison (narrowing). The host caller resolves the entity's spec.extends URI before invocation. Omitted when no parent exists or the rule does not need parent context.
-  parent?: unknown;
   // Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
   source_path?: string;
   // The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
@@ -52,12 +50,8 @@ export interface LinterOutput {
 
 // Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.
 export interface Policies {
-  // When true, the narrowing rule enforces the monotonic-narrowing invariant: every extending entity narrows the parent's schema (no widening, no semantic divergence). When false, the rule is suppressed.
-  enforce_monotonic_narrowing?: boolean;
   // When true, published artefacts are immutable at the registry path; re-publishing the same version is rejected. When false, the rule is suppressed (development-only).
   enforce_immutability?: boolean;
-  // Per-entity exemptions from the narrowing-violation rule. Each entry names an entity and the specific schema paths that may legitimately widen.
-  narrowing_exemptions?: NarrowingExemption[];
   // When true, $dynamicAnchor / $dynamicRef usage in SchemaLibrary entries is permitted (suppresses the dynamic_refs rule). Default false.
   allow_dynamic_refs?: boolean;
   // When true, $id overrides in SchemaLibrary entries are permitted (suppresses the id_overrides rule). Default false.
@@ -72,20 +66,12 @@ export interface Policies {
   allow_category_mismatches?: boolean;
 }
 
-// One per-entity exemption from the narrowing-violation rule. entity names the catalog entity; paths enumerates the schema paths within that entity that may legitimately widen; reason is the human-readable justification surfaced to reviewers.
-export interface NarrowingExemption {
-  entity: string;
-  paths: string[];
-  reason: string;
-}
-
 export function encodeLinterInput(v: LinterInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("rule_id")}:${jstr(v.rule_id)}`);
   parts.push(`${jstr("entity_kind")}:${jstr(v.entity_kind)}`);
   parts.push(`${jstr("proposed")}:${encodeOpaque(v.proposed)}`);
   if (v.previous !== undefined && v.previous !== null) parts.push(`${jstr("previous")}:${encodeOpaque(v.previous)}`);
-  if (v.parent !== undefined && v.parent !== null) parts.push(`${jstr("parent")}:${encodeOpaque(v.parent)}`);
   if (v.source_path !== undefined && v.source_path !== "") parts.push(`${jstr("source_path")}:${jstr(v.source_path)}`);
   if (v.policies !== undefined) parts.push(`${jstr("policies")}:${encodePolicies(v.policies)}`);
   return `{${parts.join(",")}}`;
@@ -108,9 +94,7 @@ export function decodeLinterOutput(data: string): LinterOutput {
 
 export function encodePolicies(v: Policies): string {
   const parts: string[] = [];
-  if (v.enforce_monotonic_narrowing !== undefined && v.enforce_monotonic_narrowing !== false) parts.push(`${jstr("enforce_monotonic_narrowing")}:${String(v.enforce_monotonic_narrowing)}`);
   if (v.enforce_immutability !== undefined && v.enforce_immutability !== false) parts.push(`${jstr("enforce_immutability")}:${String(v.enforce_immutability)}`);
-  if (v.narrowing_exemptions !== undefined && v.narrowing_exemptions.length > 0) parts.push(`${jstr("narrowing_exemptions")}:${`[${v.narrowing_exemptions!.map((e0) => encodeNarrowingExemption(e0)).join(",")}]`}`);
   if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) parts.push(`${jstr("allow_dynamic_refs")}:${String(v.allow_dynamic_refs)}`);
   if (v.allow_id_overrides !== undefined && v.allow_id_overrides !== false) parts.push(`${jstr("allow_id_overrides")}:${String(v.allow_id_overrides)}`);
   if (v.allow_direct_x_aggrega_extensions !== undefined && v.allow_direct_x_aggrega_extensions !== false) parts.push(`${jstr("allow_direct_x_aggrega_extensions")}:${String(v.allow_direct_x_aggrega_extensions)}`);
@@ -124,18 +108,6 @@ export function decodePolicies(data: string): Policies {
   return JSON.parse(data) as Policies;
 }
 
-export function encodeNarrowingExemption(v: NarrowingExemption): string {
-  const parts: string[] = [];
-  parts.push(`${jstr("entity")}:${jstr(v.entity)}`);
-  parts.push(`${jstr("paths")}:${`[${v.paths!.map((e0) => jstr(e0)).join(",")}]`}`);
-  parts.push(`${jstr("reason")}:${jstr(v.reason)}`);
-  return `{${parts.join(",")}}`;
-}
-
-export function decodeNarrowingExemption(data: string): NarrowingExemption {
-  return JSON.parse(data) as NarrowingExemption;
-}
-
 export function encodeCBORLinterInput(v: LinterInput): Uint8Array {
   const out: number[] = [];
   appendCBORLinterInput(out, v);
@@ -144,15 +116,10 @@ export function encodeCBORLinterInput(v: LinterInput): Uint8Array {
 
 export function appendCBORLinterInput(out: number[], v: LinterInput): void {
   let n = 3;
-  if (v.parent !== undefined && v.parent !== null) n++;
   if (v.policies !== undefined) n++;
   if (v.previous !== undefined && v.previous !== null) n++;
   if (v.source_path !== undefined && v.source_path !== "") n++;
   writeHead(out, 5, n);
-  if (v.parent !== undefined && v.parent !== null) {
-    writeText(out, "parent");
-    writeBytes(out, utf8Encode(JSON.stringify(v.parent)));
-  }
   writeText(out, "rule_id");
   writeText(out, v.rule_id);
   if (v.policies !== undefined) {
@@ -188,7 +155,6 @@ export function decodeCBORLinterInputFrom(dec: CborDec): LinterInput {
       case "entity_kind": o["entity_kind"] = dec.readText(); break;
       case "proposed": o["proposed"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "previous": o["previous"] = JSON.parse(utf8Decode(dec.readBytes())); break;
-      case "parent": o["parent"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "source_path": o["source_path"] = dec.readText(); break;
       case "policies": o["policies"] = decodeCBORPoliciesFrom(dec); break;
       default: dec.skip();
@@ -251,11 +217,9 @@ export function appendCBORPolicies(out: number[], v: Policies): void {
   if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) n++;
   if (v.allow_id_overrides !== undefined && v.allow_id_overrides !== false) n++;
   if (v.enforce_immutability !== undefined && v.enforce_immutability !== false) n++;
-  if (v.narrowing_exemptions !== undefined && v.narrowing_exemptions.length > 0) n++;
   if (v.allow_aggrega_ai_prefix !== undefined && v.allow_aggrega_ai_prefix !== false) n++;
   if (v.allow_nonstandard_names !== undefined && v.allow_nonstandard_names !== false) n++;
   if (v.allow_category_mismatches !== undefined && v.allow_category_mismatches !== false) n++;
-  if (v.enforce_monotonic_narrowing !== undefined && v.enforce_monotonic_narrowing !== false) n++;
   if (v.allow_direct_x_aggrega_extensions !== undefined && v.allow_direct_x_aggrega_extensions !== false) n++;
   writeHead(out, 5, n);
   if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) {
@@ -270,16 +234,6 @@ export function appendCBORPolicies(out: number[], v: Policies): void {
     writeText(out, "enforce_immutability");
     writeBool(out, v.enforce_immutability);
   }
-  if (v.narrowing_exemptions !== undefined && v.narrowing_exemptions.length > 0) {
-    writeText(out, "narrowing_exemptions");
-    {
-      const a0 = v.narrowing_exemptions;
-      writeHead(out, 4, a0.length);
-      for (const ee0 of a0) {
-        appendCBORNarrowingExemption(out, ee0);
-      }
-    }
-  }
   if (v.allow_aggrega_ai_prefix !== undefined && v.allow_aggrega_ai_prefix !== false) {
     writeText(out, "allow_aggrega_ai_prefix");
     writeBool(out, v.allow_aggrega_ai_prefix);
@@ -291,10 +245,6 @@ export function appendCBORPolicies(out: number[], v: Policies): void {
   if (v.allow_category_mismatches !== undefined && v.allow_category_mismatches !== false) {
     writeText(out, "allow_category_mismatches");
     writeBool(out, v.allow_category_mismatches);
-  }
-  if (v.enforce_monotonic_narrowing !== undefined && v.enforce_monotonic_narrowing !== false) {
-    writeText(out, "enforce_monotonic_narrowing");
-    writeBool(out, v.enforce_monotonic_narrowing);
   }
   if (v.allow_direct_x_aggrega_extensions !== undefined && v.allow_direct_x_aggrega_extensions !== false) {
     writeText(out, "allow_direct_x_aggrega_extensions");
@@ -313,9 +263,7 @@ export function decodeCBORPoliciesFrom(dec: CborDec): Policies {
   for (let i = 0; i < n; i++) {
     const k = dec.readText();
     switch (k) {
-      case "enforce_monotonic_narrowing": o["enforce_monotonic_narrowing"] = dec.readBool(); break;
       case "enforce_immutability": o["enforce_immutability"] = dec.readBool(); break;
-      case "narrowing_exemptions": o["narrowing_exemptions"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORNarrowingExemptionFrom(dec)); } return a; })(); break;
       case "allow_dynamic_refs": o["allow_dynamic_refs"] = dec.readBool(); break;
       case "allow_id_overrides": o["allow_id_overrides"] = dec.readBool(); break;
       case "allow_direct_x_aggrega_extensions": o["allow_direct_x_aggrega_extensions"] = dec.readBool(); break;
@@ -326,48 +274,5 @@ export function decodeCBORPoliciesFrom(dec: CborDec): Policies {
     }
   }
   return o as Policies;
-}
-
-export function encodeCBORNarrowingExemption(v: NarrowingExemption): Uint8Array {
-  const out: number[] = [];
-  appendCBORNarrowingExemption(out, v);
-  return new Uint8Array(out);
-}
-
-export function appendCBORNarrowingExemption(out: number[], v: NarrowingExemption): void {
-  let n = 3;
-  writeHead(out, 5, n);
-  writeText(out, "paths");
-  {
-    const a0 = v.paths;
-    writeHead(out, 4, a0.length);
-    for (const ee0 of a0) {
-      writeText(out, ee0);
-    }
-  }
-  writeText(out, "entity");
-  writeText(out, v.entity);
-  writeText(out, "reason");
-  writeText(out, v.reason);
-}
-
-export function decodeCBORNarrowingExemption(data: Uint8Array): NarrowingExemption {
-  const dec = new CborDec(data);
-  return decodeCBORNarrowingExemptionFrom(dec);
-}
-
-export function decodeCBORNarrowingExemptionFrom(dec: CborDec): NarrowingExemption {
-  const o: any = {};
-  const n = dec.readMapHeader();
-  for (let i = 0; i < n; i++) {
-    const k = dec.readText();
-    switch (k) {
-      case "entity": o["entity"] = dec.readText(); break;
-      case "paths": o["paths"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
-      case "reason": o["reason"] = dec.readText(); break;
-      default: dec.skip();
-    }
-  }
-  return o as NarrowingExemption;
 }
 
