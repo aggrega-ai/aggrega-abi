@@ -13,7 +13,7 @@ import (
 	"encoding/json"
 )
 
-// PolicyInput The payload Step 4 hands to the policy socket: the full IR graph (the same shape the Topology Builder emits) plus the precalculated routing paths the analyzer enumerates alongside.
+// PolicyInput The payload static analysis hands to the policy socket: the full IR graph (the same shape the Topology Builder emits) plus the precalculated routing paths the analyzer enumerates alongside.
 type PolicyInput struct {
 	// Graph The full capability-agnostic IR graph, single-sourced from ir-v1alpha1.schema.json. The policy plugin reasons over the complete node/edge/attachment detail rather than a narrow projection.
 	Graph IRGraph `json:"graph" yaml:"graph" cbor:"graph"`

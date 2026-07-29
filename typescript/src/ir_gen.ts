@@ -139,9 +139,9 @@ export interface IREdge {
   origin_feature_instance?: string;
   // True when this edge was created by a Release wiring a declared-but-unbound socket to an existing component. Marks edge AUTHORSHIP, not configuration: a developer-declared edge that a Release merely supplied infra for stays Aggregate-origin (origin_release unset; its Release infra appears in the edge's infra map). origin_feature set => Feature-origin; origin_release true => Release-origin; neither => Aggregate-origin.
   origin_release?: boolean;
-  // Resolved per-connection developer values for this edge (from the Aggregate edge), validated at Step 1 against the valueSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected into the consuming node's render context at .uses.<alias>.values. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
+  // Resolved per-connection developer values for this edge (from the Aggregate edge), validated at resolution against the valueSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected into the consuming node's render context at .uses.<alias>.values. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
   values?: unknown;
-  // Resolved per-connection infra for this edge (Aggregate-seeded and/or Release-supplied), validated at Step 1 against the infraSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected at .uses.<alias>.infra. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
+  // Resolved per-connection infra for this edge (Aggregate-seeded and/or Release-supplied), validated at resolution against the infraSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected at .uses.<alias>.infra. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
   infra?: unknown;
   // Agnostic injection routing. Maps local variables to Target provides keys.
   inject?: unknown;

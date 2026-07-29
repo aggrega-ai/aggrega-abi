@@ -26,7 +26,7 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// The payload Step 4 hands to the policy socket: the full IR graph (the same shape the Topology Builder emits) plus the precalculated routing paths the analyzer enumerates alongside.
+// The payload static analysis hands to the policy socket: the full IR graph (the same shape the Topology Builder emits) plus the precalculated routing paths the analyzer enumerates alongside.
 export interface PolicyInput {
   // The full capability-agnostic IR graph, single-sourced from ir-v1alpha1.schema.json. The policy plugin reasons over the complete node/edge/attachment detail rather than a narrow projection.
   graph: IRGraph;
