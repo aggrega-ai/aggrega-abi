@@ -9,9 +9,24 @@
 // and produce one wire. Each vector carries a JSON document (<Name>.golden.json)
 // and the canonical CBOR bytes (<Name>.cbor.hex).
 //
-// Two contracts are proven per vector: the JSON wire round-trips byte-identical
-// through the generated codec, and the generated CBOR encoder reproduces the
-// committed canonical bytes and decodes back to a byte-stable value.
+// Four contracts are proven per vector. The JSON wire round-trips byte-identical
+// through the generated codec. The generated CBOR encoder reproduces the committed
+// canonical bytes. Those bytes decode back to a byte-stable value. And the
+// COMMITTED CBOR bytes decode into a value whose JSON encoding is the committed
+// JSON golden.
+//
+// That fourth contract carries two assertions the other three structurally cannot
+// make. It is the only one that feeds the CBOR decoder the committed canonical
+// bytes — the other CBOR legs decode this codec's own fresh output, so an encoder
+// and decoder that shared a compensating defect would agree with each other and
+// stay green. And it is the only one that can observe a map-key sort being lost
+// from the JSON encoder: the two wire forms order map keys by different rules —
+// JSON lexicographically, CBOR by the encoded key bytes, whose length head leads —
+// so a value arriving from the CBOR wire presents its keys in an order the JSON
+// wire must actively re-sort. A value decoded from the JSON golden instead arrives
+// already in JSON order, because JSON.parse preserves the key order of the
+// document it reads, which is why the first contract stays green whether the
+// encoder sorts or not.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -36,6 +51,12 @@ function toHex(u8: Uint8Array): string {
   let s = "";
   for (const b of u8) s += b.toString(16).padStart(2, "0");
   return s;
+}
+
+function fromHex(h: string): Uint8Array {
+  const out = new Uint8Array(h.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(h.substr(i * 2, 2), 16);
+  return out;
 }
 
 // The vectors, mapping each golden file to the interface type whose codec it
@@ -91,6 +112,37 @@ const vectors: Array<[string, string]> = [
   ["AnnotationTransformInput", "AnnotationTransformInput"],
   ["AnnotationTransformOutput", "AnnotationTransformOutput"],
   ["MutatorInputSources", "MutatorInput"],
+  // The map-order probe vectors carry one golden pair per map-owning payload, with
+  // every map that payload declares populated by a probe key set whose lexicographic
+  // order is the exact reverse of its canonical CBOR order. Map-key ordering is a
+  // determinism contract — identical input must produce byte-identical output — and
+  // a map is the one container with no inherent order, so every encoder sorts before
+  // emitting. These vectors are what pins that sort on this side: the fourth contract
+  // sources the value from the committed CBOR bytes, so the JSON encoder receives the
+  // keys in the reverse of the order it must emit and has to re-sort to match. A
+  // constructed-value test cannot stand in for them here, because a TypeScript
+  // interface is erased before it runs and the payload types cannot be walked.
+  ["MapOrderAnnotationTarget", "AnnotationTarget"],
+  ["MapOrderArtifactProjectionEntry", "ArtifactProjectionEntry"],
+  ["MapOrderBoundaryEnvOverridesInput", "BoundaryEnvOverridesInput"],
+  ["MapOrderBoundaryEnvOverridesOutput", "BoundaryEnvOverridesOutput"],
+  ["MapOrderCatalogProjection", "CatalogProjection"],
+  ["MapOrderDocumentSet", "DocumentSet"],
+  ["MapOrderEmittedEntity", "EmittedEntity"],
+  ["MapOrderFRPStepInput", "FRPStepInput"],
+  ["MapOrderFRPStepOutput", "FRPStepOutput"],
+  ["MapOrderIRFeatureEntry", "IRFeatureEntry"],
+  ["MapOrderIRNode", "IRNode"],
+  ["MapOrderIRNodeProjection", "IRNodeProjection"],
+  ["MapOrderIRSpec", "IRSpec"],
+  ["MapOrderLinkEdge", "LinkEdge"],
+  ["MapOrderLinkPublishOutput", "LinkPublishOutput"],
+  ["MapOrderLinkResolveInput", "LinkResolveInput"],
+  ["MapOrderMutatorGraph", "MutatorGraph"],
+  ["MapOrderMutatorNode", "MutatorNode"],
+  ["MapOrderRenderedNode", "RenderedNode"],
+  ["MapOrderSubChart", "SubChart"],
+  ["MapOrderWorkloadProjection", "WorkloadProjection"],
 ];
 
 const m = abi as Record<string, (arg: unknown) => unknown>;
@@ -110,6 +162,12 @@ for (const [file, type] of vectors) {
     assert.equal(toHex(enc), wantCbor, `${file} CBOR encode`);
     const rt = encodeCbor(decodeCbor(enc)) as Uint8Array;
     assert.equal(toHex(rt), wantCbor, `${file} CBOR round-trip`);
+
+    assert.equal(
+      encodeJson(decodeCbor(fromHex(wantCbor))),
+      wantJson,
+      `${file} JSON wire encoded from the committed CBOR bytes is not the JSON golden`,
+    );
   });
 }
 

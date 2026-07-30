@@ -68,6 +68,29 @@ fn json_parity<T: Serialize + DeserializeOwned>(name: &str) -> T {
     v
 }
 
+/// cross_parity proves the COMMITTED CBOR bytes decode into a value whose JSON
+/// serialization is the committed JSON golden.
+///
+/// This is the only assertion that feeds the CBOR decoder the committed canonical
+/// bytes. Every other CBOR leg decodes this crate's own fresh output, so an
+/// encoder and decoder sharing a compensating defect would agree with each other
+/// and stay green.
+///
+/// It carries no additional power over map-key ordering in THIS crate, and the
+/// reason is the container type rather than the assertion: the generated map
+/// fields are `BTreeMap` (see `AnnotationTarget::annotations` and
+/// `IRNode::labels`), so serde walks them in key order and there is no sort call
+/// in the JSON path that could regress. The Go and TypeScript codecs, whose map
+/// types carry no such guarantee, need the ordering pinned explicitly.
+fn cross_parity<T: Serialize>(name: &str, v: &T) {
+    let want = golden_json(name);
+    let got = serde_json::to_string(v).expect("serialize from committed CBOR");
+    assert_eq!(
+        want, got,
+        "{name} JSON wire encoded from the committed CBOR bytes is not the JSON golden"
+    );
+}
+
 /// A generated type carrying the CBOR codec. Implemented per vector type via the
 /// cbor_case macro so the harness can assert encode==golden and a byte-stable
 /// round-trip generically.
@@ -76,8 +99,11 @@ trait CborCase: Sized {
     fn dec_cbor(data: &[u8]) -> Self;
 }
 
-macro_rules! cbor_case {
-    ($fn:ident, $ty:ty, $name:literal) => {
+/// impl_cbor_case binds a type to the harness. It is separate from cbor_vector
+/// because a type can carry several vectors while the trait may be implemented for
+/// it only once.
+macro_rules! impl_cbor_case {
+    ($ty:ty, $name:literal) => {
         impl CborCase for $ty {
             fn enc_cbor(&self) -> Vec<u8> {
                 self.encode_cbor().expect(concat!($name, " encode_cbor"))
@@ -86,6 +112,11 @@ macro_rules! cbor_case {
                 <$ty>::decode_cbor(data).expect(concat!($name, " decode_cbor"))
             }
         }
+    };
+}
+
+macro_rules! cbor_vector {
+    ($fn:ident, $ty:ty, $name:literal) => {
         #[test]
         fn $fn() {
             let v: $ty = json_parity::<$ty>($name);
@@ -99,7 +130,17 @@ macro_rules! cbor_case {
             );
             let rt = <$ty>::dec_cbor(&enc).enc_cbor();
             assert_eq!(hex_encode(&rt), hex_encode(&enc), "{} CBOR round-trip not stable", $name);
+            cross_parity($name, &<$ty>::dec_cbor(&want));
         }
+    };
+}
+
+/// cbor_case is the common case: one type, one vector, so the trait binding and the
+/// test are declared together.
+macro_rules! cbor_case {
+    ($fn:ident, $ty:ty, $name:literal) => {
+        impl_cbor_case!($ty, $name);
+        cbor_vector!($fn, $ty, $name);
     };
 }
 
@@ -146,13 +187,51 @@ cbor_case!(fetch_external_input_response, aggrega_abi::FetchExternalInputRespons
 // an order that differs from the lexicographic order the golden's JSON carries,
 // so the encoder has to re-sort actively and dropping that sort changes the
 // bytes. Its JSON half is structural rather than encoder logic, because the
-// generated map field is a BTreeMap and serialization walks it in key order;
-// there is no sort call in the JSON path that could regress. The Go and
-// TypeScript harnesses, whose map types carry neither guarantee, each pin the
-// ordering with a dedicated constructed-value test.
+// generated map field is declared `BTreeMap<String, String>` and serialization
+// walks it in key order; there is no sort call in the JSON path that could
+// regress. The Go and TypeScript harnesses, whose map types carry neither
+// guarantee, each pin the ordering with a dedicated constructed-value test.
 cbor_case!(render_policy_input, aggrega_abi::RenderPolicyInput, "RenderPolicyInput");
 cbor_case!(annotation_transform_input, aggrega_abi::AnnotationTransformInput, "AnnotationTransformInput");
 cbor_case!(annotation_transform_output, aggrega_abi::AnnotationTransformOutput, "AnnotationTransformOutput");
+
+// The map-order probe vectors carry one golden pair per map-owning payload, with
+// every map that payload declares populated by a probe key set whose lexicographic
+// order is the exact reverse of its canonical CBOR order. Map-key ordering is a
+// determinism contract — identical input must produce byte-identical output — and a
+// map is the one container with no inherent order.
+//
+// In this crate the JSON half of that ordering is structural rather than encoder
+// logic, because every generated map field is declared `BTreeMap`, so serialization
+// walks it in key order and there is no sort call in the JSON path that could
+// regress. These vectors still earn their place here: they pin the CBOR ordering,
+// whose length-led rule is NOT the BTreeMap order and so is produced by a real sort
+// call, and they keep the three languages reading one shared corpus.
+//
+// FRPStepInput, FRPStepOutput, LinkPublishOutput and LinkResolveInput already carry
+// a harness binding from their socket vectors above, so they take cbor_vector alone
+// — a second impl_cbor_case for the same type would not compile.
+cbor_case!(map_order_annotation_target, aggrega_abi::AnnotationTarget, "MapOrderAnnotationTarget");
+cbor_case!(map_order_artifact_projection_entry, aggrega_abi::ArtifactProjectionEntry, "MapOrderArtifactProjectionEntry");
+cbor_case!(map_order_boundary_env_overrides_input, aggrega_abi::BoundaryEnvOverridesInput, "MapOrderBoundaryEnvOverridesInput");
+cbor_case!(map_order_boundary_env_overrides_output, aggrega_abi::BoundaryEnvOverridesOutput, "MapOrderBoundaryEnvOverridesOutput");
+cbor_case!(map_order_catalog_projection, aggrega_abi::CatalogProjection, "MapOrderCatalogProjection");
+cbor_case!(map_order_document_set, aggrega_abi::DocumentSet, "MapOrderDocumentSet");
+cbor_case!(map_order_emitted_entity, aggrega_abi::EmittedEntity, "MapOrderEmittedEntity");
+cbor_vector!(map_order_frp_step_input, aggrega_abi::FRPStepInput, "MapOrderFRPStepInput");
+cbor_vector!(map_order_frp_step_output, aggrega_abi::FRPStepOutput, "MapOrderFRPStepOutput");
+cbor_case!(map_order_ir_feature_entry, aggrega_abi::IRFeatureEntry, "MapOrderIRFeatureEntry");
+cbor_case!(map_order_ir_node, aggrega_abi::IRNode, "MapOrderIRNode");
+cbor_case!(map_order_ir_node_projection, aggrega_abi::IRNodeProjection, "MapOrderIRNodeProjection");
+cbor_case!(map_order_ir_spec, aggrega_abi::IRSpec, "MapOrderIRSpec");
+cbor_case!(map_order_link_edge, aggrega_abi::LinkEdge, "MapOrderLinkEdge");
+cbor_vector!(map_order_link_publish_output, aggrega_abi::LinkPublishOutput, "MapOrderLinkPublishOutput");
+cbor_vector!(map_order_link_resolve_input, aggrega_abi::LinkResolveInput, "MapOrderLinkResolveInput");
+cbor_case!(map_order_mutator_graph, aggrega_abi::MutatorGraph, "MapOrderMutatorGraph");
+cbor_case!(map_order_mutator_node, aggrega_abi::MutatorNode, "MapOrderMutatorNode");
+cbor_case!(map_order_rendered_node, aggrega_abi::RenderedNode, "MapOrderRenderedNode");
+cbor_case!(map_order_sub_chart, aggrega_abi::SubChart, "MapOrderSubChart");
+cbor_case!(map_order_workload_projection, aggrega_abi::WorkloadProjection, "MapOrderWorkloadProjection");
 
 // PluginDescriptor and a few types recur across several vectors; each vector is
 // its own JSON+CBOR assertion, so they are spelled out rather than macro-bound to
@@ -171,6 +250,10 @@ fn plugin_descriptor_variants() {
         assert_eq!(hex_encode(&enc), hex_encode(&want), "{name} CBOR mismatch");
         let rt = aggrega_abi::PluginDescriptor::decode_cbor(&enc).expect("decode").encode_cbor().expect("re-encode");
         assert_eq!(hex_encode(&rt), hex_encode(&enc), "{name} CBOR round-trip");
+        cross_parity(
+            name,
+            &aggrega_abi::PluginDescriptor::decode_cbor(&want).expect("decode committed CBOR"),
+        );
     }
 }
 
@@ -190,6 +273,10 @@ fn mutator_input_sources() {
         .encode_cbor()
         .expect("re-encode");
     assert_eq!(hex_encode(&rt), hex_encode(&enc), "MutatorInputSources CBOR round-trip");
+    cross_parity(
+        "MutatorInputSources",
+        &aggrega_abi::MutatorInput::decode_cbor(&want).expect("decode committed CBOR"),
+    );
 }
 
 #[test]
@@ -198,10 +285,21 @@ fn parse_output_bare_and_content() {
         let want = golden_cbor(name);
         let enc = if is_parse {
             let v: aggrega_abi::ParseOutput = json_parity(name);
-            v.encode_cbor().expect("encode")
+            let enc = v.encode_cbor().expect("encode");
+            cross_parity(
+                name,
+                &aggrega_abi::ParseOutput::decode_cbor(&want).expect("decode committed CBOR"),
+            );
+            enc
         } else {
             let v: aggrega_abi::FetchExternalInputResponse = json_parity(name);
-            v.encode_cbor().expect("encode")
+            let enc = v.encode_cbor().expect("encode");
+            cross_parity(
+                name,
+                &aggrega_abi::FetchExternalInputResponse::decode_cbor(&want)
+                    .expect("decode committed CBOR"),
+            );
+            enc
         };
         assert_eq!(hex_encode(&enc), hex_encode(&want), "{name} CBOR mismatch");
     }
