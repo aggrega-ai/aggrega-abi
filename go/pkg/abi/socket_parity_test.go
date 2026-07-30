@@ -56,7 +56,11 @@ type cborEncoder interface {
 // Three contracts are proven per vector: the JSON wire round-trips
 // byte-identical, the CBOR encoder reproduces the committed canonical bytes,
 // and decoding those bytes back re-encodes to the same bytes.
-func roundTripBothGolden[T any, PT interface {
+//
+// Both halves of the codec are constrained rather than asserted at run time, so
+// naming a type that carries no CBOR codec fails to compile at the call site
+// instead of panicking inside the helper.
+func roundTripBothGolden[T cborEncoder, PT interface {
 	*T
 	DecodeCBOR([]byte) error
 }](t *testing.T, name string) {
@@ -76,7 +80,7 @@ func roundTripBothGolden[T any, PT interface {
 	}
 
 	wantHex := strings.TrimSpace(string(readGolden(t, name+".cbor.hex")))
-	enc, err := any(v).(cborEncoder).EncodeCBOR()
+	enc, err := v.EncodeCBOR()
 	if err != nil {
 		t.Fatalf("codec encode CBOR %s: %v", name, err)
 	}
@@ -88,7 +92,7 @@ func roundTripBothGolden[T any, PT interface {
 	if err := PT(&back).DecodeCBOR(enc); err != nil {
 		t.Fatalf("codec decode CBOR %s: %v", name, err)
 	}
-	reenc, err := any(back).(cborEncoder).EncodeCBOR()
+	reenc, err := back.EncodeCBOR()
 	if err != nil {
 		t.Fatalf("codec re-encode CBOR %s: %v", name, err)
 	}
