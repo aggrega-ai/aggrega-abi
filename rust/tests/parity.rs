@@ -233,6 +233,36 @@ cbor_case!(map_order_rendered_node, aggrega_abi::RenderedNode, "MapOrderRendered
 cbor_case!(map_order_sub_chart, aggrega_abi::SubChart, "MapOrderSubChart");
 cbor_case!(map_order_workload_projection, aggrega_abi::WorkloadProjection, "MapOrderWorkloadProjection");
 
+// The failure-envelope vectors pin the error member every socket output type
+// carries — the path that reports "I ran but could not complete", which the host
+// halts the build on. It is the path that carries bad news, so a codec defect
+// there surfaces only once something has already gone wrong and what gets
+// corrupted is the diagnostic itself.
+//
+// Each sets the error message with its success members left at their zero value,
+// because the host abandons the payload the moment it reads a non-empty error: an
+// error beside substantively populated success content is a state nothing ever acts
+// on. Where the schema makes a success member required it stays present but empty,
+// which is what a failing guest must emit to satisfy the contract. ParseSourceResponse
+// and FetchExternalInputResponse already carried a failure golden and are not
+// duplicated.
+//
+// The nine output types above already carry a harness binding from their success
+// vectors, so they take cbor_vector alone; the three host-function replies that had
+// no vector at all take cbor_case and gain their first coverage here.
+cbor_vector!(error_envelope_annotation_transform_output, aggrega_abi::AnnotationTransformOutput, "ErrorEnvelopeAnnotationTransformOutput");
+cbor_vector!(error_envelope_assemble_boundary_output, aggrega_abi::AssembleBoundaryOutput, "ErrorEnvelopeAssembleBoundaryOutput");
+cbor_vector!(error_envelope_frp_step_output, aggrega_abi::FRPStepOutput, "ErrorEnvelopeFRPStepOutput");
+cbor_vector!(error_envelope_import_output, aggrega_abi::ImportOutput, "ErrorEnvelopeImportOutput");
+cbor_vector!(error_envelope_linter_output, aggrega_abi::LinterOutput, "ErrorEnvelopeLinterOutput");
+cbor_vector!(error_envelope_mutator_output, aggrega_abi::MutatorOutput, "ErrorEnvelopeMutatorOutput");
+cbor_vector!(error_envelope_parse_output, aggrega_abi::ParseOutput, "ErrorEnvelopeParseOutput");
+cbor_vector!(error_envelope_policy_output, aggrega_abi::PolicyOutput, "ErrorEnvelopePolicyOutput");
+cbor_vector!(error_envelope_render_node_output, aggrega_abi::RenderNodeOutput, "ErrorEnvelopeRenderNodeOutput");
+cbor_case!(error_envelope_source_file_response, aggrega_abi::SourceFileResponse, "ErrorEnvelopeSourceFileResponse");
+cbor_case!(error_envelope_source_pack_response, aggrega_abi::SourcePackResponse, "ErrorEnvelopeSourcePackResponse");
+cbor_case!(error_envelope_validate_node_output, aggrega_abi::ValidateNodeOutput, "ErrorEnvelopeValidateNodeOutput");
+
 // PluginDescriptor and a few types recur across several vectors; each vector is
 // its own JSON+CBOR assertion, so they are spelled out rather than macro-bound to
 // one name.

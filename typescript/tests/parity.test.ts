@@ -143,6 +143,31 @@ const vectors: Array<[string, string]> = [
   ["MapOrderRenderedNode", "RenderedNode"],
   ["MapOrderSubChart", "SubChart"],
   ["MapOrderWorkloadProjection", "WorkloadProjection"],
+  // The failure-envelope vectors pin the error member every socket output type
+  // carries — the path that reports "I ran but could not complete", which the host
+  // halts the build on. It is the path that carries bad news, so a codec defect
+  // there surfaces only once something has already gone wrong and what gets
+  // corrupted is the diagnostic itself.
+  //
+  // Each sets the error message with its success members left at their zero value,
+  // because the host abandons the payload the moment it reads a non-empty error:
+  // an error beside substantively populated success content is a state nothing
+  // ever acts on. Where the schema makes a success member required it stays
+  // present but empty, which is what a failing guest must emit to satisfy the
+  // contract. The two host-function replies above already carried a failure
+  // golden and are not duplicated here.
+  ["ErrorEnvelopeAnnotationTransformOutput", "AnnotationTransformOutput"],
+  ["ErrorEnvelopeAssembleBoundaryOutput", "AssembleBoundaryOutput"],
+  ["ErrorEnvelopeFRPStepOutput", "FRPStepOutput"],
+  ["ErrorEnvelopeImportOutput", "ImportOutput"],
+  ["ErrorEnvelopeLinterOutput", "LinterOutput"],
+  ["ErrorEnvelopeMutatorOutput", "MutatorOutput"],
+  ["ErrorEnvelopeParseOutput", "ParseOutput"],
+  ["ErrorEnvelopePolicyOutput", "PolicyOutput"],
+  ["ErrorEnvelopeRenderNodeOutput", "RenderNodeOutput"],
+  ["ErrorEnvelopeSourceFileResponse", "SourceFileResponse"],
+  ["ErrorEnvelopeSourcePackResponse", "SourcePackResponse"],
+  ["ErrorEnvelopeValidateNodeOutput", "ValidateNodeOutput"],
 ];
 
 const m = abi as Record<string, (arg: unknown) => unknown>;
