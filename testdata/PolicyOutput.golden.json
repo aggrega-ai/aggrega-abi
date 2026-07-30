@@ -1,1 +1,1 @@
-{"results":[{"severity":"deny","message":"halt"},{"severity":"audit","message":"ok"}]}
+{"results":[{"severity":"deny","message":"halt","code":"PROD-014","rule_id":"no-floating-tags","classification":"MAJOR","source_ref":"payments-api","location":{"span":{"start_offset":18,"end_offset":30,"start_line":2,"start_column":3,"end_line":2,"end_column":15},"key_path":"spec.template.spec.containers[0].image","uri":"payments-api/deployment.yaml","line":42,"kind":"rendered-artifact"},"suggest":"replace the tag with a sha256 digest"},{"severity":"audit","message":"ok"}]}
