@@ -13,31 +13,16 @@ import (
 	"github.com/aggrega-ai/aggrega-abi-go/pkg/abi"
 )
 
-// The mutator and linter socket goldens under testdata/ are the canonical wire
-// bytes — the same goldens the Rust and TypeScript codecs validate against, so a
-// byte-match here is a cross-language parity assertion: the three codecs are
-// generated from one schema and produce one wire. Each golden carries the
-// determinism-sensitive cases — sorted map keys, verbatim opaque carry, omitted
-// empty fields — so a codec regression breaks the byte-compare loudly.
+// The socket goldens under testdata/ are the canonical wire bytes — the same
+// goldens the Rust and TypeScript codecs validate against, so a byte-match here
+// is a cross-language parity assertion: the three codecs are generated from one
+// schema and produce one wire. Each golden carries the determinism-sensitive
+// cases — sorted map keys, verbatim opaque carry, omitted empty fields — so a
+// codec regression breaks the byte-compare loudly.
 //
-// The contract proven per payload: unmarshal the golden through the generated
-// codec, re-marshal, and assert byte-identical output.
-
-func roundTripGolden[T any](t *testing.T, name string) {
-	t.Helper()
-	golden := readGolden(t, name)
-	var v T
-	if err := json.Unmarshal(golden, &v); err != nil {
-		t.Fatalf("codec unmarshal %s: %v", name, err)
-	}
-	got, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("codec re-marshal %s: %v", name, err)
-	}
-	if !bytes.Equal(golden, got) {
-		t.Errorf("%s wire not byte-identical to golden:\n golden: %s\n    got: %s", name, golden, got)
-	}
-}
+// Every payload runs through one helper covering both wire forms. A vector that
+// exercised only JSON would leave the CBOR codec — a separate set of generated
+// methods — entirely unpinned.
 
 // cborEncoder is the encode half of a generated type's CBOR codec, declared on
 // the value receiver. The decode half is declared on the pointer, so the
@@ -53,9 +38,22 @@ type cborEncoder interface {
 // other unpinned, so a CBOR-only regression crosses the wire unnoticed while
 // the JSON assertion stays green.
 //
-// Three contracts are proven per vector: the JSON wire round-trips
-// byte-identical, the CBOR encoder reproduces the committed canonical bytes,
-// and decoding those bytes back re-encodes to the same bytes.
+// Four contracts are proven per vector. The JSON wire round-trips
+// byte-identical. The CBOR encoder reproduces the committed canonical bytes.
+// Decoding those bytes back re-encodes to the same bytes. And the COMMITTED CBOR
+// bytes decode into a value whose JSON encoding is the committed JSON golden.
+//
+// That fourth contract carries two assertions the other three structurally
+// cannot make. It is the only one that feeds the CBOR decoder the committed
+// canonical bytes — the other CBOR legs decode this codec's own fresh output, so
+// an encoder and decoder that shared a compensating defect would agree with each
+// other and stay green. And it is the only one that can observe a map-key sort
+// being lost from the JSON encoder: the two wire forms order map keys by
+// different rules — JSON lexicographically, CBOR by the encoded key bytes, whose
+// length head leads — so a value arriving from the CBOR wire presents its keys in
+// an order the JSON wire must actively re-sort. A value decoded from the JSON
+// golden instead arrives already in JSON order, which is why the first contract
+// stays green whether the encoder sorts or not.
 //
 // Both halves of the codec are constrained rather than asserted at run time, so
 // naming a type that carries no CBOR codec fails to compile at the call site
@@ -100,46 +98,63 @@ func roundTripBothGolden[T cborEncoder, PT interface {
 		t.Errorf("%s CBOR round-trip not stable:\n first: %s\n  then: %s",
 			name, hex.EncodeToString(enc), hex.EncodeToString(reenc))
 	}
+
+	wantCBOR, err := hex.DecodeString(wantHex)
+	if err != nil {
+		t.Fatalf("decode committed CBOR hex %s: %v", name, err)
+	}
+	var fromCBOR T
+	if err := PT(&fromCBOR).DecodeCBOR(wantCBOR); err != nil {
+		t.Fatalf("codec decode committed CBOR %s: %v", name, err)
+	}
+	crossJSON, err := json.Marshal(fromCBOR)
+	if err != nil {
+		t.Fatalf("codec marshal JSON from committed CBOR %s: %v", name, err)
+	}
+	if !bytes.Equal(wantJSON, crossJSON) {
+		t.Errorf("%s JSON wire encoded from the committed CBOR bytes is not the JSON golden:\n golden: %s\n    got: %s",
+			name, wantJSON, crossJSON)
+	}
 }
 
 func TestSocketParity_CLIRunInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.CLIRunInput](t, "CLIRunInput.golden.json")
+	roundTripBothGolden[abi.CLIRunInput](t, "CLIRunInput")
 }
 
 func TestSocketParity_MutatorInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.MutatorInput](t, "MutatorInput.golden.json")
+	roundTripBothGolden[abi.MutatorInput](t, "MutatorInput")
 }
 
 func TestSocketParity_MutatorOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.MutatorOutput](t, "MutatorOutput.golden.json")
+	roundTripBothGolden[abi.MutatorOutput](t, "MutatorOutput")
 }
 
 func TestSocketParity_LinterInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.LinterInput](t, "LinterInput.golden.json")
+	roundTripBothGolden[abi.LinterInput](t, "LinterInput")
 }
 
 func TestSocketParity_LinterOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.LinterOutput](t, "LinterOutput.golden.json")
+	roundTripBothGolden[abi.LinterOutput](t, "LinterOutput")
 }
 
 func TestSocketParity_IRGraph(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.IRGraph](t, "IRGraph.golden.json")
+	roundTripBothGolden[abi.IRGraph](t, "IRGraph")
 }
 
 func TestSocketParity_PolicyInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.PolicyInput](t, "PolicyInput.golden.json")
+	roundTripBothGolden[abi.PolicyInput](t, "PolicyInput")
 }
 
 func TestSocketParity_PolicyOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.PolicyOutput](t, "PolicyOutput.golden.json")
+	roundTripBothGolden[abi.PolicyOutput](t, "PolicyOutput")
 }
 
 // The governance goldens below cover the payload shapes reached only by a
@@ -157,17 +172,17 @@ func TestSocketParity_PolicyOutput(t *testing.T) {
 // and an opaque settings object with out-of-order keys (pinning the verbatim
 // carry). The output omits the failure member, pinning that omission.
 //
-// The annotation map's key sort splits across the two wire forms, and only one
-// half is reachable from a golden round-trip. The CBOR half IS pinned by the
-// vector: CBOR orders map keys by their encoded bytes, whose length head leads,
-// so a short key precedes a long one — an order that differs from the
-// lexicographic order the golden's JSON carries. The encoder therefore has to
-// re-sort actively, and dropping that sort changes the bytes. The JSON half is
-// NOT pinned: the value under test is decoded from the golden, so it already
-// carries the golden's lexicographic order, and an encoder that dropped its
-// sort would reproduce that order anyway and leave the assertion green. The
-// JSON sort becomes observable only when the value is CONSTRUCTED with keys out
-// of order, which is what TestAnnotationTargetMapKeyOrder below does.
+// The annotation map's key sort is pinned in both wire forms, but by two
+// different contracts, and the difference is worth knowing before trusting
+// either. The CBOR half falls out of the golden round-trip itself, because CBOR
+// orders map keys by their encoded bytes, whose length head leads, so a short key
+// precedes a long one — an order that differs from the lexicographic order the
+// golden's JSON carries, leaving the encoder no choice but to re-sort. The JSON
+// half is invisible to that round-trip, whose value arrives from the JSON golden
+// already in JSON order; it is pinned instead by the helper's fourth contract,
+// which sources the value from the committed CBOR bytes and so presents the keys
+// in the other order. TestAnnotationTargetMapKeyOrder below pins the same rule a
+// third way, from a constructed value, and states both orders literally.
 //
 // MutatorInputSources is the label-transform payload WITH its pinned sources
 // and settings populated. The pre-existing mutator golden leaves both absent,
@@ -254,42 +269,42 @@ func TestAnnotationTargetMapKeyOrder(t *testing.T) {
 
 func TestSocketParity_RenderNodeInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.RenderNodeInput](t, "RenderNodeInput.golden.json")
+	roundTripBothGolden[abi.RenderNodeInput](t, "RenderNodeInput")
 }
 
 func TestSocketParity_RenderNodeOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.RenderNodeOutput](t, "RenderNodeOutput.golden.json")
+	roundTripBothGolden[abi.RenderNodeOutput](t, "RenderNodeOutput")
 }
 
 func TestSocketParity_AssembleBoundaryInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.AssembleBoundaryInput](t, "AssembleBoundaryInput.golden.json")
+	roundTripBothGolden[abi.AssembleBoundaryInput](t, "AssembleBoundaryInput")
 }
 
 func TestSocketParity_AssembleBoundaryOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.AssembleBoundaryOutput](t, "AssembleBoundaryOutput.golden.json")
+	roundTripBothGolden[abi.AssembleBoundaryOutput](t, "AssembleBoundaryOutput")
 }
 
 func TestSocketParity_LinkPublishInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.LinkPublishInput](t, "LinkPublishInput.golden.json")
+	roundTripBothGolden[abi.LinkPublishInput](t, "LinkPublishInput")
 }
 
 func TestSocketParity_LinkPublishOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.LinkPublishOutput](t, "LinkPublishOutput.golden.json")
+	roundTripBothGolden[abi.LinkPublishOutput](t, "LinkPublishOutput")
 }
 
 func TestSocketParity_LinkResolveInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.LinkResolveInput](t, "LinkResolveInput.golden.json")
+	roundTripBothGolden[abi.LinkResolveInput](t, "LinkResolveInput")
 }
 
 func TestSocketParity_LinkResolveOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.LinkResolveOutput](t, "LinkResolveOutput.golden.json")
+	roundTripBothGolden[abi.LinkResolveOutput](t, "LinkResolveOutput")
 }
 
 // The two describe goldens are both the PluginDescriptor wire — the shape every
@@ -303,12 +318,12 @@ func TestSocketParity_LinkResolveOutput(t *testing.T) {
 
 func TestSocketParity_PluginDescriptorCLI(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorCLI.golden.json")
+	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorCLI")
 }
 
 func TestSocketParity_PluginDescriptorProvider(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorProvider.golden.json")
+	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorProvider")
 }
 
 // PluginDescriptorMinimal is a descriptor that declares none of the optional
@@ -321,12 +336,12 @@ func TestSocketParity_PluginDescriptorProvider(t *testing.T) {
 
 func TestSocketParity_PluginDescriptorMinimal(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorMinimal.golden.json")
+	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorMinimal")
 }
 
 func TestSocketParity_PluginDescriptorMoo(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.PluginDescriptor](t, "PluginDescriptorMoo.golden.json")
+	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorMoo")
 }
 
 // The parse goldens are the parser socket wire — a ParseInput a parser guest
@@ -339,17 +354,17 @@ func TestSocketParity_PluginDescriptorMoo(t *testing.T) {
 
 func TestSocketParity_ParseInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.ParseInput](t, "ParseInput.golden.json")
+	roundTripBothGolden[abi.ParseInput](t, "ParseInput")
 }
 
 func TestSocketParity_ParseOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.ParseOutput](t, "ParseOutput.golden.json")
+	roundTripBothGolden[abi.ParseOutput](t, "ParseOutput")
 }
 
 func TestSocketParity_ParseOutputBare(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.ParseOutput](t, "ParseOutputBare.golden.json")
+	roundTripBothGolden[abi.ParseOutput](t, "ParseOutputBare")
 }
 
 // The import goldens are the importer socket wire — an ImportInput an importer
@@ -363,12 +378,12 @@ func TestSocketParity_ParseOutputBare(t *testing.T) {
 
 func TestSocketParity_ImportInput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.ImportInput](t, "ImportInput.golden.json")
+	roundTripBothGolden[abi.ImportInput](t, "ImportInput")
 }
 
 func TestSocketParity_ImportOutput(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.ImportOutput](t, "ImportOutput.golden.json")
+	roundTripBothGolden[abi.ImportOutput](t, "ImportOutput")
 }
 
 // TestImportOutputUnknownKind proves the emitted-entity kind is an open string:
@@ -397,12 +412,12 @@ func TestImportOutputUnknownKind(t *testing.T) {
 
 func TestSocketParity_ParseSourceResponse(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.ParseSourceResponse](t, "ParseSourceResponse.golden.json")
+	roundTripBothGolden[abi.ParseSourceResponse](t, "ParseSourceResponse")
 }
 
 func TestSocketParity_FetchExternalInputResponse(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponse.golden.json")
+	roundTripBothGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponse")
 }
 
 // The content golden is the success path: a base64 content string carried
@@ -411,5 +426,5 @@ func TestSocketParity_FetchExternalInputResponse(t *testing.T) {
 // failure because the content key is still present).
 func TestSocketParity_FetchExternalInputResponseContent(t *testing.T) {
 	t.Parallel()
-	roundTripGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponseContent.golden.json")
+	roundTripBothGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponseContent")
 }

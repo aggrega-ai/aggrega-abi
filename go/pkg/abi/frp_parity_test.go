@@ -4,8 +4,6 @@
 package abi_test
 
 import (
-	"bytes"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,11 +20,11 @@ import (
 // omit-logic regression, a field reorder, a base64 discrepancy) breaks the
 // byte-compare loudly.
 //
-// The contract proven per payload: unmarshal the golden through the generated
-// codec, re-marshal, and assert the result is byte-identical to the golden.
-// This is a strict round-trip against the host's wire, exercising both the
-// decode leg (token-walk into the typed value) and the encode leg (manual
-// field-ordered marshal honouring omit semantics).
+// The contracts proven per payload are the four the shared parity helper
+// asserts, over both wire forms — a strict round-trip against the host's wire
+// exercising the decode leg (token-walk into the typed value), the encode leg
+// (manual field-ordered marshal honouring omit semantics), and the same pair for
+// the canonical CBOR bytes.
 
 // readGolden reads a shared vector document from the one testdata tree the Go,
 // Rust, and TypeScript harnesses all validate against. The tree lives at the
@@ -50,19 +48,7 @@ func readGolden(t *testing.T, name string) []byte {
 // preserved.
 func TestGoldenParity_FRPStepInput(t *testing.T) {
 	t.Parallel()
-	golden := readGolden(t, "FRPStepInput.golden.json")
-
-	var in abi.FRPStepInput
-	if err := json.Unmarshal(golden, &in); err != nil {
-		t.Fatalf("codec unmarshal FRPStepInput: %v", err)
-	}
-	got, err := json.Marshal(in)
-	if err != nil {
-		t.Fatalf("codec re-marshal FRPStepInput: %v", err)
-	}
-	if !bytes.Equal(golden, got) {
-		t.Errorf("FRPStepInput wire not byte-identical to host golden:\n golden: %s\n    got: %s", golden, got)
-	}
+	roundTripBothGolden[abi.FRPStepInput](t, "FRPStepInput")
 }
 
 // TestGoldenParity_FRPStepOutput round-trips the host's FRPStepOutput wire
@@ -74,17 +60,5 @@ func TestGoldenParity_FRPStepInput(t *testing.T) {
 // passthrough.
 func TestGoldenParity_FRPStepOutput(t *testing.T) {
 	t.Parallel()
-	golden := readGolden(t, "FRPStepOutput.golden.json")
-
-	var out abi.FRPStepOutput
-	if err := json.Unmarshal(golden, &out); err != nil {
-		t.Fatalf("codec unmarshal FRPStepOutput: %v", err)
-	}
-	got, err := json.Marshal(out)
-	if err != nil {
-		t.Fatalf("codec re-marshal FRPStepOutput: %v", err)
-	}
-	if !bytes.Equal(golden, got) {
-		t.Errorf("FRPStepOutput wire not byte-identical to host golden:\n golden: %s\n    got: %s", golden, got)
-	}
+	roundTripBothGolden[abi.FRPStepOutput](t, "FRPStepOutput")
 }
