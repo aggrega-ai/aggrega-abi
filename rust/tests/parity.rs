@@ -128,6 +128,32 @@ cbor_case!(import_output, aggrega_abi::ImportOutput, "ImportOutput");
 cbor_case!(parse_source_response, aggrega_abi::ParseSourceResponse, "ParseSourceResponse");
 cbor_case!(fetch_external_input_response, aggrega_abi::FetchExternalInputResponse, "FetchExternalInputResponse");
 
+// The governance vectors cover the payload shapes reached only by a governance
+// attachment. RenderPolicyInput is the payload a policy attachment receives at
+// the render stage — rendered artifacts instead of the IR graph — carrying one
+// artifact with both optional members (the parsed tree and the declared format)
+// and one that omits both. The two annotation-transform vectors are the wire an
+// annotation-transform attachment receives and returns: the input carries an
+// empty annotation map (pinning that an empty object is emitted rather than
+// dropped), a binding-key list whose entries are NOT in sorted order (pinning
+// that a list is carried in author order rather than sorted), and an opaque
+// settings object with out-of-order keys (pinning the verbatim carry); the
+// output omits the failure member.
+//
+// The annotation map's key sort needs no separate assertion in this crate. Its
+// CBOR half is already pinned by the vector: CBOR orders map keys by their
+// encoded bytes, whose length head leads, so a short key precedes a long one —
+// an order that differs from the lexicographic order the golden's JSON carries,
+// so the encoder has to re-sort actively and dropping that sort changes the
+// bytes. Its JSON half is structural rather than encoder logic, because the
+// generated map field is a BTreeMap and serialization walks it in key order;
+// there is no sort call in the JSON path that could regress. The Go and
+// TypeScript harnesses, whose map types carry neither guarantee, each pin the
+// ordering with a dedicated constructed-value test.
+cbor_case!(render_policy_input, aggrega_abi::RenderPolicyInput, "RenderPolicyInput");
+cbor_case!(annotation_transform_input, aggrega_abi::AnnotationTransformInput, "AnnotationTransformInput");
+cbor_case!(annotation_transform_output, aggrega_abi::AnnotationTransformOutput, "AnnotationTransformOutput");
+
 // PluginDescriptor and a few types recur across several vectors; each vector is
 // its own JSON+CBOR assertion, so they are spelled out rather than macro-bound to
 // one name.
@@ -146,6 +172,24 @@ fn plugin_descriptor_variants() {
         let rt = aggrega_abi::PluginDescriptor::decode_cbor(&enc).expect("decode").encode_cbor().expect("re-encode");
         assert_eq!(hex_encode(&rt), hex_encode(&enc), "{name} CBOR round-trip");
     }
+}
+
+// MutatorInputSources is the label-transform payload WITH its pinned sources and
+// settings populated. The mutator vector above leaves both absent, so the file
+// list a governance attachment hands its guest crossed the wire with no parity
+// coverage. It reuses the MutatorInput type, so it is spelled out rather than
+// macro-bound to a second name.
+#[test]
+fn mutator_input_sources() {
+    let v: aggrega_abi::MutatorInput = json_parity("MutatorInputSources");
+    let want = golden_cbor("MutatorInputSources");
+    let enc = v.encode_cbor().expect("encode_cbor");
+    assert_eq!(hex_encode(&enc), hex_encode(&want), "MutatorInputSources CBOR mismatch");
+    let rt = aggrega_abi::MutatorInput::decode_cbor(&enc)
+        .expect("decode")
+        .encode_cbor()
+        .expect("re-encode");
+    assert_eq!(hex_encode(&rt), hex_encode(&enc), "MutatorInputSources CBOR round-trip");
 }
 
 #[test]

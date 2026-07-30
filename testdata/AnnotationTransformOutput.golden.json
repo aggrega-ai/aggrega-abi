@@ -1,0 +1,1 @@
+{"injections":[{"boundary_path":"prod/data","component_name":"db","annotation_key":"aggrega.ai/observability","annotation_value":"enabled"},{"boundary_path":"prod/edge","component_name":"web","annotation_key":"aggrega.ai/mesh","annotation_value":"sidecar"}]}

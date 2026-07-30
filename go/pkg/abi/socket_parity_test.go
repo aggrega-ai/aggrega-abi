@@ -5,7 +5,9 @@ package abi_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/aggrega-ai/aggrega-abi-go/pkg/abi"
@@ -34,6 +36,65 @@ func roundTripGolden[T any](t *testing.T, name string) {
 	}
 	if !bytes.Equal(golden, got) {
 		t.Errorf("%s wire not byte-identical to golden:\n golden: %s\n    got: %s", name, golden, got)
+	}
+}
+
+// cborEncoder is the encode half of a generated type's CBOR codec, declared on
+// the value receiver. The decode half is declared on the pointer, so the
+// helper below binds the two through a paired type parameter.
+type cborEncoder interface {
+	EncodeCBOR() ([]byte, error)
+}
+
+// roundTripBothGolden asserts a payload against BOTH committed wire forms: the
+// JSON document at <name>.golden.json and the canonical CBOR bytes at
+// <name>.cbor.hex. The pair matters because a type's JSON and CBOR codecs are
+// separate generated methods — a vector that exercises only one leaves the
+// other unpinned, so a CBOR-only regression crosses the wire unnoticed while
+// the JSON assertion stays green.
+//
+// Three contracts are proven per vector: the JSON wire round-trips
+// byte-identical, the CBOR encoder reproduces the committed canonical bytes,
+// and decoding those bytes back re-encodes to the same bytes.
+func roundTripBothGolden[T any, PT interface {
+	*T
+	DecodeCBOR([]byte) error
+}](t *testing.T, name string) {
+	t.Helper()
+
+	wantJSON := readGolden(t, name+".golden.json")
+	var v T
+	if err := json.Unmarshal(wantJSON, &v); err != nil {
+		t.Fatalf("codec unmarshal %s: %v", name, err)
+	}
+	gotJSON, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("codec re-marshal %s: %v", name, err)
+	}
+	if !bytes.Equal(wantJSON, gotJSON) {
+		t.Errorf("%s JSON wire not byte-identical to golden:\n golden: %s\n    got: %s", name, wantJSON, gotJSON)
+	}
+
+	wantHex := strings.TrimSpace(string(readGolden(t, name+".cbor.hex")))
+	enc, err := any(v).(cborEncoder).EncodeCBOR()
+	if err != nil {
+		t.Fatalf("codec encode CBOR %s: %v", name, err)
+	}
+	if gotHex := hex.EncodeToString(enc); gotHex != wantHex {
+		t.Errorf("%s CBOR wire not byte-identical to golden:\n golden: %s\n    got: %s", name, wantHex, gotHex)
+	}
+
+	var back T
+	if err := PT(&back).DecodeCBOR(enc); err != nil {
+		t.Fatalf("codec decode CBOR %s: %v", name, err)
+	}
+	reenc, err := any(back).(cborEncoder).EncodeCBOR()
+	if err != nil {
+		t.Fatalf("codec re-encode CBOR %s: %v", name, err)
+	}
+	if !bytes.Equal(enc, reenc) {
+		t.Errorf("%s CBOR round-trip not stable:\n first: %s\n  then: %s",
+			name, hex.EncodeToString(enc), hex.EncodeToString(reenc))
 	}
 }
 
@@ -75,6 +136,116 @@ func TestSocketParity_PolicyInput(t *testing.T) {
 func TestSocketParity_PolicyOutput(t *testing.T) {
 	t.Parallel()
 	roundTripGolden[abi.PolicyOutput](t, "PolicyOutput.golden.json")
+}
+
+// The governance goldens below cover the payload shapes reached only by a
+// governance attachment, in both wire forms. RenderPolicyInput is the payload a
+// policy attachment receives at the render stage — rendered artifacts instead
+// of the IR graph — and carries one artifact with both optional members (the
+// parsed tree and the declared format) and one that omits both, so the
+// byte-compare pins the omission as well as the verbatim tree carry.
+//
+// The two annotation-transform goldens are the wire an annotation-transform
+// attachment receives and returns. The input carries a target whose annotation
+// map is empty (pinning that all three codecs emit an empty object rather than
+// dropping the member), a binding-key list whose entries are NOT in sorted
+// order (pinning that a list is carried in author order rather than sorted),
+// and an opaque settings object with out-of-order keys (pinning the verbatim
+// carry). The output omits the failure member, pinning that omission.
+//
+// The annotation map's key sort splits across the two wire forms, and only one
+// half is reachable from a golden round-trip. The CBOR half IS pinned by the
+// vector: CBOR orders map keys by their encoded bytes, whose length head leads,
+// so a short key precedes a long one — an order that differs from the
+// lexicographic order the golden's JSON carries. The encoder therefore has to
+// re-sort actively, and dropping that sort changes the bytes. The JSON half is
+// NOT pinned: the value under test is decoded from the golden, so it already
+// carries the golden's lexicographic order, and an encoder that dropped its
+// sort would reproduce that order anyway and leave the assertion green. The
+// JSON sort becomes observable only when the value is CONSTRUCTED with keys out
+// of order, which is what TestAnnotationTargetMapKeyOrder below does.
+//
+// MutatorInputSources is the label-transform payload WITH its pinned sources
+// and settings populated. The pre-existing mutator golden leaves both absent,
+// so the file list a governance attachment hands its guest crossed the wire
+// with no parity coverage in any of the three codecs.
+
+func TestSocketParity_RenderPolicyInput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderPolicyInput](t, "RenderPolicyInput")
+}
+
+func TestSocketParity_AnnotationTransformInput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.AnnotationTransformInput](t, "AnnotationTransformInput")
+}
+
+func TestSocketParity_AnnotationTransformOutput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.AnnotationTransformOutput](t, "AnnotationTransformOutput")
+}
+
+func TestSocketParity_MutatorInputSources(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.MutatorInput](t, "MutatorInputSources")
+}
+
+// TestAnnotationTargetMapKeyOrder pins the annotation map's key ordering in both
+// wire forms by ENCODING a constructed value, the one path on which a lost JSON
+// sort is observable: a value decoded from a golden already carries the golden's
+// lexicographic order, so the round-trip assertions above stay green whether the
+// JSON encoder sorts or not. Map iteration here is unordered, so without the
+// sort this assertion fails on most runs rather than on every run — which is
+// itself a reason to assert the order against a fixed expectation instead of
+// relying on the round-trip.
+//
+// The two wire forms order the same three keys differently, and the test asserts
+// both. JSON sorts lexicographically. CBOR sorts by the encoded key bytes, whose
+// length head leads, so a shorter key always precedes a longer one and the three
+// keys emit in the exact reverse of their JSON order. A codec that applied the
+// JSON rule to the CBOR wire would satisfy neither assertion.
+func TestAnnotationTargetMapKeyOrder(t *testing.T) {
+	t.Parallel()
+
+	v := abi.AnnotationTarget{
+		BoundaryPath:  "prod/edge",
+		ComponentName: "web",
+		Annotations: map[string]string{
+			"tier":             "frontend",
+			"aggrega.ai/owner": "checkout",
+			"cost-center":      "42",
+		},
+	}
+
+	const wantJSON = `{"boundary_path":"prod/edge","component_name":"web",` +
+		`"annotations":{"aggrega.ai/owner":"checkout","cost-center":"42","tier":"frontend"}}`
+	gotJSON, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("codec marshal AnnotationTarget: %v", err)
+	}
+	if string(gotJSON) != wantJSON {
+		t.Errorf("JSON annotation keys not in lexicographic order:\n want: %s\n  got: %s", wantJSON, gotJSON)
+	}
+
+	enc, err := v.EncodeCBOR()
+	if err != nil {
+		t.Fatalf("codec encode CBOR AnnotationTarget: %v", err)
+	}
+	// Shortest key first: "tier" (4), "cost-center" (11), "aggrega.ai/owner" (16).
+	ordered := []string{"tier", "cost-center", "aggrega.ai/owner"}
+	at := make([]int, len(ordered))
+	for i, k := range ordered {
+		if at[i] = bytes.Index(enc, []byte(k)); at[i] < 0 {
+			t.Fatalf("CBOR wire does not carry annotation key %q: %s", k, hex.EncodeToString(enc))
+		}
+	}
+	for i := 1; i < len(at); i++ {
+		if at[i-1] >= at[i] {
+			t.Errorf("CBOR annotation keys not in canonical length-first order (%q@%d before %q@%d): %s",
+				ordered[i], at[i], ordered[i-1], at[i-1], hex.EncodeToString(enc))
+			break
+		}
+	}
 }
 
 func TestSocketParity_RenderNodeInput(t *testing.T) {

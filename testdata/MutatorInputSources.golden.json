@@ -1,0 +1,1 @@
+{"compilation_context":{"release_name":"checkout","environment":"prod"},"graph":{"nodes":{"web":{"component":"core/web","resolved_version":"1.2.3","labels":{"tier":"frontend"}}}},"sources":[{"path":"labels.rego","content":"package aggrega\n"},{"path":"tiers.rego","content":"package aggrega\n"}],"settings":{"z":1,"a":2}}
