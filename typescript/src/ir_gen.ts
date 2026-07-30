@@ -171,7 +171,7 @@ export interface IRSpec {
   nodes: Record<string, IRNode>;
   // Explicit logical network paths and dependencies between nodes.
   edges: IREdge[];
-  // Explicit canonical strings (e.g., semantic_routing, data_masking) derived from annotations, utilized for downstream Feature Negotiation.
+  // The de-duplicated, lexicographically sorted set of Feature type strings — one entry per distinct Feature type attached anywhere in the graph (for example core/logging), regardless of where the attachment was declared. Sorting is what makes the set byte-identical across runs of the same input.
   feature_markers: string[];
   // The single source of truth for opaque pass-through cognitive payloads, mapped by node ID.
   values_mapping: Record<string, unknown>;
