@@ -163,6 +163,9 @@ pub struct IRNode {
     /// Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub self_inject: Option<Box<RawValue>>,
+    /// The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uses: Option<Box<RawValue>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -720,6 +723,7 @@ impl IRNode {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 3;
+        if self.uses.is_some() { n += 1; }
         if self.sync_wave != 0 { n += 1; }
         if !self.description.is_empty() { n += 1; }
         if self.self_inject.is_some() { n += 1; }
@@ -733,6 +737,10 @@ impl IRNode {
         if !self.aggregate_annotations.is_empty() { n += 1; }
         if self.synthesized_subsystem { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
+        if let Some(ref x) = self.uses {
+            crate::cbor_gen::write_text(out, "uses");
+            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
         crate::cbor_gen::write_text(out, "labels");
         {
             let c = &self.labels;
@@ -853,6 +861,7 @@ impl IRNode {
         let mut f_release_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_aggregate_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_self_inject: Option<Box<RawValue>> = None;
+        let mut f_uses: Option<Box<RawValue>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -872,6 +881,7 @@ impl IRNode {
                 "release_annotations" => f_release_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "aggregate_annotations" => f_aggregate_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "self_inject" => f_self_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "uses" => f_uses = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 _ => dec.skip()?,
             }
         }
@@ -891,6 +901,7 @@ impl IRNode {
             release_annotations: f_release_annotations,
             aggregate_annotations: f_aggregate_annotations,
             self_inject: f_self_inject,
+            uses: f_uses,
         })
     }
 }

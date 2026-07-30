@@ -124,6 +124,8 @@ export interface IRNode {
   aggregate_annotations?: Record<string, string>;
   // Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
   self_inject?: unknown;
+  // The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
+  uses?: unknown;
 }
 
 export interface IREdge {
@@ -284,6 +286,7 @@ export function encodeIRNode(v: IRNode): string {
   if (v.release_annotations !== undefined && Object.keys(v.release_annotations).length > 0) parts.push(`${jstr("release_annotations")}:${`{${Object.keys(v.release_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.release_annotations![k0])}`).join(",")}}`}`);
   if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) parts.push(`${jstr("aggregate_annotations")}:${`{${Object.keys(v.aggregate_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.aggregate_annotations![k0])}`).join(",")}}`}`);
   if (v.self_inject !== undefined && v.self_inject !== null) parts.push(`${jstr("self_inject")}:${encodeOpaque(v.self_inject)}`);
+  if (v.uses !== undefined && v.uses !== null) parts.push(`${jstr("uses")}:${encodeOpaque(v.uses)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -731,6 +734,7 @@ export function encodeCBORIRNode(v: IRNode): Uint8Array {
 
 export function appendCBORIRNode(out: number[], v: IRNode): void {
   let n = 3;
+  if (v.uses !== undefined && v.uses !== null) n++;
   if (v.sync_wave !== undefined && v.sync_wave !== 0) n++;
   if (v.description !== undefined && v.description !== "") n++;
   if (v.self_inject !== undefined && v.self_inject !== null) n++;
@@ -744,6 +748,10 @@ export function appendCBORIRNode(out: number[], v: IRNode): void {
   if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) n++;
   if (v.synthesized_subsystem !== undefined && v.synthesized_subsystem !== false) n++;
   writeHead(out, 5, n);
+  if (v.uses !== undefined && v.uses !== null) {
+    writeText(out, "uses");
+    writeBytes(out, utf8Encode(JSON.stringify(v.uses)));
+  }
   writeText(out, "labels");
   {
     const m0 = v.labels;
@@ -858,6 +866,7 @@ export function decodeCBORIRNodeFrom(dec: CborDec): IRNode {
       case "release_annotations": o["release_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "aggregate_annotations": o["aggregate_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "self_inject": o["self_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "uses": o["uses"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       default: dec.skip();
     }
   }

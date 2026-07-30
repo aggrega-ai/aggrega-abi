@@ -117,6 +117,8 @@ type IRNode struct {
 	AggregateAnnotations map[string]string `json:"aggregate_annotations,omitempty" yaml:"aggregate_annotations,omitempty" cbor:"aggregate_annotations,omitempty"`
 	// SelfInject Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
 	SelfInject json.RawMessage `json:"self_inject,omitempty" yaml:"self_inject,omitempty" cbor:"self_inject,omitempty"`
+	// Uses The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
+	Uses json.RawMessage `json:"uses,omitempty" yaml:"uses,omitempty" cbor:"uses,omitempty"`
 }
 
 type IREdge struct {
@@ -1190,6 +1192,14 @@ func (t IRNode) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"self_inject\":")
 		buf.Write(t.SelfInject)
 	}
+	if len(t.Uses) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"uses\":")
+		buf.Write(t.Uses)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -1361,6 +1371,12 @@ func (t *IRNode) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.SelfInject = raw
+			}
+		case "uses":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				t.Uses = raw
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -2978,6 +2994,9 @@ func (t IRNode) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t IRNode) appendCBOR(dst []byte) ([]byte, error) {
 	n := 3
+	if len(t.Uses) != 0 {
+		n++
+	}
 	if t.SyncWave != 0 {
 		n++
 	}
@@ -3016,6 +3035,10 @@ func (t IRNode) appendCBOR(dst []byte) ([]byte, error) {
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
 	var err error
+	if len(t.Uses) != 0 {
+		dst = appendCBORTextString(dst, "uses")
+		dst = appendCBORByteString(dst, t.Uses)
+	}
 	dst = appendCBORTextString(dst, "labels")
 	{
 		keys := make([]string, 0, len(t.Labels))
@@ -3298,6 +3321,12 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 				return err
 			} else {
 				t.SelfInject = json.RawMessage(v)
+			}
+		case "uses":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Uses = json.RawMessage(v)
 			}
 		default:
 			if err := dec.skip(); err != nil {
