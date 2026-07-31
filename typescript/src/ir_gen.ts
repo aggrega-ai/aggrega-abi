@@ -135,6 +135,8 @@ export interface IREdge {
   socket?: string;
   // The developer-defined alias for this connection (e.g., 'primary_db').
   alias?: string;
+  // Where the socket came from: declared when the catalog entity that owns the socket lists it in usesSchema (the consuming Component, or the originating Feature for a Feature-authored edge), ad-hoc when the Aggregate author named a socket the catalog did not declare. This is a third axis, independent of edge authorship: it says where the socket came from, not who drew the edge, so a Release-authored edge into a declared socket and an Aggregate-authored edge into an ad-hoc socket differ on the two axes independently. A declared socket carries its usesSchema entry, including the selector that constrains which targets the edge may reach; an ad-hoc socket has no catalog entry and therefore no selector, so what the edge may carry is bounded by the target's declared provides alone. Always present, so a consumer never has to read an absent value as declared, and a policy can require every edge to be declared. Distinct from an attachment's binding marker, which answers the same shape of question about a different subject.
+  socket_declaration: string;
   // If this edge was autonomously declared by a Feature (including credential Features labeled feature.aggrega.ai/kind: secret), this identifies the Feature type URI. Allows Wasm plugins to isolate their own topology.
   origin_feature?: string;
   // The per-attachment instance name of the Feature that declared this edge. Locates a boundary-scope FeatureRecipe's resolved provides by instance, disambiguating two attachments of the same Feature type on one boundary.
@@ -300,6 +302,7 @@ export function encodeIREdge(v: IREdge): string {
   parts.push(`${jstr("target")}:${jstr(v.target)}`);
   if (v.socket !== undefined && v.socket !== "") parts.push(`${jstr("socket")}:${jstr(v.socket)}`);
   if (v.alias !== undefined && v.alias !== "") parts.push(`${jstr("alias")}:${jstr(v.alias)}`);
+  parts.push(`${jstr("socket_declaration")}:${jstr(v.socket_declaration)}`);
   if (v.origin_feature !== undefined && v.origin_feature !== "") parts.push(`${jstr("origin_feature")}:${jstr(v.origin_feature)}`);
   if (v.origin_feature_instance !== undefined && v.origin_feature_instance !== "") parts.push(`${jstr("origin_feature_instance")}:${jstr(v.origin_feature_instance)}`);
   if (v.origin_release !== undefined && v.origin_release !== false) parts.push(`${jstr("origin_release")}:${String(v.origin_release)}`);
@@ -880,7 +883,7 @@ export function encodeCBORIREdge(v: IREdge): Uint8Array {
 }
 
 export function appendCBORIREdge(out: number[], v: IREdge): void {
-  let n = 2;
+  let n = 3;
   if (v.alias !== undefined && v.alias !== "") n++;
   if (v.infra !== undefined && v.infra !== null) n++;
   if (v.inject !== undefined && v.inject !== null) n++;
@@ -922,6 +925,8 @@ export function appendCBORIREdge(out: number[], v: IREdge): void {
     writeText(out, "origin_release");
     writeBool(out, v.origin_release);
   }
+  writeText(out, "socket_declaration");
+  writeText(out, v.socket_declaration);
   if (v.origin_feature_instance !== undefined && v.origin_feature_instance !== "") {
     writeText(out, "origin_feature_instance");
     writeText(out, v.origin_feature_instance);
@@ -943,6 +948,7 @@ export function decodeCBORIREdgeFrom(dec: CborDec): IREdge {
       case "target": o["target"] = dec.readText(); break;
       case "socket": o["socket"] = dec.readText(); break;
       case "alias": o["alias"] = dec.readText(); break;
+      case "socket_declaration": o["socket_declaration"] = dec.readText(); break;
       case "origin_feature": o["origin_feature"] = dec.readText(); break;
       case "origin_feature_instance": o["origin_feature_instance"] = dec.readText(); break;
       case "origin_release": o["origin_release"] = dec.readBool(); break;

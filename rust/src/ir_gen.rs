@@ -178,6 +178,8 @@ pub struct IREdge {
     /// The developer-defined alias for this connection (e.g., 'primary_db').
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub alias: String,
+    /// Where the socket came from: declared when the catalog entity that owns the socket lists it in usesSchema (the consuming Component, or the originating Feature for a Feature-authored edge), ad-hoc when the Aggregate author named a socket the catalog did not declare. This is a third axis, independent of edge authorship: it says where the socket came from, not who drew the edge, so a Release-authored edge into a declared socket and an Aggregate-authored edge into an ad-hoc socket differ on the two axes independently. A declared socket carries its usesSchema entry, including the selector that constrains which targets the edge may reach; an ad-hoc socket has no catalog entry and therefore no selector, so what the edge may carry is bounded by the target's declared provides alone. Always present, so a consumer never has to read an absent value as declared, and a policy can require every edge to be declared. Distinct from an attachment's binding marker, which answers the same shape of question about a different subject.
+    pub socket_declaration: String,
     /// If this edge was autonomously declared by a Feature (including credential Features labeled feature.aggrega.ai/kind: secret), this identifies the Feature type URI. Allows Wasm plugins to isolate their own topology.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub origin_feature: String,
@@ -916,7 +918,7 @@ impl IREdge {
     }
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let mut n: u64 = 2;
+        let mut n: u64 = 3;
         if !self.alias.is_empty() { n += 1; }
         if self.infra.is_some() { n += 1; }
         if self.inject.is_some() { n += 1; }
@@ -958,6 +960,8 @@ impl IREdge {
             crate::cbor_gen::write_text(out, "origin_release");
             crate::cbor_gen::write_bool(out, *&self.origin_release);
         }
+        crate::cbor_gen::write_text(out, "socket_declaration");
+        crate::cbor_gen::write_text(out, &self.socket_declaration);
         if !self.origin_feature_instance.is_empty() {
             crate::cbor_gen::write_text(out, "origin_feature_instance");
             crate::cbor_gen::write_text(out, &self.origin_feature_instance);
@@ -977,6 +981,7 @@ impl IREdge {
         let mut f_target: Option<String> = None;
         let mut f_socket: String = String::new();
         let mut f_alias: String = String::new();
+        let mut f_socket_declaration: Option<String> = None;
         let mut f_origin_feature: String = String::new();
         let mut f_origin_feature_instance: String = String::new();
         let mut f_origin_release: bool = false;
@@ -991,6 +996,7 @@ impl IREdge {
                 "target" => f_target = Some(dec.read_text()?),
                 "socket" => f_socket = dec.read_text()?,
                 "alias" => f_alias = dec.read_text()?,
+                "socket_declaration" => f_socket_declaration = Some(dec.read_text()?),
                 "origin_feature" => f_origin_feature = dec.read_text()?,
                 "origin_feature_instance" => f_origin_feature_instance = dec.read_text()?,
                 "origin_release" => f_origin_release = dec.read_bool()?,
@@ -1005,6 +1011,7 @@ impl IREdge {
             target: f_target.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field target".to_string()))?,
             socket: f_socket,
             alias: f_alias,
+            socket_declaration: f_socket_declaration.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field socket_declaration".to_string()))?,
             origin_feature: f_origin_feature,
             origin_feature_instance: f_origin_feature_instance,
             origin_release: f_origin_release,

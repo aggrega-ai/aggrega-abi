@@ -128,6 +128,8 @@ type IREdge struct {
 	Socket string `json:"socket,omitempty" yaml:"socket,omitempty" cbor:"socket,omitempty"`
 	// Alias The developer-defined alias for this connection (e.g., 'primary_db').
 	Alias string `json:"alias,omitempty" yaml:"alias,omitempty" cbor:"alias,omitempty"`
+	// SocketDeclaration Where the socket came from: declared when the catalog entity that owns the socket lists it in usesSchema (the consuming Component, or the originating Feature for a Feature-authored edge), ad-hoc when the Aggregate author named a socket the catalog did not declare. This is a third axis, independent of edge authorship: it says where the socket came from, not who drew the edge, so a Release-authored edge into a declared socket and an Aggregate-authored edge into an ad-hoc socket differ on the two axes independently. A declared socket carries its usesSchema entry, including the selector that constrains which targets the edge may reach; an ad-hoc socket has no catalog entry and therefore no selector, so what the edge may carry is bounded by the target's declared provides alone. Always present, so a consumer never has to read an absent value as declared, and a policy can require every edge to be declared. Distinct from an attachment's binding marker, which answers the same shape of question about a different subject.
+	SocketDeclaration string `json:"socket_declaration" yaml:"socket_declaration" cbor:"socket_declaration"`
 	// OriginFeature If this edge was autonomously declared by a Feature (including credential Features labeled feature.aggrega.ai/kind: secret), this identifies the Feature type URI. Allows Wasm plugins to isolate their own topology.
 	OriginFeature string `json:"origin_feature,omitempty" yaml:"origin_feature,omitempty" cbor:"origin_feature,omitempty"`
 	// OriginFeatureInstance The per-attachment instance name of the Feature that declared this edge. Locates a boundary-scope FeatureRecipe's resolved provides by instance, disambiguating two attachments of the same Feature type on one boundary.
@@ -1424,6 +1426,12 @@ func (t IREdge) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"alias\":")
 		writeJSONString(&buf, t.Alias)
 	}
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"socket_declaration\":")
+	writeJSONString(&buf, t.SocketDeclaration)
 	if t.OriginFeature != "" {
 		if !first {
 			buf.WriteByte(',')
@@ -1517,6 +1525,12 @@ func (t *IREdge) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.Alias = s
+			}
+		case "socket_declaration":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.SocketDeclaration = s
 			}
 		case "origin_feature":
 			if s, err := readString(dec); err != nil {
@@ -3347,7 +3361,7 @@ func (t IREdge) EncodeCBOR() ([]byte, error) {
 // canonical key order (fixed at generation time), omitting empty
 // non-required fields so the map head's pair count matches.
 func (t IREdge) appendCBOR(dst []byte) ([]byte, error) {
-	n := 2
+	n := 3
 	if t.Alias != "" {
 		n++
 	}
@@ -3405,6 +3419,8 @@ func (t IREdge) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "origin_release")
 		dst = appendCBORBool(dst, t.OriginRelease)
 	}
+	dst = appendCBORTextString(dst, "socket_declaration")
+	dst = appendCBORTextString(dst, t.SocketDeclaration)
 	if t.OriginFeatureInstance != "" {
 		dst = appendCBORTextString(dst, "origin_feature_instance")
 		dst = appendCBORTextString(dst, t.OriginFeatureInstance)
@@ -3453,6 +3469,12 @@ func (t *IREdge) decodeCBOR(dec *cborDec) error {
 				return err
 			} else {
 				t.Alias = s
+			}
+		case "socket_declaration":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SocketDeclaration = s
 			}
 		case "origin_feature":
 			if s, err := dec.readTextString(); err != nil {
