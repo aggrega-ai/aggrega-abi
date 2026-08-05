@@ -16,6 +16,7 @@
  * Contract floor: v1alpha1.
  */
 
+export * from "./abi_version_enums_gen.ts";
 export * from "./cli_gen.ts";
 export * from "./describe_gen.ts";
 export * from "./diagnostic_gen.ts";

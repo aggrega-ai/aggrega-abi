@@ -14,6 +14,7 @@
 //!
 //! Contract floor: `v1alpha1`.
 
+mod abi_version_enums_gen;
 mod annotationtransform_gen;
 pub mod cbor_gen;
 mod cli_gen;
@@ -29,6 +30,7 @@ mod parse_gen;
 mod policy_gen;
 mod providerrender_gen;
 
+pub use abi_version_enums_gen::*;
 pub use annotationtransform_gen::*;
 pub use cli_gen::*;
 pub use describe_gen::*;

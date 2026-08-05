@@ -170,19 +170,36 @@ const vectors: Array<[string, string]> = [
   ["ErrorEnvelopeValidateNodeOutput", "ValidateNodeOutput"],
 ];
 
-const m = abi as Record<string, (arg: unknown) => unknown>;
+// The codecs are resolved by NAME because the vector list above is data and a
+// TypeScript interface is erased before it runs, so a per-type codec cannot be
+// reached through the typed namespace. The namespace is viewed as a bag of unknown
+// values rather than as a bag of one-argument functions: it also exports
+// multi-argument append helpers this harness never calls, so the narrower shape is
+// not true of the module as a whole and describing it that way is rejected. Each
+// name is checked to be callable as it is resolved, so a codec that stops being
+// exported reports its own name instead of failing as "not a function" inside an
+// assertion several lines further on.
+const exported = abi as Record<string, unknown>;
+
+function codec(name: string): (arg: unknown) => unknown {
+  const fn = exported[name];
+  if (typeof fn !== "function") {
+    throw new Error(`the ABI module exports no codec named ${name}`);
+  }
+  return fn as (arg: unknown) => unknown;
+}
 
 for (const [file, type] of vectors) {
   test(`${file} JSON+CBOR parity`, () => {
     const wantJson = goldenJson(file);
-    const decodeJson = m[`decode${type}`];
-    const encodeJson = m[`encode${type}`];
+    const decodeJson = codec(`decode${type}`);
+    const encodeJson = codec(`encode${type}`);
     const v = decodeJson(wantJson);
     assert.equal(encodeJson(v), wantJson, `${file} JSON wire`);
 
     const wantCbor = goldenCbor(file);
-    const encodeCbor = m[`encodeCBOR${type}`];
-    const decodeCbor = m[`decodeCBOR${type}`];
+    const encodeCbor = codec(`encodeCBOR${type}`);
+    const decodeCbor = codec(`decodeCBOR${type}`);
     const enc = encodeCbor(v) as Uint8Array;
     assert.equal(toHex(enc), wantCbor, `${file} CBOR encode`);
     const rt = encodeCbor(decodeCbor(enc)) as Uint8Array;
@@ -218,14 +235,14 @@ test("AnnotationTarget orders annotation map keys per wire form", () => {
   };
 
   assert.equal(
-    m["encodeAnnotationTarget"](v),
+    codec("encodeAnnotationTarget")(v),
     '{"boundary_path":"prod/edge","component_name":"web",' +
       '"annotations":{"aggrega.ai/owner":"checkout","cost-center":"42","tier":"frontend"}}',
     "JSON annotation keys not in lexicographic order",
   );
 
   // Shortest key first: "tier" (4), "cost-center" (11), "aggrega.ai/owner" (16).
-  const hex = toHex(m["encodeCBORAnnotationTarget"](v) as Uint8Array);
+  const hex = toHex(codec("encodeCBORAnnotationTarget")(v) as Uint8Array);
   const ordered = ["tier", "cost-center", "aggrega.ai/owner"];
   const at = ordered.map((k) => hex.indexOf(toHex(new TextEncoder().encode(k))));
   for (let i = 0; i < ordered.length; i++) {
@@ -253,8 +270,8 @@ function f64FromBits(hexBits: string): number {
 test("float-boundary vectors", () => {
   const raw = readFileSync(join(testdata, "float_vectors.json"), "utf8");
   const vecs = JSON.parse(raw) as Array<{ label: string; bits: string; cbor: string }>;
-  const encodeCbor = m["encodeCBORCandidateSignals"];
-  const decodeCbor = m["decodeCBORCandidateSignals"];
+  const encodeCbor = codec("encodeCBORCandidateSignals");
+  const decodeCbor = codec("decodeCBORCandidateSignals");
   for (const fv of vecs) {
     const f = f64FromBits(fv.bits);
     const v = { table: f, category: f, domainLabels: f, shape: f, name: f };
