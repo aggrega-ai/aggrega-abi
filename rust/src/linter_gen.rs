@@ -94,7 +94,7 @@ impl LinterInput {
             crate::cbor_gen::write_bytes(out, x.get().as_bytes());
         }
         crate::cbor_gen::write_text(out, "proposed");
-        crate::cbor_gen::write_bytes(out, &self.proposed.get().as_bytes());
+        crate::cbor_gen::write_bytes(out, self.proposed.get().as_bytes());
         crate::cbor_gen::write_text(out, "entity_kind");
         crate::cbor_gen::write_text(out, &self.entity_kind);
         if !self.source_path.is_empty() {
@@ -217,31 +217,31 @@ impl Policies {
         crate::cbor_gen::write_head(out, 5, n);
         if self.allow_dynamic_refs {
             crate::cbor_gen::write_text(out, "allow_dynamic_refs");
-            crate::cbor_gen::write_bool(out, *&self.allow_dynamic_refs);
+            crate::cbor_gen::write_bool(out, self.allow_dynamic_refs);
         }
         if self.allow_id_overrides {
             crate::cbor_gen::write_text(out, "allow_id_overrides");
-            crate::cbor_gen::write_bool(out, *&self.allow_id_overrides);
+            crate::cbor_gen::write_bool(out, self.allow_id_overrides);
         }
         if self.enforce_immutability {
             crate::cbor_gen::write_text(out, "enforce_immutability");
-            crate::cbor_gen::write_bool(out, *&self.enforce_immutability);
+            crate::cbor_gen::write_bool(out, self.enforce_immutability);
         }
         if self.allow_aggrega_ai_prefix {
             crate::cbor_gen::write_text(out, "allow_aggrega_ai_prefix");
-            crate::cbor_gen::write_bool(out, *&self.allow_aggrega_ai_prefix);
+            crate::cbor_gen::write_bool(out, self.allow_aggrega_ai_prefix);
         }
         if self.allow_nonstandard_names {
             crate::cbor_gen::write_text(out, "allow_nonstandard_names");
-            crate::cbor_gen::write_bool(out, *&self.allow_nonstandard_names);
+            crate::cbor_gen::write_bool(out, self.allow_nonstandard_names);
         }
         if self.allow_category_mismatches {
             crate::cbor_gen::write_text(out, "allow_category_mismatches");
-            crate::cbor_gen::write_bool(out, *&self.allow_category_mismatches);
+            crate::cbor_gen::write_bool(out, self.allow_category_mismatches);
         }
         if self.allow_direct_x_aggrega_extensions {
             crate::cbor_gen::write_text(out, "allow_direct_x_aggrega_extensions");
-            crate::cbor_gen::write_bool(out, *&self.allow_direct_x_aggrega_extensions);
+            crate::cbor_gen::write_bool(out, self.allow_direct_x_aggrega_extensions);
         }
         Ok(())
     }

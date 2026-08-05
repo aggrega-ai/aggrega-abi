@@ -299,7 +299,7 @@ impl<'a> CborDec<'a> {
             }
             25 => {
                 self.need(2)?;
-                let v = (self.data[self.pos] as u64) << 8 | self.data[self.pos + 1] as u64;
+                let v = ((self.data[self.pos] as u64) << 8) | self.data[self.pos + 1] as u64;
                 self.pos += 2;
                 v
             }
@@ -307,7 +307,7 @@ impl<'a> CborDec<'a> {
                 self.need(4)?;
                 let mut v: u64 = 0;
                 for k in 0..4 {
-                    v = v << 8 | self.data[self.pos + k] as u64;
+                    v = (v << 8) | self.data[self.pos + k] as u64;
                 }
                 self.pos += 4;
                 v
@@ -316,7 +316,7 @@ impl<'a> CborDec<'a> {
                 self.need(8)?;
                 let mut v: u64 = 0;
                 for k in 0..8 {
-                    v = v << 8 | self.data[self.pos + k] as u64;
+                    v = (v << 8) | self.data[self.pos + k] as u64;
                 }
                 self.pos += 8;
                 v

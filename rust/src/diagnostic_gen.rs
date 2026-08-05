@@ -197,7 +197,7 @@ impl Location {
         }
         if self.line != 0 {
             crate::cbor_gen::write_text(out, "line");
-            crate::cbor_gen::write_int(out, *&self.line);
+            crate::cbor_gen::write_int(out, self.line);
         }
         if let Some(ref x) = self.span {
             crate::cbor_gen::write_text(out, "span");
@@ -258,17 +258,17 @@ impl Span {
         let n: u64 = 6;
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "end_line");
-        crate::cbor_gen::write_int(out, *&self.end_line);
+        crate::cbor_gen::write_int(out, self.end_line);
         crate::cbor_gen::write_text(out, "end_column");
-        crate::cbor_gen::write_int(out, *&self.end_column);
+        crate::cbor_gen::write_int(out, self.end_column);
         crate::cbor_gen::write_text(out, "end_offset");
-        crate::cbor_gen::write_int(out, *&self.end_offset);
+        crate::cbor_gen::write_int(out, self.end_offset);
         crate::cbor_gen::write_text(out, "start_line");
-        crate::cbor_gen::write_int(out, *&self.start_line);
+        crate::cbor_gen::write_int(out, self.start_line);
         crate::cbor_gen::write_text(out, "start_column");
-        crate::cbor_gen::write_int(out, *&self.start_column);
+        crate::cbor_gen::write_int(out, self.start_column);
         crate::cbor_gen::write_text(out, "start_offset");
-        crate::cbor_gen::write_int(out, *&self.start_offset);
+        crate::cbor_gen::write_int(out, self.start_offset);
         Ok(())
     }
 

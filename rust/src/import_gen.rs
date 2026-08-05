@@ -645,7 +645,7 @@ impl ImportCandidate {
         crate::cbor_gen::write_text(out, "tier");
         crate::cbor_gen::write_text(out, &self.tier);
         crate::cbor_gen::write_text(out, "score");
-        crate::cbor_gen::write_float(out, *&self.score);
+        crate::cbor_gen::write_float(out, self.score);
         crate::cbor_gen::write_text(out, "signals");
         self.signals.append_cbor(out)?;
         crate::cbor_gen::write_text(out, "componentName");
@@ -698,15 +698,15 @@ impl CandidateSignals {
         let n: u64 = 5;
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "name");
-        crate::cbor_gen::write_float(out, *&self.name);
+        crate::cbor_gen::write_float(out, self.name);
         crate::cbor_gen::write_text(out, "shape");
-        crate::cbor_gen::write_float(out, *&self.shape);
+        crate::cbor_gen::write_float(out, self.shape);
         crate::cbor_gen::write_text(out, "table");
-        crate::cbor_gen::write_float(out, *&self.table);
+        crate::cbor_gen::write_float(out, self.table);
         crate::cbor_gen::write_text(out, "category");
-        crate::cbor_gen::write_float(out, *&self.category);
+        crate::cbor_gen::write_float(out, self.category);
         crate::cbor_gen::write_text(out, "domainLabels");
-        crate::cbor_gen::write_float(out, *&self.domain_labels);
+        crate::cbor_gen::write_float(out, self.domain_labels);
         Ok(())
     }
 

@@ -148,7 +148,7 @@ impl ParseOutput {
         if !self.diagnostics.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "tree");
-        crate::cbor_gen::write_bytes(out, &self.tree.get().as_bytes());
+        crate::cbor_gen::write_bytes(out, self.tree.get().as_bytes());
         if !self.error.is_empty() {
             crate::cbor_gen::write_text(out, "error");
             crate::cbor_gen::write_text(out, &self.error);
@@ -266,17 +266,17 @@ impl SourceSpan {
         let n: u64 = 6;
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "end_line");
-        crate::cbor_gen::write_int(out, *&self.end_line);
+        crate::cbor_gen::write_int(out, self.end_line);
         crate::cbor_gen::write_text(out, "end_column");
-        crate::cbor_gen::write_int(out, *&self.end_column);
+        crate::cbor_gen::write_int(out, self.end_column);
         crate::cbor_gen::write_text(out, "end_offset");
-        crate::cbor_gen::write_int(out, *&self.end_offset);
+        crate::cbor_gen::write_int(out, self.end_offset);
         crate::cbor_gen::write_text(out, "start_line");
-        crate::cbor_gen::write_int(out, *&self.start_line);
+        crate::cbor_gen::write_int(out, self.start_line);
         crate::cbor_gen::write_text(out, "start_column");
-        crate::cbor_gen::write_int(out, *&self.start_column);
+        crate::cbor_gen::write_int(out, self.start_column);
         crate::cbor_gen::write_text(out, "start_offset");
-        crate::cbor_gen::write_int(out, *&self.start_offset);
+        crate::cbor_gen::write_int(out, self.start_offset);
         Ok(())
     }
 

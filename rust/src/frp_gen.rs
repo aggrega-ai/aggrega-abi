@@ -144,11 +144,11 @@ impl FRPStepInput {
         if !self.preceding_steps.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "context");
-        crate::cbor_gen::write_bytes(out, &self.context.get().as_bytes());
+        crate::cbor_gen::write_bytes(out, self.context.get().as_bytes());
         crate::cbor_gen::write_text(out, "documents");
         self.documents.append_cbor(out)?;
         crate::cbor_gen::write_text(out, "step_index");
-        crate::cbor_gen::write_int(out, *&self.step_index);
+        crate::cbor_gen::write_int(out, self.step_index);
         if !self.step_input.is_empty() {
             crate::cbor_gen::write_text(out, "step_input");
             {
@@ -640,7 +640,7 @@ impl PrecedingStep {
         if !self.side_effects.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "index");
-        crate::cbor_gen::write_int(out, *&self.index);
+        crate::cbor_gen::write_int(out, self.index);
         crate::cbor_gen::write_text(out, "plugin_uri");
         crate::cbor_gen::write_text(out, &self.plugin_uri);
         if !self.side_effects.is_empty() {

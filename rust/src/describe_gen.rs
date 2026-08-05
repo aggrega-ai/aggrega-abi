@@ -659,7 +659,7 @@ impl ProviderContract {
         crate::cbor_gen::write_text(out, &self.boundary_assembly);
         if self.reusable_instance {
             crate::cbor_gen::write_text(out, "reusable_instance");
-            crate::cbor_gen::write_bool(out, *&self.reusable_instance);
+            crate::cbor_gen::write_bool(out, self.reusable_instance);
         }
         if let Some(ref x) = self.artifact_delimiters {
             crate::cbor_gen::write_text(out, "artifact_delimiters");
@@ -667,7 +667,7 @@ impl ProviderContract {
         }
         if self.cross_boundary_linking {
             crate::cbor_gen::write_text(out, "cross_boundary_linking");
-            crate::cbor_gen::write_bool(out, *&self.cross_boundary_linking);
+            crate::cbor_gen::write_bool(out, self.cross_boundary_linking);
         }
         if let Some(ref x) = self.assembly_name_annotation {
             crate::cbor_gen::write_text(out, "assembly_name_annotation");
@@ -730,11 +730,11 @@ impl InputKinds {
         let n: u64 = 3;
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "sourced");
-        crate::cbor_gen::write_bool(out, *&self.sourced);
+        crate::cbor_gen::write_bool(out, self.sourced);
         crate::cbor_gen::write_text(out, "synthesized");
-        crate::cbor_gen::write_bool(out, *&self.synthesized);
+        crate::cbor_gen::write_bool(out, self.synthesized);
         crate::cbor_gen::write_text(out, "artifacts_standalone");
-        crate::cbor_gen::write_bool(out, *&self.artifacts_standalone);
+        crate::cbor_gen::write_bool(out, self.artifacts_standalone);
         Ok(())
     }
 
@@ -829,7 +829,7 @@ impl AssemblyNameAnnotation {
         crate::cbor_gen::write_text(out, &self.annotation);
         if self.require_unique {
             crate::cbor_gen::write_text(out, "require_unique");
-            crate::cbor_gen::write_bool(out, *&self.require_unique);
+            crate::cbor_gen::write_bool(out, self.require_unique);
         }
         Ok(())
     }

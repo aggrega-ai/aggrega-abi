@@ -527,7 +527,7 @@ impl RenderNodeInput {
         crate::cbor_gen::write_text(out, "node");
         self.node.append_cbor(out)?;
         crate::cbor_gen::write_text(out, "context");
-        crate::cbor_gen::write_bytes(out, &self.context.get().as_bytes());
+        crate::cbor_gen::write_bytes(out, self.context.get().as_bytes());
         if let Some(ref x) = self.source_listing {
             crate::cbor_gen::write_text(out, "source_listing");
             x.append_cbor(out)?;
@@ -660,7 +660,7 @@ impl IRNodeProjection {
         }
         if self.sync_wave != 0 {
             crate::cbor_gen::write_text(out, "sync_wave");
-            crate::cbor_gen::write_int(out, *&self.sync_wave);
+            crate::cbor_gen::write_int(out, self.sync_wave);
         }
         crate::cbor_gen::write_text(out, "provenance");
         self.provenance.append_cbor(out)?;
@@ -1242,7 +1242,7 @@ impl SourceEntry {
         crate::cbor_gen::write_text(out, "path");
         crate::cbor_gen::write_text(out, &self.path);
         crate::cbor_gen::write_text(out, "is_dir");
-        crate::cbor_gen::write_bool(out, *&self.is_dir);
+        crate::cbor_gen::write_bool(out, self.is_dir);
         Ok(())
     }
 
@@ -1297,7 +1297,7 @@ impl SourceListing {
         }
         if self.root_is_dir {
             crate::cbor_gen::write_text(out, "root_is_dir");
-            crate::cbor_gen::write_bool(out, *&self.root_is_dir);
+            crate::cbor_gen::write_bool(out, self.root_is_dir);
         }
         Ok(())
     }
@@ -1608,7 +1608,7 @@ impl WorkloadProjection {
         if !self.attachment_sensitive.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "workload");
-        crate::cbor_gen::write_bytes(out, &self.workload.get().as_bytes());
+        crate::cbor_gen::write_bytes(out, self.workload.get().as_bytes());
         if !self.attachment_provides.is_empty() {
             crate::cbor_gen::write_text(out, "attachment_provides");
             {
@@ -1839,7 +1839,7 @@ impl AssembleBoundaryInput {
             }
         }
         crate::cbor_gen::write_text(out, "context");
-        crate::cbor_gen::write_bytes(out, &self.context.get().as_bytes());
+        crate::cbor_gen::write_bytes(out, self.context.get().as_bytes());
         if let Some(ref x) = self.boundary {
             crate::cbor_gen::write_text(out, "boundary");
             crate::cbor_gen::write_bytes(out, x.get().as_bytes());
@@ -2145,7 +2145,7 @@ impl AssembleBoundaryOutput {
         }
         if self.nest_per_node {
             crate::cbor_gen::write_text(out, "nest_per_node");
-            crate::cbor_gen::write_bool(out, *&self.nest_per_node);
+            crate::cbor_gen::write_bool(out, self.nest_per_node);
         }
         Ok(())
     }
@@ -2201,7 +2201,7 @@ impl CarveInput {
         crate::cbor_gen::write_text(out, &self.name);
         if self.yaml_indent != 0 {
             crate::cbor_gen::write_text(out, "yaml_indent");
-            crate::cbor_gen::write_int(out, *&self.yaml_indent);
+            crate::cbor_gen::write_int(out, self.yaml_indent);
         }
         Ok(())
     }
@@ -2322,7 +2322,7 @@ impl ReassembleInput {
         }
         if self.yaml_indent != 0 {
             crate::cbor_gen::write_text(out, "yaml_indent");
-            crate::cbor_gen::write_int(out, *&self.yaml_indent);
+            crate::cbor_gen::write_int(out, self.yaml_indent);
         }
         Ok(())
     }

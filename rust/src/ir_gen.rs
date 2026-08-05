@@ -445,7 +445,7 @@ impl IRFeatureEntry {
         }
         if self.sensitive {
             crate::cbor_gen::write_text(out, "sensitive");
-            crate::cbor_gen::write_bool(out, *&self.sensitive);
+            crate::cbor_gen::write_bool(out, self.sensitive);
         }
         if !self.annotation_key.is_empty() {
             crate::cbor_gen::write_text(out, "annotation_key");
@@ -657,7 +657,7 @@ impl CatalogMetadata {
         }
         if self.deprecated {
             crate::cbor_gen::write_text(out, "deprecated");
-            crate::cbor_gen::write_bool(out, *&self.deprecated);
+            crate::cbor_gen::write_bool(out, self.deprecated);
         }
         if !self.repository.is_empty() {
             crate::cbor_gen::write_text(out, "repository");
@@ -759,7 +759,7 @@ impl IRNode {
         crate::cbor_gen::write_text(out, &self.component);
         if self.sync_wave != 0 {
             crate::cbor_gen::write_text(out, "sync_wave");
-            crate::cbor_gen::write_int(out, *&self.sync_wave);
+            crate::cbor_gen::write_int(out, self.sync_wave);
         }
         if !self.description.is_empty() {
             crate::cbor_gen::write_text(out, "description");
@@ -817,7 +817,7 @@ impl IRNode {
         }
         if self.synthesized_boundary {
             crate::cbor_gen::write_text(out, "synthesized_boundary");
-            crate::cbor_gen::write_bool(out, *&self.synthesized_boundary);
+            crate::cbor_gen::write_bool(out, self.synthesized_boundary);
         }
         if !self.aggregate_annotations.is_empty() {
             crate::cbor_gen::write_text(out, "aggregate_annotations");
@@ -835,7 +835,7 @@ impl IRNode {
         }
         if self.synthesized_subsystem {
             crate::cbor_gen::write_text(out, "synthesized_subsystem");
-            crate::cbor_gen::write_bool(out, *&self.synthesized_subsystem);
+            crate::cbor_gen::write_bool(out, self.synthesized_subsystem);
         }
         Ok(())
     }
@@ -958,7 +958,7 @@ impl IREdge {
         }
         if self.origin_release {
             crate::cbor_gen::write_text(out, "origin_release");
-            crate::cbor_gen::write_bool(out, *&self.origin_release);
+            crate::cbor_gen::write_bool(out, self.origin_release);
         }
         crate::cbor_gen::write_text(out, "socket_declaration");
         crate::cbor_gen::write_text(out, &self.socket_declaration);
