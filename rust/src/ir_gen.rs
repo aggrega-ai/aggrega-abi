@@ -116,8 +116,6 @@ pub struct CatalogMetadata {
     pub home: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keywords: Vec<String>,
-    #[serde(default, skip_serializing_if = "is_default")]
-    pub deprecated: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -633,7 +631,6 @@ impl CatalogMetadata {
         if !self.home.is_empty() { n += 1; }
         if !self.license.is_empty() { n += 1; }
         if !self.keywords.is_empty() { n += 1; }
-        if self.deprecated { n += 1; }
         if !self.repository.is_empty() { n += 1; }
         if !self.maintainers.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -654,10 +651,6 @@ impl CatalogMetadata {
                     crate::cbor_gen::write_text(out, ev);
                 }
             }
-        }
-        if self.deprecated {
-            crate::cbor_gen::write_text(out, "deprecated");
-            crate::cbor_gen::write_bool(out, self.deprecated);
         }
         if !self.repository.is_empty() {
             crate::cbor_gen::write_text(out, "repository");
@@ -689,7 +682,6 @@ impl CatalogMetadata {
         let mut f_repository: String = String::new();
         let mut f_home: String = String::new();
         let mut f_keywords: Vec<String> = Vec::new();
-        let mut f_deprecated: bool = false;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -699,7 +691,6 @@ impl CatalogMetadata {
                 "repository" => f_repository = dec.read_text()?,
                 "home" => f_home = dec.read_text()?,
                 "keywords" => f_keywords = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
-                "deprecated" => f_deprecated = dec.read_bool()?,
                 _ => dec.skip()?,
             }
         }
@@ -709,7 +700,6 @@ impl CatalogMetadata {
             repository: f_repository,
             home: f_home,
             keywords: f_keywords,
-            deprecated: f_deprecated,
         })
     }
 }

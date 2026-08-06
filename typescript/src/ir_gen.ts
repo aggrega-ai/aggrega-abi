@@ -91,7 +91,6 @@ export interface CatalogMetadata {
   repository?: string;
   home?: string;
   keywords?: string[];
-  deprecated?: boolean;
 }
 
 export interface IRNode {
@@ -263,7 +262,6 @@ export function encodeCatalogMetadata(v: CatalogMetadata): string {
   if (v.repository !== undefined && v.repository !== "") parts.push(`${jstr("repository")}:${jstr(v.repository)}`);
   if (v.home !== undefined && v.home !== "") parts.push(`${jstr("home")}:${jstr(v.home)}`);
   if (v.keywords !== undefined && v.keywords.length > 0) parts.push(`${jstr("keywords")}:${`[${v.keywords!.map((e0) => jstr(e0)).join(",")}]`}`);
-  if (v.deprecated !== undefined && v.deprecated !== false) parts.push(`${jstr("deprecated")}:${String(v.deprecated)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -664,7 +662,6 @@ export function appendCBORCatalogMetadata(out: number[], v: CatalogMetadata): vo
   if (v.home !== undefined && v.home !== "") n++;
   if (v.license !== undefined && v.license !== "") n++;
   if (v.keywords !== undefined && v.keywords.length > 0) n++;
-  if (v.deprecated !== undefined && v.deprecated !== false) n++;
   if (v.repository !== undefined && v.repository !== "") n++;
   if (v.maintainers !== undefined && v.maintainers.length > 0) n++;
   writeHead(out, 5, n);
@@ -685,10 +682,6 @@ export function appendCBORCatalogMetadata(out: number[], v: CatalogMetadata): vo
         writeText(out, ee0);
       }
     }
-  }
-  if (v.deprecated !== undefined && v.deprecated !== false) {
-    writeText(out, "deprecated");
-    writeBool(out, v.deprecated);
   }
   if (v.repository !== undefined && v.repository !== "") {
     writeText(out, "repository");
@@ -722,7 +715,6 @@ export function decodeCBORCatalogMetadataFrom(dec: CborDec): CatalogMetadata {
       case "repository": o["repository"] = dec.readText(); break;
       case "home": o["home"] = dec.readText(); break;
       case "keywords": o["keywords"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
-      case "deprecated": o["deprecated"] = dec.readBool(); break;
       default: dec.skip();
     }
   }

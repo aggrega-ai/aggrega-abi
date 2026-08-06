@@ -84,7 +84,6 @@ type CatalogMetadata struct {
 	Repository  string       `json:"repository,omitempty" yaml:"repository,omitempty" cbor:"repository,omitempty"`
 	Home        string       `json:"home,omitempty" yaml:"home,omitempty" cbor:"home,omitempty"`
 	Keywords    []string     `json:"keywords,omitempty" yaml:"keywords,omitempty" cbor:"keywords,omitempty"`
-	Deprecated  bool         `json:"deprecated,omitempty" yaml:"deprecated,omitempty" cbor:"deprecated,omitempty"`
 }
 
 type IRNode struct {
@@ -892,18 +891,6 @@ func (t CatalogMetadata) MarshalJSON() ([]byte, error) {
 		}
 		buf.WriteByte(']')
 	}
-	if t.Deprecated != false {
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.WriteString("\"deprecated\":")
-		if t.Deprecated {
-			buf.WriteString("true")
-		} else {
-			buf.WriteString("false")
-		}
-	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -975,12 +962,6 @@ func (t *CatalogMetadata) UnmarshalJSON(data []byte) error {
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
-			}
-		case "deprecated":
-			if v, err := readBool(dec); err != nil {
-				return err
-			} else {
-				t.Deprecated = v
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -2864,9 +2845,6 @@ func (t CatalogMetadata) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Keywords) != 0 {
 		n++
 	}
-	if t.Deprecated != false {
-		n++
-	}
 	if t.Repository != "" {
 		n++
 	}
@@ -2890,10 +2868,6 @@ func (t CatalogMetadata) appendCBOR(dst []byte) ([]byte, error) {
 			ev := t.Keywords[i]
 			dst = appendCBORTextString(dst, ev)
 		}
-	}
-	if t.Deprecated != false {
-		dst = appendCBORTextString(dst, "deprecated")
-		dst = appendCBORBool(dst, t.Deprecated)
 	}
 	if t.Repository != "" {
 		dst = appendCBORTextString(dst, "repository")
@@ -2981,12 +2955,6 @@ func (t *CatalogMetadata) decodeCBOR(dec *cborDec) error {
 					s = append(s, ev)
 				}
 				t.Keywords = s
-			}
-		case "deprecated":
-			if v, err := dec.readBool(); err != nil {
-				return err
-			} else {
-				t.Deprecated = v
 			}
 		default:
 			if err := dec.skip(); err != nil {
