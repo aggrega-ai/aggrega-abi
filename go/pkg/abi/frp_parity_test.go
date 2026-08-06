@@ -6,6 +6,7 @@ package abi_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aggrega-ai/aggrega-abi-go/pkg/abi"
@@ -37,6 +38,42 @@ func readGolden(t *testing.T, name string) []byte {
 		t.Fatalf("read golden %s: %v", name, err)
 	}
 	return b
+}
+
+// readGoldenHex reads a canonical-CBOR golden and returns its hex body, holding
+// the file to an exact on-disk shape: the lowercase hex digits, then exactly one
+// terminating newline, and nothing else anywhere.
+//
+// The strictness is the point, and it is asserted rather than absorbed. A reader
+// that trims surrounding whitespace cannot distinguish the committed file from
+// one carrying a stray second newline, a carriage return, or leading indentation
+// — so a fixture whose bytes drifted would still satisfy every downstream
+// assertion, and the byte-level guarantee this whole vector corpus exists to
+// prove would be quietly weaker than it reads. Whitespace tolerance also has to
+// be identical in all three languages or the corpus is not one golden: a form one
+// harness silently accepts and another rejects makes the same file mean two
+// different things. Both are avoided by admitting exactly one form.
+//
+// The JSON goldens need no equivalent helper. Their committed bytes ARE the wire
+// bytes, carrying no terminating newline, so the byte-compare against the encoder
+// output is already the strictest possible check on the file's shape and a
+// separate assertion would only restate it.
+func readGoldenHex(t *testing.T, name string) string {
+	t.Helper()
+
+	raw := string(readGolden(t, name))
+	body, ok := strings.CutSuffix(raw, "\n")
+	if !ok {
+		t.Fatalf("golden %s does not end in a newline, so its committed shape is not the canonical one: %q",
+			name, raw)
+	}
+	for i := 0; i < len(body); i++ {
+		if c := body[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			t.Fatalf("golden %s carries %q at offset %d, so it is not lowercase hex followed by one newline: %q",
+				name, string(c), i, raw)
+		}
+	}
+	return body
 }
 
 // TestGoldenParity_FRPStepInput round-trips the host's FRPStepInput wire

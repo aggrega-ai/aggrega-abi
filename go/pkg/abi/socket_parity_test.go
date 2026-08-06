@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/aggrega-ai/aggrega-abi-go/pkg/abi"
@@ -77,7 +76,7 @@ func roundTripBothGolden[T cborEncoder, PT interface {
 		t.Errorf("%s JSON wire not byte-identical to golden:\n golden: %s\n    got: %s", name, wantJSON, gotJSON)
 	}
 
-	wantHex := strings.TrimSpace(string(readGolden(t, name+".cbor.hex")))
+	wantHex := readGoldenHex(t, name+".cbor.hex")
 	enc, err := v.EncodeCBOR()
 	if err != nil {
 		t.Fatalf("codec encode CBOR %s: %v", name, err)

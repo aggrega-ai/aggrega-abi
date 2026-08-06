@@ -22,19 +22,47 @@ fn testdata() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("testdata")
 }
 
+/// golden_json reads a JSON golden VERBATIM. Its committed bytes are the wire
+/// bytes, carrying no terminating newline, so the byte-compare against the encoder
+/// output is itself the strictest possible check on the file's shape and a
+/// separate assertion would only restate it. Reading it verbatim is what makes
+/// that compare mean anything: a reader that trimmed surrounding whitespace could
+/// not distinguish the committed file from one whose bytes had drifted, and a
+/// stray newline would be absorbed here while a stricter harness rejected it —
+/// leaving the same file meaning two different things in two languages, which is
+/// exactly what a shared corpus cannot afford.
 fn golden_json(name: &str) -> String {
     let p = testdata().join(format!("{name}.golden.json"));
-    fs::read_to_string(&p)
-        .unwrap_or_else(|e| panic!("read golden {}: {}", p.display(), e))
-        .trim()
-        .to_string()
+    fs::read_to_string(&p).unwrap_or_else(|e| panic!("read golden {}: {}", p.display(), e))
+}
+
+/// golden_hex reads a canonical-CBOR golden and returns its hex body, holding the
+/// file to an exact on-disk shape: the lowercase hex digits, then exactly one
+/// terminating newline, and nothing else anywhere. Admitting exactly one form is
+/// what keeps the corpus single-valued across the three harnesses — a whitespace
+/// variant one of them silently accepted would be a fixture the languages read
+/// differently.
+fn golden_hex(name: &str) -> String {
+    let p = testdata().join(format!("{name}.cbor.hex"));
+    let raw = fs::read_to_string(&p)
+        .unwrap_or_else(|e| panic!("read cbor golden {}: {}", p.display(), e));
+    let body = raw.strip_suffix('\n').unwrap_or_else(|| {
+        panic!("golden {name}.cbor.hex does not end in a newline, so its committed shape is not the canonical one: {raw:?}")
+    });
+    if let Some(i) = body.bytes().position(|c| !c.is_ascii_digit() && !(b'a'..=b'f').contains(&c)) {
+        panic!(
+            "golden {}.cbor.hex carries {:?} at offset {}, so it is not lowercase hex followed by one newline: {:?}",
+            name,
+            &body[i..i + 1],
+            i,
+            raw
+        );
+    }
+    body.to_string()
 }
 
 fn golden_cbor(name: &str) -> Vec<u8> {
-    let p = testdata().join(format!("{name}.cbor.hex"));
-    let h = fs::read_to_string(&p)
-        .unwrap_or_else(|e| panic!("read cbor golden {}: {}", p.display(), e));
-    hex_decode(h.trim())
+    hex_decode(&golden_hex(name))
 }
 
 fn hex_decode(s: &str) -> Vec<u8> {
@@ -372,4 +400,119 @@ fn float_boundary_vectors() {
         let rt = CandidateSignals::decode_cbor(&enc).expect("decode").encode_cbor().expect("re-encode");
         assert_eq!(hex_encode(&rt), fv.cbor, "{}: float round-trip not stable", fv.label);
     }
+}
+
+// The vector corpus is ONE golden read by three harnesses, and the value of that
+// arrangement is entirely in the word "one". Three codecs generated from a single
+// schema are only proven to produce a single wire if all three are held to the
+// same bytes; a vector exercised in one language and not another proves that
+// language's codec self-consistent and says nothing about parity.
+//
+// Nothing structural keeps them aligned. Each harness enumerates its vectors in
+// its own idiom — the macro invocations above, call sites in Go, an array in
+// TypeScript — so agreement across the three is a hand-maintained property, and a
+// vector pair committed to the shared tree is wired by whoever remembers to wire
+// it in all three places. The failure mode is silent in the worst way: the new
+// vector passes wherever it was wired, every existing vector keeps passing, and
+// the language that never received it reports nothing at all. Coverage does not go
+// red when it is missing, because missing coverage has no assertion to fail.
+//
+// The census below closes that on this side by deriving coverage FROM THE CORPUS
+// rather than from a list: the directory is the authority, so a pair is covered
+// the moment it lands or this test names it. Each of the other two harnesses
+// carries the same guard against the same directory.
+//
+// Only the corpus-to-harness direction needs asserting. The reverse — a harness
+// asserting a vector the corpus does not carry — cannot pass quietly anywhere,
+// because the golden reader panics on the missing file.
+
+/// SOURCE is this harness's own text, embedded at compile time so the census reads
+/// the real vector declarations. A hand-written list of names checked against the
+/// directory would only move the drift one step, leaving the list and the macro
+/// invocations free to disagree.
+const SOURCE: &str = include_str!("parity.rs");
+
+/// STANDALONE_FIXTURES are the corpus files that are deliberately NOT vector
+/// pairs, each consumed by its own dedicated test in all three harnesses. They are
+/// named so that a fixture arriving in the corpus and wired nowhere cannot pass as
+/// one of these.
+const STANDALONE_FIXTURES: &[&str] = &["float_vectors.json"];
+
+/// corpus_vectors returns the vector names committed to the shared tree, having
+/// first asserted that every name carries BOTH halves of its pair and that every
+/// file present is either half of a pair or a named standalone fixture. An
+/// unrecognized file fails rather than being skipped, because a fixture nothing
+/// consumes is the same coverage hole this census exists to close.
+fn corpus_vectors() -> std::collections::BTreeSet<String> {
+    let dir = testdata();
+    let mut json = std::collections::BTreeSet::new();
+    let mut cbor = std::collections::BTreeSet::new();
+    let entries = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("read the shared vector corpus {}: {}", dir.display(), e));
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|e| panic!("read a corpus entry: {e}"));
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if STANDALONE_FIXTURES.contains(&name.as_str()) {
+            continue;
+        }
+        if let Some(base) = name.strip_suffix(".golden.json") {
+            json.insert(base.to_string());
+        } else if let Some(base) = name.strip_suffix(".cbor.hex") {
+            cbor.insert(base.to_string());
+        } else {
+            panic!(
+                "the shared vector corpus carries {name:?}, which is neither half of a vector pair \
+                 nor a fixture any harness is known to consume, so nothing asserts anything about it"
+            );
+        }
+    }
+    let half_only: Vec<&String> = json.symmetric_difference(&cbor).collect();
+    assert!(
+        half_only.is_empty(),
+        "a vector is the JSON and CBOR pair, and a name carrying one half leaves the other codec \
+         unpinned: {half_only:?}"
+    );
+    assert!(
+        !json.is_empty(),
+        "found no vector pairs in the shared corpus, so this census certifies nothing"
+    );
+    json
+}
+
+/// declarations returns this harness's text with line comments removed, so a
+/// vector name that appears only in prose cannot be mistaken for one that is
+/// wired.
+fn declarations() -> String {
+    SOURCE
+        .lines()
+        .map(|l| match l.find("//") {
+            Some(i) => &l[..i],
+            None => l,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn every_golden_vector_is_exercised() {
+    let corpus = corpus_vectors();
+    let declared = declarations();
+
+    // Calibration: the census is worthless if the instrument reads nothing, so a
+    // pattern that has stopped matching the code fails here rather than reporting
+    // a clean sweep over an empty search.
+    assert!(
+        declared.contains("cbor_case!"),
+        "found no vector declarations in this harness's own text, so the coverage census certifies nothing"
+    );
+
+    let missing: Vec<&String> = corpus
+        .iter()
+        .filter(|name| !declared.contains(&format!("\"{name}\"")))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "these vectors are committed to the shared corpus but no assertion in this harness reads them, \
+         so this language's codec is unpinned on a wire the others prove: {missing:?}"
+    );
 }

@@ -30,7 +30,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -39,12 +39,41 @@ import * as abi from "../src/index.ts";
 const here = dirname(fileURLToPath(import.meta.url));
 const testdata = join(here, "..", "..", "testdata");
 
+// goldenJson reads a JSON golden VERBATIM. Its committed bytes are the wire bytes,
+// carrying no terminating newline, so the byte-compare against the encoder output
+// is itself the strictest possible check on the file's shape and a separate
+// assertion would only restate it. Reading it verbatim is what makes that compare
+// mean anything: a reader that trimmed surrounding whitespace could not
+// distinguish the committed file from one whose bytes had drifted, and a stray
+// newline would be absorbed here while a stricter harness rejected it — leaving the
+// same file meaning two different things in two languages, which is exactly what a
+// shared corpus cannot afford.
 function goldenJson(name: string): string {
-  return readFileSync(join(testdata, `${name}.golden.json`), "utf8").trim();
+  return readFileSync(join(testdata, `${name}.golden.json`), "utf8");
 }
 
+// goldenCbor reads a canonical-CBOR golden and returns its hex body, holding the
+// file to an exact on-disk shape: the lowercase hex digits, then exactly one
+// terminating newline, and nothing else anywhere. Admitting exactly one form is
+// what keeps the corpus single-valued across the three harnesses — a whitespace
+// variant one of them silently accepted would be a fixture the languages read
+// differently.
 function goldenCbor(name: string): string {
-  return readFileSync(join(testdata, `${name}.cbor.hex`), "utf8").trim();
+  const raw = readFileSync(join(testdata, `${name}.cbor.hex`), "utf8");
+  if (!raw.endsWith("\n")) {
+    throw new Error(
+      `golden ${name}.cbor.hex does not end in a newline, so its committed shape is not the canonical one: ${JSON.stringify(raw)}`,
+    );
+  }
+  const body = raw.slice(0, -1);
+  const stray = body.search(/[^0-9a-f]/);
+  if (stray >= 0) {
+    throw new Error(
+      `golden ${name}.cbor.hex carries ${JSON.stringify(body[stray])} at offset ${stray}, so it is not ` +
+        `lowercase hex followed by one newline: ${JSON.stringify(raw)}`,
+    );
+  }
+  return body;
 }
 
 function toHex(u8: Uint8Array): string {
@@ -280,4 +309,77 @@ test("float-boundary vectors", () => {
     const rt = encodeCbor(decodeCbor(enc)) as Uint8Array;
     assert.equal(toHex(rt), fv.cbor, `${fv.label} float round-trip`);
   }
+});
+
+// The vector corpus is ONE golden read by three harnesses, and the value of that
+// arrangement is entirely in the word "one". Three codecs generated from a single
+// schema are only proven to produce a single wire if all three are held to the same
+// bytes; a vector exercised in one language and not another proves that language's
+// codec self-consistent and says nothing about parity.
+//
+// Nothing structural keeps them aligned. Each harness enumerates its vectors in its
+// own idiom — the array above, call sites in Go, macro invocations in Rust — so
+// agreement across the three is a hand-maintained property, and a vector pair
+// committed to the shared tree is wired by whoever remembers to wire it in all three
+// places. The failure mode is silent in the worst way: the new vector passes wherever
+// it was wired, every existing vector keeps passing, and the language that never
+// received it reports nothing at all. Coverage does not go red when it is missing,
+// because missing coverage has no assertion to fail.
+//
+// The census below closes that on this side by deriving coverage FROM THE CORPUS
+// rather than from a list: the directory is the authority, so a pair is covered the
+// moment it lands or this test names it. Each of the other two harnesses carries the
+// same guard against the same directory. Here the comparison is exact in both
+// directions, because the vector list is data this test can read directly.
+
+// standaloneFixtures are the corpus files that are deliberately NOT vector pairs,
+// each consumed by its own dedicated test in all three harnesses. They are named so
+// that a fixture arriving in the corpus and wired nowhere cannot pass as one of
+// these.
+const standaloneFixtures = ["float_vectors.json"];
+
+// corpusVectors returns the vector names committed to the shared tree, having first
+// asserted that every name carries BOTH halves of its pair and that every file
+// present is either half of a pair or a named standalone fixture. An unrecognized
+// file fails rather than being skipped, because a fixture nothing consumes is the
+// same coverage hole this census exists to close.
+function corpusVectors(): Set<string> {
+  const json = new Set<string>();
+  const cbor = new Set<string>();
+  for (const name of readdirSync(testdata)) {
+    if (standaloneFixtures.includes(name)) continue;
+    if (name.endsWith(".golden.json")) json.add(name.slice(0, -".golden.json".length));
+    else if (name.endsWith(".cbor.hex")) cbor.add(name.slice(0, -".cbor.hex".length));
+    else {
+      throw new Error(
+        `the shared vector corpus carries ${JSON.stringify(name)}, which is neither half of a vector ` +
+          `pair nor a fixture any harness is known to consume, so nothing asserts anything about it`,
+      );
+    }
+  }
+  const halfOnly = [...json].filter((n) => !cbor.has(n)).concat([...cbor].filter((n) => !json.has(n)));
+  assert.deepEqual(
+    halfOnly.sort(),
+    [],
+    "a vector is the JSON and CBOR pair, and a name carrying one half leaves the other codec unpinned",
+  );
+  assert.ok(json.size > 0, "found no vector pairs in the shared corpus, so this census certifies nothing");
+  return json;
+}
+
+test("every golden vector is exercised", () => {
+  const corpus = corpusVectors();
+  const exercised = new Set(vectors.map(([file]) => file));
+
+  assert.deepEqual(
+    [...corpus].filter((name) => !exercised.has(name)).sort(),
+    [],
+    "these vectors are committed to the shared corpus but no assertion in this harness reads them, so " +
+      "this language's codec is unpinned on a wire the others prove",
+  );
+  assert.deepEqual(
+    [...exercised].filter((name) => !corpus.has(name)).sort(),
+    [],
+    "these vectors are asserted by this harness but the shared corpus does not carry them",
+  );
 });
