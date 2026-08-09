@@ -47,9 +47,6 @@ pub struct LinterOutput {
 /// Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Policies {
-    /// When true, published artefacts are immutable at the registry path; re-publishing the same version is rejected. When false, the rule is suppressed (development-only).
-    #[serde(default, skip_serializing_if = "is_default")]
-    pub enforce_immutability: bool,
     /// When true, $dynamicAnchor / $dynamicRef usage in SchemaLibrary entries is permitted (suppresses the dynamic_refs rule). Default false.
     #[serde(default, skip_serializing_if = "is_default")]
     pub allow_dynamic_refs: bool,
@@ -209,7 +206,6 @@ impl Policies {
         let mut n: u64 = 0;
         if self.allow_dynamic_refs { n += 1; }
         if self.allow_id_overrides { n += 1; }
-        if self.enforce_immutability { n += 1; }
         if self.allow_aggrega_ai_prefix { n += 1; }
         if self.allow_nonstandard_names { n += 1; }
         if self.allow_category_mismatches { n += 1; }
@@ -222,10 +218,6 @@ impl Policies {
         if self.allow_id_overrides {
             crate::cbor_gen::write_text(out, "allow_id_overrides");
             crate::cbor_gen::write_bool(out, self.allow_id_overrides);
-        }
-        if self.enforce_immutability {
-            crate::cbor_gen::write_text(out, "enforce_immutability");
-            crate::cbor_gen::write_bool(out, self.enforce_immutability);
         }
         if self.allow_aggrega_ai_prefix {
             crate::cbor_gen::write_text(out, "allow_aggrega_ai_prefix");
@@ -254,7 +246,6 @@ impl Policies {
     }
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_enforce_immutability: bool = false;
         let mut f_allow_dynamic_refs: bool = false;
         let mut f_allow_id_overrides: bool = false;
         let mut f_allow_direct_x_aggrega_extensions: bool = false;
@@ -265,7 +256,6 @@ impl Policies {
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
-                "enforce_immutability" => f_enforce_immutability = dec.read_bool()?,
                 "allow_dynamic_refs" => f_allow_dynamic_refs = dec.read_bool()?,
                 "allow_id_overrides" => f_allow_id_overrides = dec.read_bool()?,
                 "allow_direct_x_aggrega_extensions" => f_allow_direct_x_aggrega_extensions = dec.read_bool()?,
@@ -276,7 +266,6 @@ impl Policies {
             }
         }
         Ok(Self {
-            enforce_immutability: f_enforce_immutability,
             allow_dynamic_refs: f_allow_dynamic_refs,
             allow_id_overrides: f_allow_id_overrides,
             allow_direct_x_aggrega_extensions: f_allow_direct_x_aggrega_extensions,

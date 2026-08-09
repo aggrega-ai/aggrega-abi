@@ -1,1 +1,1 @@
-{"rule_id":"schema-evolution","entity_kind":"Component","proposed":{"z":1,"a":2},"previous":{"k":"v"},"policies":{"enforce_immutability":true}}
+{"rule_id":"schema-evolution","entity_kind":"Component","proposed":{"z":1,"a":2},"previous":{"k":"v"},"policies":{"allow_dynamic_refs":true}}

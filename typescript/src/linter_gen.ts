@@ -50,8 +50,6 @@ export interface LinterOutput {
 
 // Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.
 export interface Policies {
-  // When true, published artefacts are immutable at the registry path; re-publishing the same version is rejected. When false, the rule is suppressed (development-only).
-  enforce_immutability?: boolean;
   // When true, $dynamicAnchor / $dynamicRef usage in SchemaLibrary entries is permitted (suppresses the dynamic_refs rule). Default false.
   allow_dynamic_refs?: boolean;
   // When true, $id overrides in SchemaLibrary entries are permitted (suppresses the id_overrides rule). Default false.
@@ -94,7 +92,6 @@ export function decodeLinterOutput(data: string): LinterOutput {
 
 export function encodePolicies(v: Policies): string {
   const parts: string[] = [];
-  if (v.enforce_immutability !== undefined && v.enforce_immutability !== false) parts.push(`${jstr("enforce_immutability")}:${String(v.enforce_immutability)}`);
   if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) parts.push(`${jstr("allow_dynamic_refs")}:${String(v.allow_dynamic_refs)}`);
   if (v.allow_id_overrides !== undefined && v.allow_id_overrides !== false) parts.push(`${jstr("allow_id_overrides")}:${String(v.allow_id_overrides)}`);
   if (v.allow_direct_x_aggrega_extensions !== undefined && v.allow_direct_x_aggrega_extensions !== false) parts.push(`${jstr("allow_direct_x_aggrega_extensions")}:${String(v.allow_direct_x_aggrega_extensions)}`);
@@ -216,7 +213,6 @@ export function appendCBORPolicies(out: number[], v: Policies): void {
   let n = 0;
   if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) n++;
   if (v.allow_id_overrides !== undefined && v.allow_id_overrides !== false) n++;
-  if (v.enforce_immutability !== undefined && v.enforce_immutability !== false) n++;
   if (v.allow_aggrega_ai_prefix !== undefined && v.allow_aggrega_ai_prefix !== false) n++;
   if (v.allow_nonstandard_names !== undefined && v.allow_nonstandard_names !== false) n++;
   if (v.allow_category_mismatches !== undefined && v.allow_category_mismatches !== false) n++;
@@ -229,10 +225,6 @@ export function appendCBORPolicies(out: number[], v: Policies): void {
   if (v.allow_id_overrides !== undefined && v.allow_id_overrides !== false) {
     writeText(out, "allow_id_overrides");
     writeBool(out, v.allow_id_overrides);
-  }
-  if (v.enforce_immutability !== undefined && v.enforce_immutability !== false) {
-    writeText(out, "enforce_immutability");
-    writeBool(out, v.enforce_immutability);
   }
   if (v.allow_aggrega_ai_prefix !== undefined && v.allow_aggrega_ai_prefix !== false) {
     writeText(out, "allow_aggrega_ai_prefix");
@@ -263,7 +255,6 @@ export function decodeCBORPoliciesFrom(dec: CborDec): Policies {
   for (let i = 0; i < n; i++) {
     const k = dec.readText();
     switch (k) {
-      case "enforce_immutability": o["enforce_immutability"] = dec.readBool(); break;
       case "allow_dynamic_refs": o["allow_dynamic_refs"] = dec.readBool(); break;
       case "allow_id_overrides": o["allow_id_overrides"] = dec.readBool(); break;
       case "allow_direct_x_aggrega_extensions": o["allow_direct_x_aggrega_extensions"] = dec.readBool(); break;
