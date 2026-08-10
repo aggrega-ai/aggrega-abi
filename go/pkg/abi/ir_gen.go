@@ -167,8 +167,6 @@ type IRSpec struct {
 	Nodes map[string]IRNode `json:"nodes" yaml:"nodes" cbor:"nodes"`
 	// Edges Explicit logical network paths and dependencies between nodes.
 	Edges []IREdge `json:"edges" yaml:"edges" cbor:"edges"`
-	// FeatureMarkers The de-duplicated, lexicographically sorted set of Feature type strings — one entry per distinct Feature type attached anywhere in the graph (for example core/logging), regardless of where the attachment was declared. Sorting is what makes the set byte-identical across runs of the same input.
-	FeatureMarkers []string `json:"feature_markers" yaml:"feature_markers" cbor:"feature_markers"`
 	// ValuesMapping The single source of truth for opaque pass-through cognitive payloads, mapped by node ID.
 	ValuesMapping map[string]json.RawMessage `json:"values_mapping" yaml:"values_mapping" cbor:"values_mapping"`
 	// InfraMapping The physical sizing payload injected from the Release, mapped by node ID.
@@ -1791,20 +1789,6 @@ func (t IRSpec) MarshalJSON() ([]byte, error) {
 		buf.WriteByte(',')
 	}
 	first = false
-	buf.WriteString("\"feature_markers\":")
-	buf.WriteByte('[')
-	for i := range t.FeatureMarkers {
-		if i > 0 {
-			buf.WriteByte(',')
-		}
-		ev := t.FeatureMarkers[i]
-		writeJSONString(&buf, ev)
-	}
-	buf.WriteByte(']')
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
 	buf.WriteString("\"values_mapping\":")
 	{
 		keys := make([]string, 0, len(t.ValuesMapping))
@@ -2003,23 +1987,6 @@ func (t *IRSpec) UnmarshalJSON(data []byte) error {
 					}
 				}
 				t.Edges = append(t.Edges, elem)
-			}
-			if err := expectDelim(dec, ']'); err != nil {
-				return err
-			}
-		case "feature_markers":
-			t.FeatureMarkers = nil
-			if err := expectDelim(dec, '['); err != nil {
-				return err
-			}
-			for dec.More() {
-				var elem string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					elem = s
-				}
-				t.FeatureMarkers = append(t.FeatureMarkers, elem)
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
@@ -3655,7 +3622,7 @@ func (t IRSpec) EncodeCBOR() ([]byte, error) {
 // canonical key order (fixed at generation time), omitting empty
 // non-required fields so the map head's pair count matches.
 func (t IRSpec) appendCBOR(dst []byte) ([]byte, error) {
-	n := 7
+	n := 6
 	if len(t.BoundaryFeatures) != 0 {
 		n++
 	}
@@ -3716,12 +3683,6 @@ func (t IRSpec) appendCBOR(dst []byte) ([]byte, error) {
 			mv := t.ValuesMapping[k]
 			dst = appendCBORByteString(dst, mv)
 		}
-	}
-	dst = appendCBORTextString(dst, "feature_markers")
-	dst = appendCBORHead(dst, 4, uint64(len(t.FeatureMarkers)))
-	for i := range t.FeatureMarkers {
-		ev := t.FeatureMarkers[i]
-		dst = appendCBORTextString(dst, ev)
 	}
 	if len(t.BoundaryFeatures) != 0 {
 		dst = appendCBORTextString(dst, "boundary_features")
@@ -3837,24 +3798,6 @@ func (t *IRSpec) decodeCBOR(dec *cborDec) error {
 					s = append(s, ev)
 				}
 				t.Edges = s
-			}
-		case "feature_markers":
-			{
-				sn, err := dec.readArrayHeader()
-				if err != nil {
-					return err
-				}
-				s := make([]string, 0, sn)
-				for si := 0; si < sn; si++ {
-					var ev string
-					if s, err := dec.readTextString(); err != nil {
-						return err
-					} else {
-						ev = s
-					}
-					s = append(s, ev)
-				}
-				t.FeatureMarkers = s
 			}
 		case "values_mapping":
 			{

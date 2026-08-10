@@ -225,8 +225,6 @@ pub struct IRSpec {
     pub nodes: BTreeMap<String, IRNode>,
     /// Explicit logical network paths and dependencies between nodes.
     pub edges: Vec<IREdge>,
-    /// The de-duplicated, lexicographically sorted set of Feature type strings — one entry per distinct Feature type attached anywhere in the graph (for example core/logging), regardless of where the attachment was declared. Sorting is what makes the set byte-identical across runs of the same input.
-    pub feature_markers: Vec<String>,
     /// The single source of truth for opaque pass-through cognitive payloads, mapped by node ID.
     pub values_mapping: BTreeMap<String, Box<RawValue>>,
     /// The physical sizing payload injected from the Release, mapped by node ID.
@@ -1133,7 +1131,7 @@ impl IRSpec {
     }
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let mut n: u64 = 7;
+        let mut n: u64 = 6;
         if !self.boundary_features.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "edges");
@@ -1180,14 +1178,6 @@ impl IRSpec {
                 crate::cbor_gen::write_text(out, k);
                 let mv = &c[k];
                 crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
-            }
-        }
-        crate::cbor_gen::write_text(out, "feature_markers");
-        {
-            let c = &self.feature_markers;
-            crate::cbor_gen::write_head(out, 4, c.len() as u64);
-            for ev in c {
-                crate::cbor_gen::write_text(out, ev);
             }
         }
         if !self.boundary_features.is_empty() {
@@ -1249,7 +1239,6 @@ impl IRSpec {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_nodes: Option<BTreeMap<String, IRNode>> = None;
         let mut f_edges: Option<Vec<IREdge>> = None;
-        let mut f_feature_markers: Option<Vec<String>> = None;
         let mut f_values_mapping: Option<BTreeMap<String, Box<RawValue>>> = None;
         let mut f_infra_mapping: Option<BTreeMap<String, Box<RawValue>>> = None;
         let mut f_feature_values_mapping: Option<BTreeMap<String, BTreeMap<String, IRFeatureEntry>>> = None;
@@ -1261,7 +1250,6 @@ impl IRSpec {
             match k.as_str() {
                 "nodes" => f_nodes = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRNode> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRNode::decode_cbor_from(dec)?; m.insert(mk, mv); } m }),
                 "edges" => f_edges = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<IREdge> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(IREdge::decode_cbor_from(dec)?); } sv }),
-                "feature_markers" => f_feature_markers = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }),
                 "values_mapping" => f_values_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m }),
                 "infra_mapping" => f_infra_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m }),
                 "feature_values_mapping" => f_feature_values_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, IRFeatureEntry>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRFeatureEntry> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRFeatureEntry::decode_cbor_from(dec)?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m }),
@@ -1273,7 +1261,6 @@ impl IRSpec {
         Ok(Self {
             nodes: f_nodes.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field nodes".to_string()))?,
             edges: f_edges.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field edges".to_string()))?,
-            feature_markers: f_feature_markers.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field feature_markers".to_string()))?,
             values_mapping: f_values_mapping.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field values_mapping".to_string()))?,
             infra_mapping: f_infra_mapping.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field infra_mapping".to_string()))?,
             feature_values_mapping: f_feature_values_mapping.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field feature_values_mapping".to_string()))?,

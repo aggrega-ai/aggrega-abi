@@ -174,8 +174,6 @@ export interface IRSpec {
   nodes: Record<string, IRNode>;
   // Explicit logical network paths and dependencies between nodes.
   edges: IREdge[];
-  // The de-duplicated, lexicographically sorted set of Feature type strings — one entry per distinct Feature type attached anywhere in the graph (for example core/logging), regardless of where the attachment was declared. Sorting is what makes the set byte-identical across runs of the same input.
-  feature_markers: string[];
   // The single source of truth for opaque pass-through cognitive payloads, mapped by node ID.
   values_mapping: Record<string, unknown>;
   // The physical sizing payload injected from the Release, mapped by node ID.
@@ -343,7 +341,6 @@ export function encodeIRSpec(v: IRSpec): string {
   const parts: string[] = [];
   parts.push(`${jstr("nodes")}:${`{${Object.keys(v.nodes!).sort().map((k0) => `${jstr(k0)}:${encodeIRNode(v.nodes![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("edges")}:${`[${v.edges!.map((e0) => encodeIREdge(e0)).join(",")}]`}`);
-  parts.push(`${jstr("feature_markers")}:${`[${v.feature_markers!.map((e0) => jstr(e0)).join(",")}]`}`);
   parts.push(`${jstr("values_mapping")}:${`{${Object.keys(v.values_mapping!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values_mapping![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("infra_mapping")}:${`{${Object.keys(v.infra_mapping!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.infra_mapping![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("feature_values_mapping")}:${`{${Object.keys(v.feature_values_mapping!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.feature_values_mapping![k0]!).sort().map((k1) => `${jstr(k1)}:${encodeIRFeatureEntry(v.feature_values_mapping![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
@@ -1043,7 +1040,7 @@ export function encodeCBORIRSpec(v: IRSpec): Uint8Array {
 }
 
 export function appendCBORIRSpec(out: number[], v: IRSpec): void {
-  let n = 7;
+  let n = 6;
   if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "edges");
@@ -1084,14 +1081,6 @@ export function appendCBORIRSpec(out: number[], v: IRSpec): void {
     for (const kk0 of ks0) {
       writeText(out, kk0);
       writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
-    }
-  }
-  writeText(out, "feature_markers");
-  {
-    const a0 = v.feature_markers;
-    writeHead(out, 4, a0.length);
-    for (const ee0 of a0) {
-      writeText(out, ee0);
     }
   }
   if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) {
@@ -1147,7 +1136,6 @@ export function decodeCBORIRSpecFrom(dec: CborDec): IRSpec {
     switch (k) {
       case "nodes": o["nodes"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRNodeFrom(dec); } return m; })(); break;
       case "edges": o["edges"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORIREdgeFrom(dec)); } return a; })(); break;
-      case "feature_markers": o["feature_markers"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       case "values_mapping": o["values_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       case "infra_mapping": o["infra_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       case "feature_values_mapping": o["feature_values_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRFeatureEntryFrom(dec); } return m; })(); } return m; })(); break;
