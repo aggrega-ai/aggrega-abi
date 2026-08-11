@@ -21,10 +21,11 @@ package abi
 // this schema: the compiler declares it by hand as ABIVersionV1Alpha1 in
 // aggrega-cli/internal/wasm/describe.go, and the descriptor check in that file
 // is what rejects a guest at load. That home is named here because it is the
-// enforcing one: nothing cross-checks it against the schema, so bumping the ABI
-// is a schema edit plus a regeneration AND a hand edit to the host constant, and
-// a bump that stops at the regeneration leaves the compiler still refusing every
-// guest built against the new version.
+// enforcing one, and it is held to this schema by a cross-check in the
+// compiler's own test suite. So bumping the ABI is a schema edit plus a
+// regeneration AND a hand edit to the host constant, and a bump that stops at
+// the regeneration fails that cross-check rather than silently leaving the
+// compiler refusing every guest built against the new version.
 //
 // It is unrelated to the IR payload's schema version, which travels in an IR
 // graph's provenance and versions the graph shape rather than the plugin ABI.
