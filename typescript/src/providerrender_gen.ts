@@ -97,10 +97,12 @@ export interface CatalogProjection {
   mapping_libraries?: Record<string, unknown>;
 }
 
-// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
+// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
 export interface RenderNodeOutput {
   // The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
   files: RenderedFile[];
+  // The names the guest derived while rendering this node, keyed by the key space it derived them into, each space carrying its names in derivation order. A guest that derives the name its output addresses a resource by has put that name inside the file bytes the host writes verbatim, where the host cannot see it; declaring it here is how the guest asks the host to confirm no two derivations landed on one name. The host compares declared names for equality within one declared space and does nothing else — it does not parse a name, does not learn what a space or a name means, and never derives one itself. Two contributors to the same assembled output that declare the same name in the same space halt the build, and the halt names the space, the name, and both contributors. Both the space names and the names within them are the guest's own vocabulary: a guest wanting uniqueness across a narrower or wider scope than one assembled output expresses that scope in the space name it declares. Preserves declaration order so the payload is byte-identical across runs of identical input. Absent when the guest derives no names it wants checked, which leaves the check inert for that guest.
+  derived_keys?: Record<string, string[]>;
   // Diagnostics the guest raised while rendering. Each element is the shared Wasm-plugin diagnostic shape.
   diagnostics?: Diagnostic[];
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
@@ -479,6 +481,7 @@ export function decodeCatalogProjection(data: string): CatalogProjection {
 export function encodeRenderNodeOutput(v: RenderNodeOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => encodeRenderedFile(e0)).join(",")}]`}`);
+  if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) parts.push(`${jstr("derived_keys")}:${`{${Object.keys(v.derived_keys!).sort().map((k0) => `${jstr(k0)}:${`[${v.derived_keys![k0]!.map((e1) => jstr(e1)).join(",")}]`}`).join(",")}}`}`);
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   return `{${parts.join(",")}}`;
@@ -1221,6 +1224,7 @@ export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): 
   let n = 1;
   if (v.error !== undefined && v.error !== "") n++;
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
+  if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) n++;
   writeHead(out, 5, n);
   if (v.error !== undefined && v.error !== "") {
     writeText(out, "error");
@@ -1244,6 +1248,24 @@ export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): 
       }
     }
   }
+  if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) {
+    writeText(out, "derived_keys");
+    {
+      const m0 = v.derived_keys;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        {
+          const a1 = m0[kk0];
+          writeHead(out, 4, a1.length);
+          for (const ee1 of a1) {
+            writeText(out, ee1);
+          }
+        }
+      }
+    }
+  }
 }
 
 export function decodeCBORRenderNodeOutput(data: Uint8Array): RenderNodeOutput {
@@ -1258,6 +1280,7 @@ export function decodeCBORRenderNodeOutputFrom(dec: CborDec): RenderNodeOutput {
     const k = dec.readText();
     switch (k) {
       case "files": o["files"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORRenderedFileFrom(dec)); } return a; })(); break;
+      case "derived_keys": o["derived_keys"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); } return m; })(); break;
       case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
       case "error": o["error"] = dec.readText(); break;
       default: dec.skip();

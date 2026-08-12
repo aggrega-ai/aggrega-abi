@@ -116,11 +116,14 @@ pub struct CatalogProjection {
     pub mapping_libraries: BTreeMap<String, Box<RawValue>>,
 }
 
-/// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
+/// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderNodeOutput {
     /// The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
     pub files: Vec<RenderedFile>,
+    /// The names the guest derived while rendering this node, keyed by the key space it derived them into, each space carrying its names in derivation order. A guest that derives the name its output addresses a resource by has put that name inside the file bytes the host writes verbatim, where the host cannot see it; declaring it here is how the guest asks the host to confirm no two derivations landed on one name. The host compares declared names for equality within one declared space and does nothing else — it does not parse a name, does not learn what a space or a name means, and never derives one itself. Two contributors to the same assembled output that declare the same name in the same space halt the build, and the halt names the space, the name, and both contributors. Both the space names and the names within them are the guest's own vocabulary: a guest wanting uniqueness across a narrower or wider scope than one assembled output expresses that scope in the space name it declares. Preserves declaration order so the payload is byte-identical across runs of identical input. Absent when the guest derives no names it wants checked, which leaves the check inert for that guest.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub derived_keys: BTreeMap<String, Vec<String>>,
     /// Diagnostics the guest raised while rendering. Each element is the shared Wasm-plugin diagnostic shape.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
@@ -971,6 +974,7 @@ impl RenderNodeOutput {
         let mut n: u64 = 1;
         if !self.error.is_empty() { n += 1; }
         if !self.diagnostics.is_empty() { n += 1; }
+        if !self.derived_keys.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.error.is_empty() {
             crate::cbor_gen::write_text(out, "error");
@@ -994,6 +998,26 @@ impl RenderNodeOutput {
                 }
             }
         }
+        if !self.derived_keys.is_empty() {
+            crate::cbor_gen::write_text(out, "derived_keys");
+            {
+                let c = &self.derived_keys;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    {
+                        let c = mv;
+                        crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                        for ev in c {
+                            crate::cbor_gen::write_text(out, ev);
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -1006,6 +1030,7 @@ impl RenderNodeOutput {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_files: Option<Vec<RenderedFile>> = None;
+        let mut f_derived_keys: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
         let mut f_error: String = String::new();
         let n = dec.read_map_header()?;
@@ -1013,6 +1038,7 @@ impl RenderNodeOutput {
             let k = dec.read_text()?;
             match k.as_str() {
                 "files" => f_files = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv }),
+                "derived_keys" => f_derived_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
                 "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
                 "error" => f_error = dec.read_text()?,
                 _ => dec.skip()?,
@@ -1020,6 +1046,7 @@ impl RenderNodeOutput {
         }
         Ok(Self {
             files: f_files.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field files".to_string()))?,
+            derived_keys: f_derived_keys,
             diagnostics: f_diagnostics,
             error: f_error,
         })
