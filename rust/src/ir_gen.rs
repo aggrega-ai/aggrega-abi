@@ -129,7 +129,7 @@ pub struct IRNode {
     pub component: String,
     /// The exact Semantic Version of the Component resolved during compilation.
     pub resolved_version: String,
-    /// The deployment wave inherited from the IRNode's containing boundary's syncWave field (default 0; negative permitted). Renderers translate the integer to provider-native sequencing artifacts (argocd.argoproj.io/sync-wave for K8s/Helm; depends_on for Terraform; DependsOn for CloudFormation; no-op for Compose).
+    /// The deployment wave inherited from the containing boundary's `syncWave` field (default 0; negative permitted). On K8s and Helm the wave is what orders the deployment: it becomes an `argocd.argoproj.io/sync-wave` annotation, and on a resource the chart already marks as a Helm hook it also becomes that hook's `helm.sh/hook-weight`. No other target sequences on it: on compose the value is recorded as a service label, and on the terraform and cloudformation targets it produces no ordering artifact.
     #[serde(default, skip_serializing_if = "is_default")]
     pub sync_wave: i64,
     /// The physical spatial hierarchy mapped from the Release boundaries (e.g., 'aws-prod/eks-main/payments'). Allows rendering plugins to generate boundary-aware unique identifiers.

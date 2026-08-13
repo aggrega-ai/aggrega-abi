@@ -95,7 +95,7 @@ type IRNode struct {
 	Component string `json:"component" yaml:"component" cbor:"component"`
 	// ResolvedVersion The exact Semantic Version of the Component resolved during compilation.
 	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
-	// SyncWave The deployment wave inherited from the IRNode's containing boundary's syncWave field (default 0; negative permitted). Renderers translate the integer to provider-native sequencing artifacts (argocd.argoproj.io/sync-wave for K8s/Helm; depends_on for Terraform; DependsOn for CloudFormation; no-op for Compose).
+	// SyncWave The deployment wave inherited from the containing boundary's `syncWave` field (default 0; negative permitted). On K8s and Helm the wave is what orders the deployment: it becomes an `argocd.argoproj.io/sync-wave` annotation, and on a resource the chart already marks as a Helm hook it also becomes that hook's `helm.sh/hook-weight`. No other target sequences on it: on compose the value is recorded as a service label, and on the terraform and cloudformation targets it produces no ordering artifact.
 	SyncWave int `json:"sync_wave,omitempty" yaml:"sync_wave,omitempty" cbor:"sync_wave,omitempty"`
 	// BoundaryPath The physical spatial hierarchy mapped from the Release boundaries (e.g., 'aws-prod/eks-main/payments'). Allows rendering plugins to generate boundary-aware unique identifiers.
 	BoundaryPath string `json:"boundary_path,omitempty" yaml:"boundary_path,omitempty" cbor:"boundary_path,omitempty"`
