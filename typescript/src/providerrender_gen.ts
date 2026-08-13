@@ -55,7 +55,7 @@ export interface IRNodeProjection {
   uses?: Record<string, string[]>;
   // The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
   boundary_path?: string;
-  // The node's deployment wave, stamped as the aggrega.ai/sync-wave and argocd.argoproj.io/sync-wave annotations when non-zero. This is the per-node render-input carrier of the wave, distinct from the boundary context's sync wave that feeds the assemble export.
+  // The deployment wave this node inherited from its containing boundary (default 0; negative permitted). Renderers that support ordering translate it into a target-native form; a target with no ordering concept carries it as a label and orders nothing.
   sync_wave?: number;
   // The bound Recipe's name, paired with recipe_version to form the aggrega.ai/recipe-uri annotation; when either half is empty the annotation is not stamped.
   recipe_name?: string;
