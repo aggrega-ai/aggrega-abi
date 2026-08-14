@@ -32,9 +32,9 @@ type FRPStepInput struct {
 	PrecedingSteps []PrecedingStep `json:"preceding_steps,omitempty" yaml:"preceding_steps,omitempty" cbor:"preceding_steps,omitempty"`
 }
 
-// FRPStepOutput The payload a feature-recipe-pipeline guest returns for one pipeline step: the RFC 6902 patches the apply engine applies to the keyed document set, the side effects this step produced, and any diagnostics the guest raised.
+// FRPStepOutput The payload a feature-recipe-pipeline guest returns for one pipeline step: the RFC 6902 patches the host applies to the keyed document set, the side effects this step produced, and any diagnostics the guest raised.
 type FRPStepOutput struct {
-	// Patches Structured RFC 6902 operations the step emits against documents in the keyed set. Each names its target document by scope and key, then names the op, path, and value explicitly. Distinct from the mutator socket's opaque patch slice: an FRP step's patches are applied by the apply engine and restored by snapshot on a failed step, so the operations are explicit here rather than opaque.
+	// Patches Structured RFC 6902 operations the step emits against documents in the keyed set. Each names its target document by scope and key, then names the op, path, and value explicitly. Distinct from the mutator socket's opaque patch slice: an FRP step's patches are applied by the host and restored by snapshot on a failed step, so the operations are explicit here rather than opaque.
 	Patches []JSONPatchOp `json:"patches,omitempty" yaml:"patches,omitempty" cbor:"patches,omitempty"`
 	// SideEffects The effects this step produced beyond patching an existing document (for example emitting a CRD or writing a file).
 	SideEffects []SideEffect `json:"side_effects,omitempty" yaml:"side_effects,omitempty" cbor:"side_effects,omitempty"`

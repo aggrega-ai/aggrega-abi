@@ -88,7 +88,7 @@ pub struct NodeProvenance {
     /// The environment name, stamped as the aggrega.ai/environment label when non-empty.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub environment: String,
-    /// The bare provider engine kind, stamped as the aggrega.ai/provider label when non-empty.
+    /// The bare provider kind, stamped as the aggrega.ai/provider label when non-empty.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub provider_name: String,
     /// The resolved provider-rendering plugin version, stamped as the aggrega.ai/provider-version label when non-empty.
@@ -437,7 +437,7 @@ pub struct LinkEndpoint {
     pub node: String,
     /// The endpoint's boundary path — the dispatch group its rendered output assembles into.
     pub boundary: String,
-    /// The provider that rendered the endpoint (the provider engine name). Both endpoints of a wired link name the same provider; the host does not route a link whose endpoints name different providers.
+    /// The provider that rendered the endpoint (the bare provider name). Both endpoints of a wired link name the same provider; the host does not route a link whose endpoints name different providers.
     pub provider: String,
     /// The deployment identity the endpoint's rendered output belongs to — the scope its assembled artifacts are named within. The host assembles it from the build's deployment identity and passes it verbatim; it infers no meaning from the value. A provider reads it to scope a cross-reference name to the deployment. An absent value is the empty string, which a provider treats as an unscoped name.
     #[serde(default, skip_serializing_if = "String::is_empty")]
