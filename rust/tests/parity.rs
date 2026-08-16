@@ -243,7 +243,6 @@ cbor_case!(map_order_annotation_target, aggrega_abi::AnnotationTarget, "MapOrder
 cbor_case!(map_order_artifact_projection_entry, aggrega_abi::ArtifactProjectionEntry, "MapOrderArtifactProjectionEntry");
 cbor_case!(map_order_boundary_env_overrides_input, aggrega_abi::BoundaryEnvOverridesInput, "MapOrderBoundaryEnvOverridesInput");
 cbor_case!(map_order_boundary_env_overrides_output, aggrega_abi::BoundaryEnvOverridesOutput, "MapOrderBoundaryEnvOverridesOutput");
-cbor_case!(map_order_catalog_projection, aggrega_abi::CatalogProjection, "MapOrderCatalogProjection");
 cbor_case!(map_order_document_set, aggrega_abi::DocumentSet, "MapOrderDocumentSet");
 cbor_case!(map_order_emitted_entity, aggrega_abi::EmittedEntity, "MapOrderEmittedEntity");
 cbor_vector!(map_order_frp_step_input, aggrega_abi::FRPStepInput, "MapOrderFRPStepInput");

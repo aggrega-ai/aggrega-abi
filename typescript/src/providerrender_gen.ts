@@ -24,13 +24,11 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, and an optional pre-packaged catalog projection. When the catalog projection is present the guest renders from the payload alone and needs no host round-trips for catalog content; when it is omitted the guest fetches catalog entries through the read-only host functions bound at load time.
+// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, and the pre-evaluated inputs the node's bound Recipe declares — an acquired-source listing, a workload, an artifact set — each present only when that Recipe declares it.
 export interface RenderNodeInput {
   node: IRNodeProjection;
   // The render-time context the host hands the guest. The guest reads it to resolve parameters, annotations, and boundary metadata; the schema does not interpret its internal shape (an opaque passthrough), so the provider socket schema does not rebind the cross-boundary render-context shape. The render context's own contract is the render-context wire shape; a guest that reads it consults that contract.
   context: unknown;
-  // The pre-packaged catalog content the guest renders against when the host supplies catalog entries in the payload rather than behind host functions. Absent when the guest fetches catalog entries through the read-only host functions instead.
-  catalog_projection?: CatalogProjection;
   // The generic enumeration of the acquired source the host hands the guest for a sourced provider: the source root, whether that root is a directory, and the sorted root-relative entries under it. The host reads no file content here — it lists names only. The guest applies its own resolution logic over the listing and asks the host to pack a chosen selection through the pack-source host function, so all per-provider source-resolution intelligence lives in the guest. Present for sourced providers; absent otherwise.
   source_listing?: SourceListing;
   // The pre-evaluated workload the host hands the guest to synthesize provider-native manifests from; present when the bound Recipe declares a workload rather than a chart source, absent otherwise.
@@ -81,20 +79,6 @@ export interface NodeProvenance {
   provider_name?: string;
   // The resolved provider-rendering plugin version, stamped as the aggrega.ai/provider-version label when non-empty.
   provider_version?: string;
-}
-
-// The pre-packaged catalog content a Provider guest renders against when the host supplies catalog entries in the payload rather than behind host functions. It is a closure walk outward from the IR node: only the catalog entries transitively referenced by the node being rendered are included, not the whole catalog. Each map is keyed by catalog URI and preserves key order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads each entry through the catalog entity's own wire contract.
-export interface CatalogProjection {
-  // The Component entries the node transitively references, keyed by catalog URI.
-  components?: Record<string, unknown>;
-  // The Feature entries the node transitively references, keyed by catalog URI.
-  features?: Record<string, unknown>;
-  // The Recipe entries the node transitively references, keyed by catalog URI.
-  recipes?: Record<string, unknown>;
-  // The FeatureRecipe entries the node transitively references, keyed by catalog URI.
-  feature_recipes?: Record<string, unknown>;
-  // The MappingLibrary entries the node transitively references, keyed by catalog URI.
-  mapping_libraries?: Record<string, unknown>;
 }
 
 // The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
@@ -417,7 +401,6 @@ export function encodeRenderNodeInput(v: RenderNodeInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("node")}:${encodeIRNodeProjection(v.node)}`);
   parts.push(`${jstr("context")}:${encodeOpaque(v.context)}`);
-  if (v.catalog_projection !== undefined && v.catalog_projection !== null) parts.push(`${jstr("catalog_projection")}:${encodeCatalogProjection(v.catalog_projection)}`);
   if (v.source_listing !== undefined && v.source_listing !== null) parts.push(`${jstr("source_listing")}:${encodeSourceListing(v.source_listing)}`);
   if (v.workload_projection !== undefined && v.workload_projection !== null) parts.push(`${jstr("workload_projection")}:${encodeWorkloadProjection(v.workload_projection)}`);
   if (v.artifacts_projection !== undefined && v.artifacts_projection !== null) parts.push(`${jstr("artifacts_projection")}:${encodeArtifactsProjection(v.artifacts_projection)}`);
@@ -462,20 +445,6 @@ export function encodeNodeProvenance(v: NodeProvenance): string {
 
 export function decodeNodeProvenance(data: string): NodeProvenance {
   return JSON.parse(data) as NodeProvenance;
-}
-
-export function encodeCatalogProjection(v: CatalogProjection): string {
-  const parts: string[] = [];
-  if (v.components !== undefined && Object.keys(v.components).length > 0) parts.push(`${jstr("components")}:${`{${Object.keys(v.components!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.components![k0])}`).join(",")}}`}`);
-  if (v.features !== undefined && Object.keys(v.features).length > 0) parts.push(`${jstr("features")}:${`{${Object.keys(v.features!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.features![k0])}`).join(",")}}`}`);
-  if (v.recipes !== undefined && Object.keys(v.recipes).length > 0) parts.push(`${jstr("recipes")}:${`{${Object.keys(v.recipes!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.recipes![k0])}`).join(",")}}`}`);
-  if (v.feature_recipes !== undefined && Object.keys(v.feature_recipes).length > 0) parts.push(`${jstr("feature_recipes")}:${`{${Object.keys(v.feature_recipes!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.feature_recipes![k0])}`).join(",")}}`}`);
-  if (v.mapping_libraries !== undefined && Object.keys(v.mapping_libraries).length > 0) parts.push(`${jstr("mapping_libraries")}:${`{${Object.keys(v.mapping_libraries!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.mapping_libraries![k0])}`).join(",")}}`}`);
-  return `{${parts.join(",")}}`;
-}
-
-export function decodeCatalogProjection(data: string): CatalogProjection {
-  return JSON.parse(data) as CatalogProjection;
 }
 
 export function encodeRenderNodeOutput(v: RenderNodeOutput): string {
@@ -877,7 +846,6 @@ export function encodeCBORRenderNodeInput(v: RenderNodeInput): Uint8Array {
 export function appendCBORRenderNodeInput(out: number[], v: RenderNodeInput): void {
   let n = 2;
   if (v.source_listing !== undefined && v.source_listing !== null) n++;
-  if (v.catalog_projection !== undefined && v.catalog_projection !== null) n++;
   if (v.workload_projection !== undefined && v.workload_projection !== null) n++;
   if (v.artifacts_projection !== undefined && v.artifacts_projection !== null) n++;
   writeHead(out, 5, n);
@@ -888,10 +856,6 @@ export function appendCBORRenderNodeInput(out: number[], v: RenderNodeInput): vo
   if (v.source_listing !== undefined && v.source_listing !== null) {
     writeText(out, "source_listing");
     appendCBORSourceListing(out, v.source_listing);
-  }
-  if (v.catalog_projection !== undefined && v.catalog_projection !== null) {
-    writeText(out, "catalog_projection");
-    appendCBORCatalogProjection(out, v.catalog_projection);
   }
   if (v.workload_projection !== undefined && v.workload_projection !== null) {
     writeText(out, "workload_projection");
@@ -916,7 +880,6 @@ export function decodeCBORRenderNodeInputFrom(dec: CborDec): RenderNodeInput {
     switch (k) {
       case "node": o["node"] = decodeCBORIRNodeProjectionFrom(dec); break;
       case "context": o["context"] = JSON.parse(utf8Decode(dec.readBytes())); break;
-      case "catalog_projection": o["catalog_projection"] = decodeCBORCatalogProjectionFrom(dec); break;
       case "source_listing": o["source_listing"] = decodeCBORSourceListingFrom(dec); break;
       case "workload_projection": o["workload_projection"] = decodeCBORWorkloadProjectionFrom(dec); break;
       case "artifacts_projection": o["artifacts_projection"] = decodeCBORArtifactsProjectionFrom(dec); break;
@@ -1114,104 +1077,6 @@ export function decodeCBORNodeProvenanceFrom(dec: CborDec): NodeProvenance {
     }
   }
   return o as NodeProvenance;
-}
-
-export function encodeCBORCatalogProjection(v: CatalogProjection): Uint8Array {
-  const out: number[] = [];
-  appendCBORCatalogProjection(out, v);
-  return new Uint8Array(out);
-}
-
-export function appendCBORCatalogProjection(out: number[], v: CatalogProjection): void {
-  let n = 0;
-  if (v.recipes !== undefined && Object.keys(v.recipes).length > 0) n++;
-  if (v.features !== undefined && Object.keys(v.features).length > 0) n++;
-  if (v.components !== undefined && Object.keys(v.components).length > 0) n++;
-  if (v.feature_recipes !== undefined && Object.keys(v.feature_recipes).length > 0) n++;
-  if (v.mapping_libraries !== undefined && Object.keys(v.mapping_libraries).length > 0) n++;
-  writeHead(out, 5, n);
-  if (v.recipes !== undefined && Object.keys(v.recipes).length > 0) {
-    writeText(out, "recipes");
-    {
-      const m0 = v.recipes;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
-        writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
-      }
-    }
-  }
-  if (v.features !== undefined && Object.keys(v.features).length > 0) {
-    writeText(out, "features");
-    {
-      const m0 = v.features;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
-        writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
-      }
-    }
-  }
-  if (v.components !== undefined && Object.keys(v.components).length > 0) {
-    writeText(out, "components");
-    {
-      const m0 = v.components;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
-        writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
-      }
-    }
-  }
-  if (v.feature_recipes !== undefined && Object.keys(v.feature_recipes).length > 0) {
-    writeText(out, "feature_recipes");
-    {
-      const m0 = v.feature_recipes;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
-        writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
-      }
-    }
-  }
-  if (v.mapping_libraries !== undefined && Object.keys(v.mapping_libraries).length > 0) {
-    writeText(out, "mapping_libraries");
-    {
-      const m0 = v.mapping_libraries;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
-        writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
-      }
-    }
-  }
-}
-
-export function decodeCBORCatalogProjection(data: Uint8Array): CatalogProjection {
-  const dec = new CborDec(data);
-  return decodeCBORCatalogProjectionFrom(dec);
-}
-
-export function decodeCBORCatalogProjectionFrom(dec: CborDec): CatalogProjection {
-  const o: any = {};
-  const n = dec.readMapHeader();
-  for (let i = 0; i < n; i++) {
-    const k = dec.readText();
-    switch (k) {
-      case "components": o["components"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
-      case "features": o["features"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
-      case "recipes": o["recipes"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
-      case "feature_recipes": o["feature_recipes"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
-      case "mapping_libraries": o["mapping_libraries"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
-      default: dec.skip();
-    }
-  }
-  return o as CatalogProjection;
 }
 
 export function encodeCBORRenderNodeOutput(v: RenderNodeOutput): Uint8Array {

@@ -62,7 +62,6 @@ var mapBearingPayloads = []any{
 	abi.ArtifactProjectionEntry{},
 	abi.BoundaryEnvOverridesInput{},
 	abi.BoundaryEnvOverridesOutput{},
-	abi.CatalogProjection{},
 	abi.DocumentSet{},
 	abi.EmittedEntity{},
 	abi.FRPStepInput{},
@@ -313,10 +312,6 @@ func TestSocketParity_MapOrderProbes(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.BoundaryEnvOverridesOutput](t, "MapOrderBoundaryEnvOverridesOutput")
 	})
-	t.Run("CatalogProjection", func(t *testing.T) {
-		t.Parallel()
-		roundTripBothGolden[abi.CatalogProjection](t, "MapOrderCatalogProjection")
-	})
 	t.Run("DocumentSet", func(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.DocumentSet](t, "MapOrderDocumentSet")
@@ -392,7 +387,7 @@ func TestMapBearingCensusIsComplete(t *testing.T) {
 
 	// The declared map fields across the generated codec. Counted from the field
 	// declarations, so a nested map counts once as the field that declares it.
-	const wantMapFields = 45
+	const wantMapFields = 40
 
 	got := 0
 	for _, proto := range mapBearingPayloads {

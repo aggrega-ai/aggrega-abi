@@ -155,7 +155,6 @@ const vectors: Array<[string, string]> = [
   ["MapOrderArtifactProjectionEntry", "ArtifactProjectionEntry"],
   ["MapOrderBoundaryEnvOverridesInput", "BoundaryEnvOverridesInput"],
   ["MapOrderBoundaryEnvOverridesOutput", "BoundaryEnvOverridesOutput"],
-  ["MapOrderCatalogProjection", "CatalogProjection"],
   ["MapOrderDocumentSet", "DocumentSet"],
   ["MapOrderEmittedEntity", "EmittedEntity"],
   ["MapOrderFRPStepInput", "FRPStepInput"],

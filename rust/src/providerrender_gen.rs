@@ -15,15 +15,12 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
 }
 
-/// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, and an optional pre-packaged catalog projection. When the catalog projection is present the guest renders from the payload alone and needs no host round-trips for catalog content; when it is omitted the guest fetches catalog entries through the read-only host functions bound at load time.
+/// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, and the pre-evaluated inputs the node's bound Recipe declares — an acquired-source listing, a workload, an artifact set — each present only when that Recipe declares it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderNodeInput {
     pub node: IRNodeProjection,
     /// The render-time context the host hands the guest. The guest reads it to resolve parameters, annotations, and boundary metadata; the schema does not interpret its internal shape (an opaque passthrough), so the provider socket schema does not rebind the cross-boundary render-context shape. The render context's own contract is the render-context wire shape; a guest that reads it consults that contract.
     pub context: Box<RawValue>,
-    /// The pre-packaged catalog content the guest renders against when the host supplies catalog entries in the payload rather than behind host functions. Absent when the guest fetches catalog entries through the read-only host functions instead.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub catalog_projection: Option<Box<CatalogProjection>>,
     /// The generic enumeration of the acquired source the host hands the guest for a sourced provider: the source root, whether that root is a directory, and the sorted root-relative entries under it. The host reads no file content here — it lists names only. The guest applies its own resolution logic over the listing and asks the host to pack a chosen selection through the pack-source host function, so all per-provider source-resolution intelligence lives in the guest. Present for sourced providers; absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_listing: Option<Box<SourceListing>>,
@@ -94,26 +91,6 @@ pub struct NodeProvenance {
     /// The resolved provider-rendering plugin version, stamped as the aggrega.ai/provider-version label when non-empty.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub provider_version: String,
-}
-
-/// The pre-packaged catalog content a Provider guest renders against when the host supplies catalog entries in the payload rather than behind host functions. It is a closure walk outward from the IR node: only the catalog entries transitively referenced by the node being rendered are included, not the whole catalog. Each map is keyed by catalog URI and preserves key order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads each entry through the catalog entity's own wire contract.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CatalogProjection {
-    /// The Component entries the node transitively references, keyed by catalog URI.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub components: BTreeMap<String, Box<RawValue>>,
-    /// The Feature entries the node transitively references, keyed by catalog URI.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub features: BTreeMap<String, Box<RawValue>>,
-    /// The Recipe entries the node transitively references, keyed by catalog URI.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub recipes: BTreeMap<String, Box<RawValue>>,
-    /// The FeatureRecipe entries the node transitively references, keyed by catalog URI.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub feature_recipes: BTreeMap<String, Box<RawValue>>,
-    /// The MappingLibrary entries the node transitively references, keyed by catalog URI.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub mapping_libraries: BTreeMap<String, Box<RawValue>>,
 }
 
 /// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
@@ -523,7 +500,6 @@ impl RenderNodeInput {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
         if self.source_listing.is_some() { n += 1; }
-        if self.catalog_projection.is_some() { n += 1; }
         if self.workload_projection.is_some() { n += 1; }
         if self.artifacts_projection.is_some() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -533,10 +509,6 @@ impl RenderNodeInput {
         crate::cbor_gen::write_bytes(out, self.context.get().as_bytes());
         if let Some(ref x) = self.source_listing {
             crate::cbor_gen::write_text(out, "source_listing");
-            x.append_cbor(out)?;
-        }
-        if let Some(ref x) = self.catalog_projection {
-            crate::cbor_gen::write_text(out, "catalog_projection");
             x.append_cbor(out)?;
         }
         if let Some(ref x) = self.workload_projection {
@@ -560,7 +532,6 @@ impl RenderNodeInput {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_node: Option<IRNodeProjection> = None;
         let mut f_context: Option<Box<RawValue>> = None;
-        let mut f_catalog_projection: Option<Box<CatalogProjection>> = None;
         let mut f_source_listing: Option<Box<SourceListing>> = None;
         let mut f_workload_projection: Option<Box<WorkloadProjection>> = None;
         let mut f_artifacts_projection: Option<Box<ArtifactsProjection>> = None;
@@ -570,7 +541,6 @@ impl RenderNodeInput {
             match k.as_str() {
                 "node" => f_node = Some(IRNodeProjection::decode_cbor_from(dec)?),
                 "context" => f_context = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
-                "catalog_projection" => f_catalog_projection = Some(Box::new(CatalogProjection::decode_cbor_from(dec)?)),
                 "source_listing" => f_source_listing = Some(Box::new(SourceListing::decode_cbor_from(dec)?)),
                 "workload_projection" => f_workload_projection = Some(Box::new(WorkloadProjection::decode_cbor_from(dec)?)),
                 "artifacts_projection" => f_artifacts_projection = Some(Box::new(ArtifactsProjection::decode_cbor_from(dec)?)),
@@ -580,7 +550,6 @@ impl RenderNodeInput {
         Ok(Self {
             node: f_node.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field node".to_string()))?,
             context: f_context.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field context".to_string()))?,
-            catalog_projection: f_catalog_projection,
             source_listing: f_source_listing,
             workload_projection: f_workload_projection,
             artifacts_projection: f_artifacts_projection,
@@ -832,131 +801,6 @@ impl NodeProvenance {
             environment: f_environment,
             provider_name: f_provider_name,
             provider_version: f_provider_version,
-        })
-    }
-}
-
-impl CatalogProjection {
-    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
-    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
-    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
-        let mut out = Vec::new();
-        self.append_cbor(&mut out)?;
-        Ok(out)
-    }
-
-    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let mut n: u64 = 0;
-        if !self.recipes.is_empty() { n += 1; }
-        if !self.features.is_empty() { n += 1; }
-        if !self.components.is_empty() { n += 1; }
-        if !self.feature_recipes.is_empty() { n += 1; }
-        if !self.mapping_libraries.is_empty() { n += 1; }
-        crate::cbor_gen::write_head(out, 5, n);
-        if !self.recipes.is_empty() {
-            crate::cbor_gen::write_text(out, "recipes");
-            {
-                let c = &self.recipes;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
-                    crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
-                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
-                }
-            }
-        }
-        if !self.features.is_empty() {
-            crate::cbor_gen::write_text(out, "features");
-            {
-                let c = &self.features;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
-                    crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
-                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
-                }
-            }
-        }
-        if !self.components.is_empty() {
-            crate::cbor_gen::write_text(out, "components");
-            {
-                let c = &self.components;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
-                    crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
-                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
-                }
-            }
-        }
-        if !self.feature_recipes.is_empty() {
-            crate::cbor_gen::write_text(out, "feature_recipes");
-            {
-                let c = &self.feature_recipes;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
-                    crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
-                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
-                }
-            }
-        }
-        if !self.mapping_libraries.is_empty() {
-            crate::cbor_gen::write_text(out, "mapping_libraries");
-            {
-                let c = &self.mapping_libraries;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
-                    crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
-                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
-    /// skipped.
-    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut dec = crate::cbor_gen::CborDec::new(data);
-        Self::decode_cbor_from(&mut dec)
-    }
-
-    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_components: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
-        let mut f_features: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
-        let mut f_recipes: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
-        let mut f_feature_recipes: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
-        let mut f_mapping_libraries: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
-        let n = dec.read_map_header()?;
-        for _ in 0..n {
-            let k = dec.read_text()?;
-            match k.as_str() {
-                "components" => f_components = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
-                "features" => f_features = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
-                "recipes" => f_recipes = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
-                "feature_recipes" => f_feature_recipes = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
-                "mapping_libraries" => f_mapping_libraries = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
-                _ => dec.skip()?,
-            }
-        }
-        Ok(Self {
-            components: f_components,
-            features: f_features,
-            recipes: f_recipes,
-            feature_recipes: f_feature_recipes,
-            mapping_libraries: f_mapping_libraries,
         })
     }
 }
