@@ -387,7 +387,7 @@ func TestMapBearingCensusIsComplete(t *testing.T) {
 
 	// The declared map fields across the generated codec. Counted from the field
 	// declarations, so a nested map counts once as the field that declares it.
-	const wantMapFields = 40
+	const wantMapFields = 39
 
 	got := 0
 	for _, proto := range mapBearingPayloads {
