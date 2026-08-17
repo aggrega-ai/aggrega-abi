@@ -37,7 +37,7 @@ export interface RenderNodeInput {
   artifacts_projection?: ArtifactsProjection;
 }
 
-// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, and build provenance. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values in sorted key order — so the wire payload is byte-identical across runs of identical input.
+// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, and build provenance. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
 export interface IRNodeProjection {
   // The node's absolute id within the topology graph.
   id: string;
@@ -49,6 +49,8 @@ export interface IRNodeProjection {
   values?: Record<string, unknown>;
   // The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
   features?: Record<string, unknown>;
+  // Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
+  sensitive_rendered_keys?: Record<string, string>;
   // The node's outbound uses edges keyed by socket alias, each carrying the ordered target node ids bound to that socket. Preserves author order so the payload is byte-identical across runs of identical input.
   uses?: Record<string, string[]>;
   // The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
@@ -416,6 +418,7 @@ export function encodeIRNodeProjection(v: IRNodeProjection): string {
   parts.push(`${jstr("resolved_recipe")}:${jstr(v.resolved_recipe)}`);
   if (v.values !== undefined && Object.keys(v.values).length > 0) parts.push(`${jstr("values")}:${`{${Object.keys(v.values!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values![k0])}`).join(",")}}`}`);
   if (v.features !== undefined && Object.keys(v.features).length > 0) parts.push(`${jstr("features")}:${`{${Object.keys(v.features!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.features![k0])}`).join(",")}}`}`);
+  if (v.sensitive_rendered_keys !== undefined && Object.keys(v.sensitive_rendered_keys).length > 0) parts.push(`${jstr("sensitive_rendered_keys")}:${`{${Object.keys(v.sensitive_rendered_keys!).sort().map((k0) => `${jstr(k0)}:${jstr(v.sensitive_rendered_keys![k0])}`).join(",")}}`}`);
   if (v.uses !== undefined && Object.keys(v.uses).length > 0) parts.push(`${jstr("uses")}:${`{${Object.keys(v.uses!).sort().map((k0) => `${jstr(k0)}:${`[${v.uses![k0]!.map((e1) => jstr(e1)).join(",")}]`}`).join(",")}}`}`);
   if (v.boundary_path !== undefined && v.boundary_path !== "") parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
@@ -903,6 +906,7 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
   if (v.output_labels !== undefined && Object.keys(v.output_labels).length > 0) n++;
   if (v.recipe_version !== undefined && v.recipe_version !== "") n++;
   if (v.label_component_id !== undefined && v.label_component_id !== "") n++;
+  if (v.sensitive_rendered_keys !== undefined && Object.keys(v.sensitive_rendered_keys).length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "id");
   writeText(out, v.id);
@@ -986,6 +990,18 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
     writeText(out, "label_component_id");
     writeText(out, v.label_component_id);
   }
+  if (v.sensitive_rendered_keys !== undefined && Object.keys(v.sensitive_rendered_keys).length > 0) {
+    writeText(out, "sensitive_rendered_keys");
+    {
+      const m0 = v.sensitive_rendered_keys;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
 }
 
 export function decodeCBORIRNodeProjection(data: Uint8Array): IRNodeProjection {
@@ -1004,6 +1020,7 @@ export function decodeCBORIRNodeProjectionFrom(dec: CborDec): IRNodeProjection {
       case "resolved_recipe": o["resolved_recipe"] = dec.readText(); break;
       case "values": o["values"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       case "features": o["features"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "sensitive_rendered_keys": o["sensitive_rendered_keys"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "uses": o["uses"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); } return m; })(); break;
       case "boundary_path": o["boundary_path"] = dec.readText(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;

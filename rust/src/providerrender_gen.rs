@@ -32,7 +32,7 @@ pub struct RenderNodeInput {
     pub artifacts_projection: Option<Box<ArtifactsProjection>>,
 }
 
-/// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, and build provenance. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values in sorted key order — so the wire payload is byte-identical across runs of identical input.
+/// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, and build provenance. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRNodeProjection {
     /// The node's absolute id within the topology graph.
@@ -48,6 +48,9 @@ pub struct IRNodeProjection {
     /// The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub features: BTreeMap<String, Box<RawValue>>,
+    /// Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sensitive_rendered_keys: BTreeMap<String, String>,
     /// The node's outbound uses edges keyed by socket alias, each carrying the ordered target node ids bound to that socket. Preserves author order so the payload is byte-identical across runs of identical input.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub uses: BTreeMap<String, Vec<String>>,
@@ -574,6 +577,7 @@ impl IRNodeProjection {
         if !self.output_labels.is_empty() { n += 1; }
         if !self.recipe_version.is_empty() { n += 1; }
         if !self.label_component_id.is_empty() { n += 1; }
+        if !self.sensitive_rendered_keys.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "id");
         crate::cbor_gen::write_text(out, &self.id);
@@ -665,6 +669,20 @@ impl IRNodeProjection {
             crate::cbor_gen::write_text(out, "label_component_id");
             crate::cbor_gen::write_text(out, &self.label_component_id);
         }
+        if !self.sensitive_rendered_keys.is_empty() {
+            crate::cbor_gen::write_text(out, "sensitive_rendered_keys");
+            {
+                let c = &self.sensitive_rendered_keys;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -681,6 +699,7 @@ impl IRNodeProjection {
         let mut f_resolved_recipe: Option<String> = None;
         let mut f_values: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
         let mut f_features: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_sensitive_rendered_keys: BTreeMap<String, String> = BTreeMap::new();
         let mut f_uses: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut f_boundary_path: String = String::new();
         let mut f_sync_wave: i64 = 0;
@@ -698,6 +717,7 @@ impl IRNodeProjection {
                 "resolved_recipe" => f_resolved_recipe = Some(dec.read_text()?),
                 "values" => f_values = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
                 "features" => f_features = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "sensitive_rendered_keys" => f_sensitive_rendered_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "uses" => f_uses = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
                 "boundary_path" => f_boundary_path = dec.read_text()?,
                 "sync_wave" => f_sync_wave = dec.read_int()?,
@@ -715,6 +735,7 @@ impl IRNodeProjection {
             resolved_recipe: f_resolved_recipe.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field resolved_recipe".to_string()))?,
             values: f_values,
             features: f_features,
+            sensitive_rendered_keys: f_sensitive_rendered_keys,
             uses: f_uses,
             boundary_path: f_boundary_path,
             sync_wave: f_sync_wave,
