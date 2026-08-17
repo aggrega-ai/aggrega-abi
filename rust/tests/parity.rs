@@ -184,6 +184,12 @@ cbor_case!(policy_input, aggrega_abi::PolicyInput, "PolicyInput");
 cbor_case!(policy_output, aggrega_abi::PolicyOutput, "PolicyOutput");
 cbor_case!(render_node_input, aggrega_abi::RenderNodeInput, "RenderNodeInput");
 cbor_case!(render_node_output, aggrega_abi::RenderNodeOutput, "RenderNodeOutput");
+// A second vector for IRNodeProjection, so cbor_vector rather than cbor_case: the
+// trait binding for this type is declared once with the map-order probe below.
+// This vector carries a POPULATED per-key sensitivity marking, which no other
+// vector on this socket does — the field is elided when empty, so every other
+// vector's bytes are the same whether the codec handles it or drops it.
+cbor_vector!(ir_node_projection_sensitive_rendered_keys, aggrega_abi::IRNodeProjection, "IRNodeProjectionSensitiveRenderedKeys");
 cbor_case!(assemble_boundary_input, aggrega_abi::AssembleBoundaryInput, "AssembleBoundaryInput");
 cbor_case!(assemble_boundary_output, aggrega_abi::AssembleBoundaryOutput, "AssembleBoundaryOutput");
 cbor_case!(link_publish_input, aggrega_abi::LinkPublishInput, "LinkPublishInput");

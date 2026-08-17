@@ -276,6 +276,19 @@ func TestSocketParity_RenderNodeOutput(t *testing.T) {
 	roundTripBothGolden[abi.RenderNodeOutput](t, "RenderNodeOutput")
 }
 
+// TestSocketParity_IRNodeProjectionSensitiveRenderedKeys pins a node projection
+// whose per-key sensitivity marking is POPULATED. The field is omitted from the
+// payload when it is empty, so every other vector on this socket carries the same
+// bytes whether the codec handles it or drops it: a regression there moves nothing
+// and fails nowhere. This vector is the one that does not have that property, and
+// it is a captured render payload rather than an authored fixture — the projection
+// the host built for a real node of a worked example whose Component declares a
+// credential slot as handling secret material.
+func TestSocketParity_IRNodeProjectionSensitiveRenderedKeys(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.IRNodeProjection](t, "IRNodeProjectionSensitiveRenderedKeys")
+}
+
 func TestSocketParity_AssembleBoundaryInput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.AssembleBoundaryInput](t, "AssembleBoundaryInput")

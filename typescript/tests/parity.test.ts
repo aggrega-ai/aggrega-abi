@@ -103,6 +103,7 @@ const vectors: Array<[string, string]> = [
   ["PolicyOutput", "PolicyOutput"],
   ["RenderNodeInput", "RenderNodeInput"],
   ["RenderNodeOutput", "RenderNodeOutput"],
+  ["IRNodeProjectionSensitiveRenderedKeys", "IRNodeProjection"],
   ["AssembleBoundaryInput", "AssembleBoundaryInput"],
   ["AssembleBoundaryOutput", "AssembleBoundaryOutput"],
   ["LinkPublishInput", "LinkPublishInput"],
