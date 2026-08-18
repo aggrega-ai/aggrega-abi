@@ -67,6 +67,8 @@ type IRFeatureEntry struct {
 	Sensitive bool `json:"sensitive,omitempty" yaml:"sensitive,omitempty" cbor:"sensitive,omitempty"`
 	// SensitiveInject The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
 	SensitiveInject json.RawMessage `json:"sensitive_inject,omitempty" yaml:"sensitive_inject,omitempty" cbor:"sensitive_inject,omitempty"`
+	// SensitiveAuthoredLeaves The leaves this attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual authored leaf. A leaf appears only where the join is exact: an authored leaf path equal to a path the Feature's schema declares sensitive, with nothing read out of the path's own text and no value inspected. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf an author left readable. Absence therefore states that no authored leaf matched a declaration, never that nothing on this attachment carries sensitive material — a guest that reads an absent leaf as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent on an attachment learns that the attachment authors no declared-sensitive leaf and nothing about whether anything reads the key. Leaves arrive in the order the attachment authored them, the values pillar's before the infra pillar's — the same author order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Empty when the attachment authors no leaf its Feature declares sensitive.
+	SensitiveAuthoredLeaves []string `json:"sensitive_authored_leaves,omitempty" yaml:"sensitive_authored_leaves,omitempty" cbor:"sensitive_authored_leaves,omitempty"`
 }
 
 // IRBoundaryFeature A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -577,6 +579,22 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"sensitive_inject\":")
 		buf.Write(t.SensitiveInject)
 	}
+	if len(t.SensitiveAuthoredLeaves) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"sensitive_authored_leaves\":")
+		buf.WriteByte('[')
+		for i := range t.SensitiveAuthoredLeaves {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.SensitiveAuthoredLeaves[i]
+			writeJSONString(&buf, ev)
+		}
+		buf.WriteByte(']')
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -748,6 +766,23 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.SensitiveInject = raw
+			}
+		case "sensitive_authored_leaves":
+			t.SensitiveAuthoredLeaves = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem string
+				if s, err := readString(dec); err != nil {
+					return err
+				} else {
+					elem = s
+				}
+				t.SensitiveAuthoredLeaves = append(t.SensitiveAuthoredLeaves, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -2439,6 +2474,9 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.CatalogAnnotations) != 0 {
 		n++
 	}
+	if len(t.SensitiveAuthoredLeaves) != 0 {
+		n++
+	}
 	dst = appendCBORHead(dst, 5, uint64(n))
 	var err error
 	dst = appendCBORTextString(dst, "type")
@@ -2547,6 +2585,14 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 				mv := t.CatalogAnnotations[k]
 				dst = appendCBORTextString(dst, mv)
 			}
+		}
+	}
+	if len(t.SensitiveAuthoredLeaves) != 0 {
+		dst = appendCBORTextString(dst, "sensitive_authored_leaves")
+		dst = appendCBORHead(dst, 4, uint64(len(t.SensitiveAuthoredLeaves)))
+		for i := range t.SensitiveAuthoredLeaves {
+			ev := t.SensitiveAuthoredLeaves[i]
+			dst = appendCBORTextString(dst, ev)
 		}
 	}
 	return dst, nil
@@ -2719,6 +2765,24 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 				return err
 			} else {
 				t.SensitiveInject = json.RawMessage(v)
+			}
+		case "sensitive_authored_leaves":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.SensitiveAuthoredLeaves = s
 			}
 		default:
 			if err := dec.skip(); err != nil {

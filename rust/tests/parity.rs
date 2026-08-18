@@ -190,6 +190,13 @@ cbor_case!(render_node_output, aggrega_abi::RenderNodeOutput, "RenderNodeOutput"
 // vector on this socket does — the field is elided when empty, so every other
 // vector's bytes are the same whether the codec handles it or drops it.
 cbor_vector!(ir_node_projection_sensitive_rendered_keys, aggrega_abi::IRNodeProjection, "IRNodeProjectionSensitiveRenderedKeys");
+// A second vector for IRFeatureEntry, so cbor_vector rather than cbor_case for the
+// same reason: the trait binding for this type is declared once with the map-order
+// probe below. This vector carries a POPULATED per-authored-leaf sensitivity
+// marking, which no other vector on this socket does — the field is elided when
+// empty, so every other vector's bytes are the same whether the codec handles the
+// field or drops it, and a regression there would move nothing and fail nowhere.
+cbor_vector!(ir_feature_entry_sensitive_authored_leaves, aggrega_abi::IRFeatureEntry, "IRFeatureEntrySensitiveAuthoredLeaves");
 cbor_case!(assemble_boundary_input, aggrega_abi::AssembleBoundaryInput, "AssembleBoundaryInput");
 cbor_case!(assemble_boundary_output, aggrega_abi::AssembleBoundaryOutput, "AssembleBoundaryOutput");
 cbor_case!(link_publish_input, aggrega_abi::LinkPublishInput, "LinkPublishInput");

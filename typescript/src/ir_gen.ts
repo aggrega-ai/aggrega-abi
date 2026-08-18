@@ -74,6 +74,8 @@ export interface IRFeatureEntry {
   sensitive?: boolean;
   // The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
   sensitive_inject?: unknown;
+  // The leaves this attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual authored leaf. A leaf appears only where the join is exact: an authored leaf path equal to a path the Feature's schema declares sensitive, with nothing read out of the path's own text and no value inspected. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf an author left readable. Absence therefore states that no authored leaf matched a declaration, never that nothing on this attachment carries sensitive material — a guest that reads an absent leaf as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent on an attachment learns that the attachment authors no declared-sensitive leaf and nothing about whether anything reads the key. Leaves arrive in the order the attachment authored them, the values pillar's before the infra pillar's — the same author order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Empty when the attachment authors no leaf its Feature declares sensitive.
+  sensitive_authored_leaves?: string[];
 }
 
 // A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -235,6 +237,7 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) parts.push(`${jstr("infra_provenance")}:${`{${Object.keys(v.infra_provenance!).sort().map((k0) => `${jstr(k0)}:${encodeFieldProvenance(v.infra_provenance![k0])}`).join(",")}}`}`);
   if (v.sensitive !== undefined && v.sensitive !== false) parts.push(`${jstr("sensitive")}:${String(v.sensitive)}`);
   if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) parts.push(`${jstr("sensitive_inject")}:${encodeOpaque(v.sensitive_inject)}`);
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) parts.push(`${jstr("sensitive_authored_leaves")}:${`[${v.sensitive_authored_leaves!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -488,6 +491,7 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.annotation_source !== undefined && v.annotation_source !== "") n++;
   if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) n++;
   if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) n++;
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "type");
   writeText(out, v.type);
@@ -577,6 +581,16 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
       }
     }
   }
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) {
+    writeText(out, "sensitive_authored_leaves");
+    {
+      const a0 = v.sensitive_authored_leaves;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
 }
 
 export function decodeCBORIRFeatureEntry(data: Uint8Array): IRFeatureEntry {
@@ -605,6 +619,7 @@ export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
       case "infra_provenance": o["infra_provenance"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORFieldProvenanceFrom(dec); } return m; })(); break;
       case "sensitive": o["sensitive"] = dec.readBool(); break;
       case "sensitive_inject": o["sensitive_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "sensitive_authored_leaves": o["sensitive_authored_leaves"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       default: dec.skip();
     }
   }

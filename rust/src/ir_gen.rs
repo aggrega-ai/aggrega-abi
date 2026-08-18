@@ -90,6 +90,9 @@ pub struct IRFeatureEntry {
     /// The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sensitive_inject: Option<Box<RawValue>>,
+    /// The leaves this attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual authored leaf. A leaf appears only where the join is exact: an authored leaf path equal to a path the Feature's schema declares sensitive, with nothing read out of the path's own text and no value inspected. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf an author left readable. Absence therefore states that no authored leaf matched a declaration, never that nothing on this attachment carries sensitive material — a guest that reads an absent leaf as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent on an attachment learns that the attachment authors no declared-sensitive leaf and nothing about whether anything reads the key. Leaves arrive in the order the attachment authored them, the values pillar's before the infra pillar's — the same author order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Empty when the attachment authors no leaf its Feature declares sensitive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sensitive_authored_leaves: Vec<String>,
 }
 
 /// A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -402,6 +405,7 @@ impl IRFeatureEntry {
         if !self.annotation_source.is_empty() { n += 1; }
         if !self.values_provenance.is_empty() { n += 1; }
         if !self.catalog_annotations.is_empty() { n += 1; }
+        if !self.sensitive_authored_leaves.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "type");
         crate::cbor_gen::write_text(out, &self.r#type);
@@ -499,6 +503,16 @@ impl IRFeatureEntry {
                 }
             }
         }
+        if !self.sensitive_authored_leaves.is_empty() {
+            crate::cbor_gen::write_text(out, "sensitive_authored_leaves");
+            {
+                let c = &self.sensitive_authored_leaves;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -525,6 +539,7 @@ impl IRFeatureEntry {
         let mut f_infra_provenance: BTreeMap<String, FieldProvenance> = BTreeMap::new();
         let mut f_sensitive: bool = false;
         let mut f_sensitive_inject: Option<Box<RawValue>> = None;
+        let mut f_sensitive_authored_leaves: Vec<String> = Vec::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -544,6 +559,7 @@ impl IRFeatureEntry {
                 "infra_provenance" => f_infra_provenance = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, FieldProvenance> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = FieldProvenance::decode_cbor_from(dec)?; m.insert(mk, mv); } m },
                 "sensitive" => f_sensitive = dec.read_bool()?,
                 "sensitive_inject" => f_sensitive_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "sensitive_authored_leaves" => f_sensitive_authored_leaves = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
                 _ => dec.skip()?,
             }
         }
@@ -563,6 +579,7 @@ impl IRFeatureEntry {
             infra_provenance: f_infra_provenance,
             sensitive: f_sensitive,
             sensitive_inject: f_sensitive_inject,
+            sensitive_authored_leaves: f_sensitive_authored_leaves,
         })
     }
 }

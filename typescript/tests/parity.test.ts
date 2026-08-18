@@ -104,6 +104,7 @@ const vectors: Array<[string, string]> = [
   ["RenderNodeInput", "RenderNodeInput"],
   ["RenderNodeOutput", "RenderNodeOutput"],
   ["IRNodeProjectionSensitiveRenderedKeys", "IRNodeProjection"],
+  ["IRFeatureEntrySensitiveAuthoredLeaves", "IRFeatureEntry"],
   ["AssembleBoundaryInput", "AssembleBoundaryInput"],
   ["AssembleBoundaryOutput", "AssembleBoundaryOutput"],
   ["LinkPublishInput", "LinkPublishInput"],

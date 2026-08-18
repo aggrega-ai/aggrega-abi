@@ -289,6 +289,24 @@ func TestSocketParity_IRNodeProjectionSensitiveRenderedKeys(t *testing.T) {
 	roundTripBothGolden[abi.IRNodeProjection](t, "IRNodeProjectionSensitiveRenderedKeys")
 }
 
+// TestSocketParity_IRFeatureEntrySensitiveAuthoredLeaves pins an attachment entry
+// whose per-authored-leaf sensitivity marking is POPULATED, for the same reason
+// the projection vector above exists: the field is omitted from the payload when
+// it is empty, so every other vector carrying an attachment entry has the same
+// bytes whether the codec handles the field or drops it, and a regression there
+// moves nothing and fails nowhere.
+//
+// It is a captured payload rather than an authored fixture — the entry the host
+// built for an attachment whose Feature declares one of its values leaves
+// sensitive and whose deployment authors a literal at that leaf. The entry also
+// carries the two other sensitivity units populated, so the vector shows the three
+// coexisting at their three different units rather than one standing in for
+// another.
+func TestSocketParity_IRFeatureEntrySensitiveAuthoredLeaves(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.IRFeatureEntry](t, "IRFeatureEntrySensitiveAuthoredLeaves")
+}
+
 func TestSocketParity_AssembleBoundaryInput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.AssembleBoundaryInput](t, "AssembleBoundaryInput")
