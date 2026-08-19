@@ -19,6 +19,7 @@
 export * from "./abi_version_enums_gen.ts";
 export * from "./cli_gen.ts";
 export * from "./describe_gen.ts";
+export * from "./diagnostic_enums_gen.ts";
 export * from "./diagnostic_gen.ts";
 export * from "./hostfunc_error_enums_gen.ts";
 export * from "./frp_gen.ts";

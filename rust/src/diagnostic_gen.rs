@@ -15,7 +15,7 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
 /// One issue a Wasm plugin raised: a severity, a human-readable message, an optional location, and optional socket-specific fields. Every socket that emits diagnostics emits this shape; each populates the subset it uses (a parser sets a location span, an import sets code and source_ref, a publishing linter sets rule_id and classification, a policy sets only severity and message, a renderer sets a structured location and suggest) and omits the rest.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Diagnostic {
-    /// The diagnostic's severity, as an open string so each socket keeps its own vocabulary. A parser reports its own severities; an import reports error, warning, or info; a publishing linter reports error or warning; a policy reports the build-outcome verdict deny, warn, or audit. The host reads the value without the schema constraining it to one vocabulary.
+    /// The diagnostic's severity, drawn from one closed set every socket shares. halt stops the build and names what to fix. warn surfaces alongside a build that still completes. info records the observation and leaves the build outcome unchanged. A parser, an import, a publishing linter and a governance verdict all report from this one set, so a reader interprets a severity the same way whichever socket raised it.
     pub severity: String,
     /// The human-readable diagnostic text.
     pub message: String,
