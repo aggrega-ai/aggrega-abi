@@ -247,10 +247,10 @@ pub struct ArtifactsProjection {
     pub entries: Vec<ArtifactProjectionEntry>,
 }
 
-/// One pre-evaluated artifact entry the host hands a Provider guest to place: its host-resolved output base name, its origin, the already-template-evaluated content bytes, and the build-provenance label and annotation key sets the host computed for the node. The guest decides how to place the provenance (splicing it into a manifest's metadata, prepending it as a comment, or emitting a companion file) and where the file lands.
+/// One pre-evaluated artifact entry the host hands a Provider guest to place: its host-resolved output name, its origin, the already-template-evaluated content bytes, and the build-provenance label and annotation key sets the host computed for the node. The guest decides how to place the provenance (splicing it into a manifest's metadata, prepending it as a comment, or emitting a companion file) and where the file lands.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ArtifactProjectionEntry {
-    /// The host-resolved output base name for the entry: the author-declared map key for an inline entry, or the imported file's base name for an imported entry. The guest places the entry at this name or under a provider-specific sub-path derived from it.
+    /// The host-resolved output name for the entry: the author-declared map key, with a file supplied by a library bundle nested under that key. The guest places the entry at this name or under a provider-specific sub-path derived from it.
     pub name: String,
     /// Whether the entry was authored as inline content or as an imported file. A guest that rejects one form (an umbrella-chart provider rejects inline content) reads this to halt loudly.
     pub origin: String,
