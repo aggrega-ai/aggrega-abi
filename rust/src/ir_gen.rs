@@ -16,7 +16,6 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Maintainer {
-    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub email: String,
@@ -147,9 +146,6 @@ pub struct IRNode {
     /// True when this node's boundary was synthesized by the compiler — the `default` boundary created for a Release that declares top-level `components` rather than named `boundaries`. Derived provenance, never authored: it distinguishes the synthesized `default` from a boundary a user explicitly named `default`, and routes the node's artifacts to `dist/` flat instead of `dist/boundaries/default/`. Absent (false) for every authored boundary.
     #[serde(default, skip_serializing_if = "is_default")]
     pub synthesized_boundary: bool,
-    /// Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub source_file: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub catalog_metadata: Option<Box<CatalogMetadata>>,
     /// Immutable, intrinsic component characteristics authored by the Platform Architect in Domain 2.
@@ -164,6 +160,9 @@ pub struct IRNode {
     /// Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub self_inject: Option<Box<RawValue>>,
+    /// Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_file: String,
     /// The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uses: Option<Box<RawValue>>,
@@ -260,19 +259,16 @@ impl Maintainer {
     }
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let mut n: u64 = 0;
+        let mut n: u64 = 1;
         if !self.url.is_empty() { n += 1; }
-        if !self.name.is_empty() { n += 1; }
         if !self.email.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.url.is_empty() {
             crate::cbor_gen::write_text(out, "url");
             crate::cbor_gen::write_text(out, &self.url);
         }
-        if !self.name.is_empty() {
-            crate::cbor_gen::write_text(out, "name");
-            crate::cbor_gen::write_text(out, &self.name);
-        }
+        crate::cbor_gen::write_text(out, "name");
+        crate::cbor_gen::write_text(out, &self.name);
         if !self.email.is_empty() {
             crate::cbor_gen::write_text(out, "email");
             crate::cbor_gen::write_text(out, &self.email);
@@ -288,21 +284,21 @@ impl Maintainer {
     }
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_name: String = String::new();
+        let mut f_name: Option<String> = None;
         let mut f_email: String = String::new();
         let mut f_url: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
-                "name" => f_name = dec.read_text()?,
+                "name" => f_name = Some(dec.read_text()?),
                 "email" => f_email = dec.read_text()?,
                 "url" => f_url = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
-            name: f_name,
+            name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
             email: f_email,
             url: f_url,
         })
@@ -862,12 +858,12 @@ impl IRNode {
         let mut f_subsystem_path: String = String::new();
         let mut f_synthesized_subsystem: bool = false;
         let mut f_synthesized_boundary: bool = false;
-        let mut f_source_file: String = String::new();
         let mut f_catalog_metadata: Option<Box<CatalogMetadata>> = None;
         let mut f_catalog_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_release_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_aggregate_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_self_inject: Option<Box<RawValue>> = None;
+        let mut f_source_file: String = String::new();
         let mut f_uses: Option<Box<RawValue>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
@@ -882,12 +878,12 @@ impl IRNode {
                 "subsystem_path" => f_subsystem_path = dec.read_text()?,
                 "synthesized_subsystem" => f_synthesized_subsystem = dec.read_bool()?,
                 "synthesized_boundary" => f_synthesized_boundary = dec.read_bool()?,
-                "source_file" => f_source_file = dec.read_text()?,
                 "catalog_metadata" => f_catalog_metadata = Some(Box::new(CatalogMetadata::decode_cbor_from(dec)?)),
                 "catalog_annotations" => f_catalog_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "release_annotations" => f_release_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "aggregate_annotations" => f_aggregate_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "self_inject" => f_self_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "source_file" => f_source_file = dec.read_text()?,
                 "uses" => f_uses = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 _ => dec.skip()?,
             }
@@ -902,12 +898,12 @@ impl IRNode {
             subsystem_path: f_subsystem_path,
             synthesized_subsystem: f_synthesized_subsystem,
             synthesized_boundary: f_synthesized_boundary,
-            source_file: f_source_file,
             catalog_metadata: f_catalog_metadata,
             catalog_annotations: f_catalog_annotations,
             release_annotations: f_release_annotations,
             aggregate_annotations: f_aggregate_annotations,
             self_inject: f_self_inject,
+            source_file: f_source_file,
             uses: f_uses,
         })
     }

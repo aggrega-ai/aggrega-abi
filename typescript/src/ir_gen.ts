@@ -23,7 +23,7 @@ function encodeOpaque(v: unknown): string {
 }
 
 export interface Maintainer {
-  name?: string;
+  name: string;
   email?: string;
   url?: string;
 }
@@ -114,8 +114,6 @@ export interface IRNode {
   synthesized_subsystem?: boolean;
   // True when this node's boundary was synthesized by the compiler — the `default` boundary created for a Release that declares top-level `components` rather than named `boundaries`. Derived provenance, never authored: it distinguishes the synthesized `default` from a boundary a user explicitly named `default`, and routes the node's artifacts to `dist/` flat instead of `dist/boundaries/default/`. Absent (false) for every authored boundary.
   synthesized_boundary?: boolean;
-  // Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
-  source_file?: string;
   catalog_metadata?: CatalogMetadata;
   // Immutable, intrinsic component characteristics authored by the Platform Architect in Domain 2.
   catalog_annotations?: Record<string, string>;
@@ -125,6 +123,8 @@ export interface IRNode {
   aggregate_annotations?: Record<string, string>;
   // Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
   self_inject?: unknown;
+  // Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
+  source_file?: string;
   // The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
   uses?: unknown;
 }
@@ -196,7 +196,7 @@ export interface IRGraph {
 
 export function encodeMaintainer(v: Maintainer): string {
   const parts: string[] = [];
-  if (v.name !== undefined && v.name !== "") parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
   if (v.email !== undefined && v.email !== "") parts.push(`${jstr("email")}:${jstr(v.email)}`);
   if (v.url !== undefined && v.url !== "") parts.push(`${jstr("url")}:${jstr(v.url)}`);
   return `{${parts.join(",")}}`;
@@ -281,12 +281,12 @@ export function encodeIRNode(v: IRNode): string {
   if (v.subsystem_path !== undefined && v.subsystem_path !== "") parts.push(`${jstr("subsystem_path")}:${jstr(v.subsystem_path)}`);
   if (v.synthesized_subsystem !== undefined && v.synthesized_subsystem !== false) parts.push(`${jstr("synthesized_subsystem")}:${String(v.synthesized_subsystem)}`);
   if (v.synthesized_boundary !== undefined && v.synthesized_boundary !== false) parts.push(`${jstr("synthesized_boundary")}:${String(v.synthesized_boundary)}`);
-  if (v.source_file !== undefined && v.source_file !== "") parts.push(`${jstr("source_file")}:${jstr(v.source_file)}`);
   if (v.catalog_metadata !== undefined && v.catalog_metadata !== null) parts.push(`${jstr("catalog_metadata")}:${encodeCatalogMetadata(v.catalog_metadata)}`);
   if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) parts.push(`${jstr("catalog_annotations")}:${`{${Object.keys(v.catalog_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.catalog_annotations![k0])}`).join(",")}}`}`);
   if (v.release_annotations !== undefined && Object.keys(v.release_annotations).length > 0) parts.push(`${jstr("release_annotations")}:${`{${Object.keys(v.release_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.release_annotations![k0])}`).join(",")}}`}`);
   if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) parts.push(`${jstr("aggregate_annotations")}:${`{${Object.keys(v.aggregate_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.aggregate_annotations![k0])}`).join(",")}}`}`);
   if (v.self_inject !== undefined && v.self_inject !== null) parts.push(`${jstr("self_inject")}:${encodeOpaque(v.self_inject)}`);
+  if (v.source_file !== undefined && v.source_file !== "") parts.push(`${jstr("source_file")}:${jstr(v.source_file)}`);
   if (v.uses !== undefined && v.uses !== null) parts.push(`${jstr("uses")}:${encodeOpaque(v.uses)}`);
   return `{${parts.join(",")}}`;
 }
@@ -376,19 +376,16 @@ export function encodeCBORMaintainer(v: Maintainer): Uint8Array {
 }
 
 export function appendCBORMaintainer(out: number[], v: Maintainer): void {
-  let n = 0;
+  let n = 1;
   if (v.url !== undefined && v.url !== "") n++;
-  if (v.name !== undefined && v.name !== "") n++;
   if (v.email !== undefined && v.email !== "") n++;
   writeHead(out, 5, n);
   if (v.url !== undefined && v.url !== "") {
     writeText(out, "url");
     writeText(out, v.url);
   }
-  if (v.name !== undefined && v.name !== "") {
-    writeText(out, "name");
-    writeText(out, v.name);
-  }
+  writeText(out, "name");
+  writeText(out, v.name);
   if (v.email !== undefined && v.email !== "") {
     writeText(out, "email");
     writeText(out, v.email);
@@ -867,12 +864,12 @@ export function decodeCBORIRNodeFrom(dec: CborDec): IRNode {
       case "subsystem_path": o["subsystem_path"] = dec.readText(); break;
       case "synthesized_subsystem": o["synthesized_subsystem"] = dec.readBool(); break;
       case "synthesized_boundary": o["synthesized_boundary"] = dec.readBool(); break;
-      case "source_file": o["source_file"] = dec.readText(); break;
       case "catalog_metadata": o["catalog_metadata"] = decodeCBORCatalogMetadataFrom(dec); break;
       case "catalog_annotations": o["catalog_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "release_annotations": o["release_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "aggregate_annotations": o["aggregate_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "self_inject": o["self_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "source_file": o["source_file"] = dec.readText(); break;
       case "uses": o["uses"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       default: dec.skip();
     }

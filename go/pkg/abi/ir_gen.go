@@ -16,7 +16,7 @@ import (
 )
 
 type Maintainer struct {
-	Name  string `json:"name,omitempty" yaml:"name,omitempty" cbor:"name,omitempty"`
+	Name  string `json:"name" yaml:"name" cbor:"name"`
 	Email string `json:"email,omitempty" yaml:"email,omitempty" cbor:"email,omitempty"`
 	URL   string `json:"url,omitempty" yaml:"url,omitempty" cbor:"url,omitempty"`
 }
@@ -106,10 +106,8 @@ type IRNode struct {
 	// SynthesizedSubsystem True when this node's subsystem was synthesized by the compiler — the `default` subsystem created for an Aggregate that declares top-level `components` rather than named `subsystems`. Derived provenance, never authored: it distinguishes the synthesized `default` from a subsystem a user explicitly named `default`. Independent of `synthesized_boundary` (a node may be synthesized on either axis or both). Absent (false) for every authored subsystem.
 	SynthesizedSubsystem bool `json:"synthesized_subsystem,omitempty" yaml:"synthesized_subsystem,omitempty" cbor:"synthesized_subsystem,omitempty"`
 	// SynthesizedBoundary True when this node's boundary was synthesized by the compiler — the `default` boundary created for a Release that declares top-level `components` rather than named `boundaries`. Derived provenance, never authored: it distinguishes the synthesized `default` from a boundary a user explicitly named `default`, and routes the node's artifacts to `dist/` flat instead of `dist/boundaries/default/`. Absent (false) for every authored boundary.
-	SynthesizedBoundary bool `json:"synthesized_boundary,omitempty" yaml:"synthesized_boundary,omitempty" cbor:"synthesized_boundary,omitempty"`
-	// SourceFile Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
-	SourceFile      string           `json:"source_file,omitempty" yaml:"source_file,omitempty" cbor:"source_file,omitempty"`
-	CatalogMetadata *CatalogMetadata `json:"catalog_metadata,omitempty" yaml:"catalog_metadata,omitempty" cbor:"catalog_metadata,omitempty"`
+	SynthesizedBoundary bool             `json:"synthesized_boundary,omitempty" yaml:"synthesized_boundary,omitempty" cbor:"synthesized_boundary,omitempty"`
+	CatalogMetadata     *CatalogMetadata `json:"catalog_metadata,omitempty" yaml:"catalog_metadata,omitempty" cbor:"catalog_metadata,omitempty"`
 	// CatalogAnnotations Immutable, intrinsic component characteristics authored by the Platform Architect in Domain 2.
 	CatalogAnnotations map[string]string `json:"catalog_annotations,omitempty" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
 	// ReleaseAnnotations Physical topology strings and Ops realities cascading from boundaries in the Release.
@@ -118,6 +116,8 @@ type IRNode struct {
 	AggregateAnnotations map[string]string `json:"aggregate_annotations,omitempty" yaml:"aggregate_annotations,omitempty" cbor:"aggregate_annotations,omitempty"`
 	// SelfInject Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
 	SelfInject json.RawMessage `json:"self_inject,omitempty" yaml:"self_inject,omitempty" cbor:"self_inject,omitempty"`
+	// SourceFile Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
+	SourceFile string `json:"source_file,omitempty" yaml:"source_file,omitempty" cbor:"source_file,omitempty"`
 	// Uses The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
 	Uses json.RawMessage `json:"uses,omitempty" yaml:"uses,omitempty" cbor:"uses,omitempty"`
 }
@@ -193,14 +193,12 @@ func (t Maintainer) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteByte('{')
 	first := true
-	if t.Name != "" {
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.WriteString("\"name\":")
-		writeJSONString(&buf, t.Name)
+	if !first {
+		buf.WriteByte(',')
 	}
+	first = false
+	buf.WriteString("\"name\":")
+	writeJSONString(&buf, t.Name)
 	if t.Email != "" {
 		if !first {
 			buf.WriteByte(',')
@@ -1105,14 +1103,6 @@ func (t IRNode) MarshalJSON() ([]byte, error) {
 			buf.WriteString("false")
 		}
 	}
-	if t.SourceFile != "" {
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		buf.WriteString("\"source_file\":")
-		writeJSONString(&buf, t.SourceFile)
-	}
 	if t.CatalogMetadata != nil {
 		if !first {
 			buf.WriteByte(',')
@@ -1207,6 +1197,14 @@ func (t IRNode) MarshalJSON() ([]byte, error) {
 		first = false
 		buf.WriteString("\"self_inject\":")
 		buf.Write(t.SelfInject)
+	}
+	if t.SourceFile != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"source_file\":")
+		writeJSONString(&buf, t.SourceFile)
 	}
 	if len(t.Uses) != 0 {
 		if !first {
@@ -1303,12 +1301,6 @@ func (t *IRNode) UnmarshalJSON(data []byte) error {
 			} else {
 				t.SynthesizedBoundary = v
 			}
-		case "source_file":
-			if s, err := readString(dec); err != nil {
-				return err
-			} else {
-				t.SourceFile = s
-			}
 		case "catalog_metadata":
 			if raw, err := readRaw(dec, data); err != nil {
 				return err
@@ -1387,6 +1379,12 @@ func (t *IRNode) UnmarshalJSON(data []byte) error {
 				return err
 			} else {
 				t.SelfInject = raw
+			}
+		case "source_file":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.SourceFile = s
 			}
 		case "uses":
 			if raw, err := readRaw(dec, data); err != nil {
@@ -2244,11 +2242,8 @@ func (t Maintainer) EncodeCBOR() ([]byte, error) {
 // canonical key order (fixed at generation time), omitting empty
 // non-required fields so the map head's pair count matches.
 func (t Maintainer) appendCBOR(dst []byte) ([]byte, error) {
-	n := 0
+	n := 1
 	if t.URL != "" {
-		n++
-	}
-	if t.Name != "" {
 		n++
 	}
 	if t.Email != "" {
@@ -2259,10 +2254,8 @@ func (t Maintainer) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "url")
 		dst = appendCBORTextString(dst, t.URL)
 	}
-	if t.Name != "" {
-		dst = appendCBORTextString(dst, "name")
-		dst = appendCBORTextString(dst, t.Name)
-	}
+	dst = appendCBORTextString(dst, "name")
+	dst = appendCBORTextString(dst, t.Name)
 	if t.Email != "" {
 		dst = appendCBORTextString(dst, "email")
 		dst = appendCBORTextString(dst, t.Email)
@@ -3249,12 +3242,6 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.SynthesizedBoundary = v
 			}
-		case "source_file":
-			if s, err := dec.readTextString(); err != nil {
-				return err
-			} else {
-				t.SourceFile = s
-			}
 		case "catalog_metadata":
 			{
 				v := new(CatalogMetadata)
@@ -3334,6 +3321,12 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 				return err
 			} else {
 				t.SelfInject = json.RawMessage(v)
+			}
+		case "source_file":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.SourceFile = s
 			}
 		case "uses":
 			if v, err := dec.readByteString(); err != nil {
