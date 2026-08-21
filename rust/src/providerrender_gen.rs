@@ -264,7 +264,7 @@ pub struct ArtifactProjectionEntry {
     pub annotations: BTreeMap<String, String>,
 }
 
-/// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs and their merged annotations, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
+/// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs with their merged annotations and deployment waves, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssembleBoundaryInput {
     /// Optional per-render boundary metadata a guest may consult. A dispatch group can merge contributors from multiple boundaries, so there is no single boundary; the field is carry-only-consumed and absent when the host merges across boundaries. Opaque at this schema layer; the guest reads the boundary-context shape through the render-context wire contract.
@@ -290,7 +290,7 @@ pub struct AssembleBoundaryInput {
     pub aggregate_name: String,
 }
 
-/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, and the render output the render_node export produced for it.
+/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, and the render output the render_node export produced for it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderedNode {
     /// The node's absolute id within the topology graph.
@@ -302,6 +302,9 @@ pub struct RenderedNode {
     /// The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub annotations: BTreeMap<String, String>,
+    /// The deployment wave this node inherited from its containing boundary (default 0; negative permitted), so a boundary assembler can order the contributors it merges relative to one another. A dispatch group can merge contributors from several boundaries, each carrying its own wave, so the wave travels with every node here rather than once for the whole payload. An assembler whose output shape expresses no ordering ignores it.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub sync_wave: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1801,6 +1804,7 @@ impl RenderedNode {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 3;
+        if self.sync_wave != 0 { n += 1; }
         if !self.annotations.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "id");
@@ -1809,6 +1813,10 @@ impl RenderedNode {
         crate::cbor_gen::write_text(out, &self.r#type);
         crate::cbor_gen::write_text(out, "rendered");
         self.rendered.append_cbor(out)?;
+        if self.sync_wave != 0 {
+            crate::cbor_gen::write_text(out, "sync_wave");
+            crate::cbor_gen::write_int(out, self.sync_wave);
+        }
         if !self.annotations.is_empty() {
             crate::cbor_gen::write_text(out, "annotations");
             {
@@ -1838,6 +1846,7 @@ impl RenderedNode {
         let mut f_type: Option<String> = None;
         let mut f_rendered: Option<RenderNodeOutput> = None;
         let mut f_annotations: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_sync_wave: i64 = 0;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -1846,6 +1855,7 @@ impl RenderedNode {
                 "type" => f_type = Some(dec.read_text()?),
                 "rendered" => f_rendered = Some(RenderNodeOutput::decode_cbor_from(dec)?),
                 "annotations" => f_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "sync_wave" => f_sync_wave = dec.read_int()?,
                 _ => dec.skip()?,
             }
         }
@@ -1854,6 +1864,7 @@ impl RenderedNode {
             r#type: f_type.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field type".to_string()))?,
             rendered: f_rendered.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field rendered".to_string()))?,
             annotations: f_annotations,
+            sync_wave: f_sync_wave,
         })
     }
 }

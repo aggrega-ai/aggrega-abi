@@ -217,7 +217,7 @@ export interface ArtifactProjectionEntry {
   annotations?: Record<string, string>;
 }
 
-// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs and their merged annotations, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
+// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs with their merged annotations and deployment waves, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
 export interface AssembleBoundaryInput {
   // Optional per-render boundary metadata a guest may consult. A dispatch group can merge contributors from multiple boundaries, so there is no single boundary; the field is carry-only-consumed and absent when the host merges across boundaries. Opaque at this schema layer; the guest reads the boundary-context shape through the render-context wire contract.
   boundary?: unknown;
@@ -237,7 +237,7 @@ export interface AssembleBoundaryInput {
   aggregate_name?: string;
 }
 
-// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, and the render output the render_node export produced for it.
+// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, and the render output the render_node export produced for it.
 export interface RenderedNode {
   // The node's absolute id within the topology graph.
   id: string;
@@ -246,6 +246,8 @@ export interface RenderedNode {
   rendered: RenderNodeOutput;
   // The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
   annotations?: Record<string, string>;
+  // The deployment wave this node inherited from its containing boundary (default 0; negative permitted), so a boundary assembler can order the contributors it merges relative to one another. A dispatch group can merge contributors from several boundaries, each carrying its own wave, so the wave travels with every node here rather than once for the whole payload. An assembler whose output shape expresses no ordering ignores it.
+  sync_wave?: number;
 }
 
 export interface RenderEdge {
@@ -643,6 +645,7 @@ export function encodeRenderedNode(v: RenderedNode): string {
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
   parts.push(`${jstr("rendered")}:${encodeRenderNodeOutput(v.rendered)}`);
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) parts.push(`${jstr("annotations")}:${`{${Object.keys(v.annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.annotations![k0])}`).join(",")}}`}`);
+  if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -1856,6 +1859,7 @@ export function encodeCBORRenderedNode(v: RenderedNode): Uint8Array {
 
 export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
   let n = 3;
+  if (v.sync_wave !== undefined && v.sync_wave !== 0) n++;
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "id");
@@ -1864,6 +1868,10 @@ export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
   writeText(out, v.type);
   writeText(out, "rendered");
   appendCBORRenderNodeOutput(out, v.rendered);
+  if (v.sync_wave !== undefined && v.sync_wave !== 0) {
+    writeText(out, "sync_wave");
+    writeInt(out, v.sync_wave);
+  }
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) {
     writeText(out, "annotations");
     {
@@ -1893,6 +1901,7 @@ export function decodeCBORRenderedNodeFrom(dec: CborDec): RenderedNode {
       case "type": o["type"] = dec.readText(); break;
       case "rendered": o["rendered"] = decodeCBORRenderNodeOutputFrom(dec); break;
       case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "sync_wave": o["sync_wave"] = dec.readInt(); break;
       default: dec.skip();
     }
   }
