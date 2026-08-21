@@ -14,7 +14,7 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
 }
 
-/// The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. policies carries the per-workspace publishing-discipline configuration the rule consults.
+/// The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. policies carries the per-workspace publishing-discipline configuration the rule consults.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinterInput {
     /// The rule the plugin should dispatch to. At v0.1.0 the only recognised value is 'schema-evolution'; the recognised set expands as further rules ship. Unknown rule_ids produce an 'unknown_rule' finding in the output.
@@ -26,6 +26,9 @@ pub struct LinterInput {
     /// Parsed structure of the previous-version entity, for rules that perform pairwise comparison (schema-evolution). Omitted when the rule does not need a previous-version reference (e.g., first publication, structural-only rules).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous: Option<Box<RawValue>>,
+    /// Parsed structure of the Component a linted Recipe names in spec.implements, resolved by the host. It is a related entity of a DIFFERENT kind from the one being linted, which is what distinguishes it from previous: previous carries another version of the same entity, while this carries the Component whose declared output contract the Recipe realizes. The host resolves it through the same catalog lookup a build uses, keyed on the Component's name, so all three pin forms spec.implements accepts (unversioned, exact, major-compatible range) reach the same entry. Omitted when the linted entity is not a Recipe, when it names no Component, or when no Component of that name is reachable in the workspace's catalog directories. An absent value means the comparison is unavailable, not that the contract is empty: a rule that reads this field emits no finding when it is absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implemented_component: Option<Box<RawValue>>,
     /// Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_path: String,
@@ -65,6 +68,9 @@ pub struct Policies {
     /// When true, suppress the category-matches-directory rule's findings. The standard-catalog convention requires Components under core/<category>/ to declare component.aggrega.ai/category={category} matching the directory segment, where {category} is one of the 15 closed-set values. Workspaces with legitimate persistent exceptions opt out here. Default false.
     #[serde(default, skip_serializing_if = "is_default")]
     pub allow_category_mismatches: bool,
+    /// When true, suppress the provides-declared-by-component rule's findings. That rule reports each key a Recipe publishes in spec.provides that the Component named by its spec.implements does not declare in the provides pillar of its spec.schema. Publishing beyond the declared contract is accepted at build time, so the finding is advisory; a workspace whose Recipes deliberately publish keys their Component does not declare opts out here. Default false.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub allow_undeclared_recipe_provides: bool,
 }
 
 
@@ -81,6 +87,7 @@ impl LinterInput {
         let mut n: u64 = 4;
         if self.previous.is_some() { n += 1; }
         if !self.source_path.is_empty() { n += 1; }
+        if self.implemented_component.is_some() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "rule_id");
         crate::cbor_gen::write_text(out, &self.rule_id);
@@ -98,6 +105,10 @@ impl LinterInput {
             crate::cbor_gen::write_text(out, "source_path");
             crate::cbor_gen::write_text(out, &self.source_path);
         }
+        if let Some(ref x) = self.implemented_component {
+            crate::cbor_gen::write_text(out, "implemented_component");
+            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
         Ok(())
     }
 
@@ -113,6 +124,7 @@ impl LinterInput {
         let mut f_entity_kind: Option<String> = None;
         let mut f_proposed: Option<Box<RawValue>> = None;
         let mut f_previous: Option<Box<RawValue>> = None;
+        let mut f_implemented_component: Option<Box<RawValue>> = None;
         let mut f_source_path: String = String::new();
         let mut f_policies: Policies = Policies::default();
         let n = dec.read_map_header()?;
@@ -123,6 +135,7 @@ impl LinterInput {
                 "entity_kind" => f_entity_kind = Some(dec.read_text()?),
                 "proposed" => f_proposed = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "previous" => f_previous = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "implemented_component" => f_implemented_component = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "source_path" => f_source_path = dec.read_text()?,
                 "policies" => f_policies = Policies::decode_cbor_from(dec)?,
                 _ => dec.skip()?,
@@ -133,6 +146,7 @@ impl LinterInput {
             entity_kind: f_entity_kind.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field entity_kind".to_string()))?,
             proposed: f_proposed.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field proposed".to_string()))?,
             previous: f_previous,
+            implemented_component: f_implemented_component,
             source_path: f_source_path,
             policies: f_policies,
         })
@@ -209,6 +223,7 @@ impl Policies {
         if self.allow_aggrega_ai_prefix { n += 1; }
         if self.allow_nonstandard_names { n += 1; }
         if self.allow_category_mismatches { n += 1; }
+        if self.allow_undeclared_recipe_provides { n += 1; }
         if self.allow_direct_x_aggrega_extensions { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if self.allow_dynamic_refs {
@@ -231,6 +246,10 @@ impl Policies {
             crate::cbor_gen::write_text(out, "allow_category_mismatches");
             crate::cbor_gen::write_bool(out, self.allow_category_mismatches);
         }
+        if self.allow_undeclared_recipe_provides {
+            crate::cbor_gen::write_text(out, "allow_undeclared_recipe_provides");
+            crate::cbor_gen::write_bool(out, self.allow_undeclared_recipe_provides);
+        }
         if self.allow_direct_x_aggrega_extensions {
             crate::cbor_gen::write_text(out, "allow_direct_x_aggrega_extensions");
             crate::cbor_gen::write_bool(out, self.allow_direct_x_aggrega_extensions);
@@ -252,6 +271,7 @@ impl Policies {
         let mut f_allow_aggrega_ai_prefix: bool = false;
         let mut f_allow_nonstandard_names: bool = false;
         let mut f_allow_category_mismatches: bool = false;
+        let mut f_allow_undeclared_recipe_provides: bool = false;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -262,6 +282,7 @@ impl Policies {
                 "allow_aggrega_ai_prefix" => f_allow_aggrega_ai_prefix = dec.read_bool()?,
                 "allow_nonstandard_names" => f_allow_nonstandard_names = dec.read_bool()?,
                 "allow_category_mismatches" => f_allow_category_mismatches = dec.read_bool()?,
+                "allow_undeclared_recipe_provides" => f_allow_undeclared_recipe_provides = dec.read_bool()?,
                 _ => dec.skip()?,
             }
         }
@@ -272,6 +293,7 @@ impl Policies {
             allow_aggrega_ai_prefix: f_allow_aggrega_ai_prefix,
             allow_nonstandard_names: f_allow_nonstandard_names,
             allow_category_mismatches: f_allow_category_mismatches,
+            allow_undeclared_recipe_provides: f_allow_undeclared_recipe_provides,
         })
     }
 }
