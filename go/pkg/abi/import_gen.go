@@ -249,6 +249,19 @@ func (t *ImportInput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes ImportInput exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ImportInput) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "format", "bytes", "sources", "settings"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes ImportSource in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t ImportSource) MarshalJSON() ([]byte, error) {
@@ -307,6 +320,19 @@ func (t *ImportSource) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	return nil
+}
+
+// UnmarshalJSONStrict decodes ImportSource exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ImportSource) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "name", "bytes"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
 }
 
 // MarshalJSON encodes ImportOutput in field-declaration order, omitting
@@ -515,6 +541,19 @@ func (t *ImportOutput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes ImportOutput exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ImportOutput) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "entities", "decisions", "diagnostics", "files", "error"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes EmittedEntity in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t EmittedEntity) MarshalJSON() ([]byte, error) {
@@ -721,6 +760,19 @@ func (t *EmittedEntity) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes EmittedEntity exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *EmittedEntity) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "kind", "name", "mode", "body", "labels", "annotations", "sourceRef", "decisionRef"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes ImportDecision in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t ImportDecision) MarshalJSON() ([]byte, error) {
@@ -864,6 +916,19 @@ func (t *ImportDecision) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes ImportDecision exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ImportDecision) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "sourceNode", "candidates", "chosen", "rationale", "swapHint"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes DecisionSourceNode in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t DecisionSourceNode) MarshalJSON() ([]byte, error) {
@@ -934,6 +999,19 @@ func (t *DecisionSourceNode) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	return nil
+}
+
+// UnmarshalJSONStrict decodes DecisionSourceNode exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *DecisionSourceNode) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "id", "type", "paramsSummary"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
 }
 
 // MarshalJSON encodes ImportCandidate in field-declaration order, omitting
@@ -1026,6 +1104,19 @@ func (t *ImportCandidate) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	return nil
+}
+
+// UnmarshalJSONStrict decodes ImportCandidate exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ImportCandidate) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "componentName", "score", "tier", "signals"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
 }
 
 // MarshalJSON encodes CandidateSignals in field-declaration order, omitting
@@ -1134,6 +1225,19 @@ func (t *CandidateSignals) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes CandidateSignals exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *CandidateSignals) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "table", "category", "domainLabels", "shape", "name"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes DecisionChoice in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t DecisionChoice) MarshalJSON() ([]byte, error) {
@@ -1206,6 +1310,19 @@ func (t *DecisionChoice) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes DecisionChoice exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *DecisionChoice) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "target", "mode", "tier"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes ScaffoldFile in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t ScaffoldFile) MarshalJSON() ([]byte, error) {
@@ -1264,6 +1381,19 @@ func (t *ScaffoldFile) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	return nil
+}
+
+// UnmarshalJSONStrict decodes ScaffoldFile exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ScaffoldFile) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "path", "content"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
 }
 
 // EncodeCBOR encodes ImportInput as canonical CBOR (RFC 8949 §4.2.1; floats per

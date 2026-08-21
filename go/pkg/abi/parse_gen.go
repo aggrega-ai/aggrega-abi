@@ -144,6 +144,19 @@ func (t *ParseInput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes ParseInput exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ParseInput) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "format", "bytes", "options"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes ParseOutput in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t ParseOutput) MarshalJSON() ([]byte, error) {
@@ -284,6 +297,19 @@ func (t *ParseOutput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes ParseOutput exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ParseOutput) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "tree", "diagnostics", "spans", "error"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes NodeSpan in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t NodeSpan) MarshalJSON() ([]byte, error) {
@@ -348,6 +374,19 @@ func (t *NodeSpan) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	return nil
+}
+
+// UnmarshalJSONStrict decodes NodeSpan exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *NodeSpan) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "pointer", "span"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
 }
 
 // MarshalJSON encodes SourceSpan in field-declaration order, omitting
@@ -458,6 +497,19 @@ func (t *SourceSpan) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes SourceSpan exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *SourceSpan) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "start_offset", "end_offset", "start_line", "start_column", "end_line", "end_column"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes ParseSourceResponse in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t ParseSourceResponse) MarshalJSON() ([]byte, error) {
@@ -534,6 +586,19 @@ func (t *ParseSourceResponse) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	return nil
+}
+
+// UnmarshalJSONStrict decodes ParseSourceResponse exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *ParseSourceResponse) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "tree", "error", "error_code"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
 }
 
 // EncodeCBOR encodes ParseInput as canonical CBOR (RFC 8949 §4.2.1; floats per

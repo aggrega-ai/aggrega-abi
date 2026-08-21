@@ -100,6 +100,19 @@ func (t *CLIRunInput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSONStrict decodes CLIRunInput exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *CLIRunInput) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "command", "args"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // EncodeCBOR encodes CLIRunInput as canonical CBOR (RFC 8949 §4.2.1; floats per
 // CBOR CDE §4.2), dispatch-free.
 func (t CLIRunInput) EncodeCBOR() ([]byte, error) {
