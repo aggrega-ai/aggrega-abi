@@ -369,10 +369,12 @@ export interface LinkPatch {
   ops: unknown[];
 }
 
-// The payload a provider receives on its link_publish export: one cross-boundary link whose consumed endpoint's output is referenced across a boundary. The export returns the published identity the consumer resolves against and any producer-side artifact wiring the consumed endpoint's output needs.
+// The payload a provider receives on its link_publish export: one cross-boundary link whose consumed endpoint's output is referenced across a boundary, and that endpoint's assembled files. The export returns the published identity the consumer resolves against and any producer-side artifact wiring the consumed endpoint's output needs.
 export interface LinkPublishInput {
   // The cross-boundary link being published, read from the consumed (target) endpoint's side.
   edge: LinkEdge;
+  // The consumed endpoint's assembled files, so the provider can read what that endpoint already declares and check the names it is about to publish against them. Each names its on-disk path and carries the assembled bytes. Absent when the host has no assembled producer output to hand the publish; a provider that needs no document to author its wiring ignores it.
+  producer_files?: RenderedFile[];
 }
 
 // The payload a provider returns from its link_publish export: the published identity handle the consumer resolves against, and the producer-side artifact wiring to apply to the consumed endpoint's assembled output.
@@ -800,6 +802,7 @@ export function decodeLinkPatch(data: string): LinkPatch {
 export function encodeLinkPublishInput(v: LinkPublishInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("edge")}:${encodeLinkEdge(v.edge)}`);
+  if (v.producer_files !== undefined && v.producer_files.length > 0) parts.push(`${jstr("producer_files")}:${`[${v.producer_files!.map((e0) => encodeRenderedFile(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2522,9 +2525,20 @@ export function encodeCBORLinkPublishInput(v: LinkPublishInput): Uint8Array {
 
 export function appendCBORLinkPublishInput(out: number[], v: LinkPublishInput): void {
   let n = 1;
+  if (v.producer_files !== undefined && v.producer_files.length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "edge");
   appendCBORLinkEdge(out, v.edge);
+  if (v.producer_files !== undefined && v.producer_files.length > 0) {
+    writeText(out, "producer_files");
+    {
+      const a0 = v.producer_files;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORRenderedFile(out, ee0);
+      }
+    }
+  }
 }
 
 export function decodeCBORLinkPublishInput(data: Uint8Array): LinkPublishInput {
@@ -2539,6 +2553,7 @@ export function decodeCBORLinkPublishInputFrom(dec: CborDec): LinkPublishInput {
     const k = dec.readText();
     switch (k) {
       case "edge": o["edge"] = decodeCBORLinkEdgeFrom(dec); break;
+      case "producer_files": o["producer_files"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORRenderedFileFrom(dec)); } return a; })(); break;
       default: dec.skip();
     }
   }

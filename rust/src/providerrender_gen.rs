@@ -454,11 +454,14 @@ pub struct LinkPatch {
     pub ops: Vec<Box<RawValue>>,
 }
 
-/// The payload a provider receives on its link_publish export: one cross-boundary link whose consumed endpoint's output is referenced across a boundary. The export returns the published identity the consumer resolves against and any producer-side artifact wiring the consumed endpoint's output needs.
+/// The payload a provider receives on its link_publish export: one cross-boundary link whose consumed endpoint's output is referenced across a boundary, and that endpoint's assembled files. The export returns the published identity the consumer resolves against and any producer-side artifact wiring the consumed endpoint's output needs.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LinkPublishInput {
     /// The cross-boundary link being published, read from the consumed (target) endpoint's side.
     pub edge: LinkEdge,
+    /// The consumed endpoint's assembled files, so the provider can read what that endpoint already declares and check the names it is about to publish against them. Each names its on-disk path and carries the assembled bytes. Absent when the host has no assembled producer output to hand the publish; a provider that needs no document to author its wiring ignores it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub producer_files: Vec<RenderedFile>,
 }
 
 /// The payload a provider returns from its link_publish export: the published identity handle the consumer resolves against, and the producer-side artifact wiring to apply to the consumed endpoint's assembled output.
@@ -2659,10 +2662,21 @@ impl LinkPublishInput {
     }
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let n: u64 = 1;
+        let mut n: u64 = 1;
+        if !self.producer_files.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "edge");
         self.edge.append_cbor(out)?;
+        if !self.producer_files.is_empty() {
+            crate::cbor_gen::write_text(out, "producer_files");
+            {
+                let c = &self.producer_files;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -2675,16 +2689,19 @@ impl LinkPublishInput {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_edge: Option<LinkEdge> = None;
+        let mut f_producer_files: Vec<RenderedFile> = Vec::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "edge" => f_edge = Some(LinkEdge::decode_cbor_from(dec)?),
+                "producer_files" => f_producer_files = { let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv },
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             edge: f_edge.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field edge".to_string()))?,
+            producer_files: f_producer_files,
         })
     }
 }
