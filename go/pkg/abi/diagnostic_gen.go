@@ -620,6 +620,19 @@ func (t *Diagnostic) decodeCBOR(dec *cborDec) error {
 	return nil
 }
 
+// DecodeCBORStrict decodes Diagnostic exactly as DecodeCBOR does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the map's own keys and does not descend.
+func (t *Diagnostic) DecodeCBORStrict(data []byte) error {
+	if err := refuseUndeclaredCBORKeys(data, "severity", "message", "code", "rule_id", "classification", "source_ref", "location", "suggest"); err != nil {
+		return err
+	}
+	return t.DecodeCBOR(data)
+}
+
 // EncodeCBOR encodes Location as canonical CBOR (RFC 8949 §4.2.1; floats per
 // CBOR CDE §4.2), dispatch-free.
 func (t Location) EncodeCBOR() ([]byte, error) {
@@ -734,6 +747,19 @@ func (t *Location) decodeCBOR(dec *cborDec) error {
 	return nil
 }
 
+// DecodeCBORStrict decodes Location exactly as DecodeCBOR does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the map's own keys and does not descend.
+func (t *Location) DecodeCBORStrict(data []byte) error {
+	if err := refuseUndeclaredCBORKeys(data, "span", "key_path", "uri", "line", "kind"); err != nil {
+		return err
+	}
+	return t.DecodeCBOR(data)
+}
+
 // EncodeCBOR encodes Span as canonical CBOR (RFC 8949 §4.2.1; floats per
 // CBOR CDE §4.2), dispatch-free.
 func (t Span) EncodeCBOR() ([]byte, error) {
@@ -822,4 +848,17 @@ func (t *Span) decodeCBOR(dec *cborDec) error {
 		}
 	}
 	return nil
+}
+
+// DecodeCBORStrict decodes Span exactly as DecodeCBOR does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the map's own keys and does not descend.
+func (t *Span) DecodeCBORStrict(data []byte) error {
+	if err := refuseUndeclaredCBORKeys(data, "start_offset", "end_offset", "start_line", "start_column", "end_line", "end_column"); err != nil {
+		return err
+	}
+	return t.DecodeCBOR(data)
 }

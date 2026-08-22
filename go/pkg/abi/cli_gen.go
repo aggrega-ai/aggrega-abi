@@ -186,3 +186,16 @@ func (t *CLIRunInput) decodeCBOR(dec *cborDec) error {
 	}
 	return nil
 }
+
+// DecodeCBORStrict decodes CLIRunInput exactly as DecodeCBOR does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the map's own keys and does not descend.
+func (t *CLIRunInput) DecodeCBORStrict(data []byte) error {
+	if err := refuseUndeclaredCBORKeys(data, "command", "args"); err != nil {
+		return err
+	}
+	return t.DecodeCBOR(data)
+}
