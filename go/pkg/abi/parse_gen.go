@@ -18,7 +18,7 @@ import (
 type ParseInput struct {
 	// Format The name of the source format to parse, matching one of the parser's advertised parse:<format> capabilities (for example hcl, toml, yaml, or json). The parser reads the bytes as this format.
 	Format string `json:"format" yaml:"format" cbor:"format"`
-	// Bytes The source bytes to parse, base64-encoded on the wire. The parser decodes the base64 to recover the original bytes and reads them as the named format.
+	// Bytes The source bytes to parse. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the parser decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in. The parser reads the recovered bytes as the named format.
 	Bytes []byte `json:"bytes" yaml:"bytes" cbor:"bytes"`
 	// Options An opaque options document the consumer supplies for parser-specific behavior. The host pipes it through without interpreting it; the parser reads whatever shape it documents. Absent when the consumer supplies no options.
 	Options json.RawMessage `json:"options,omitempty" yaml:"options,omitempty" cbor:"options,omitempty"`
