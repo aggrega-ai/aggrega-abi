@@ -117,7 +117,7 @@ export interface RenderedFile {
 export interface SourceFile {
   // The file's path relative to the source root (for example Chart.yaml or templates/deployment.yaml).
   path: string;
-  // The file's raw bytes exactly as the host read them from the local source (base64 on the JSON wire).
+  // The file's raw bytes exactly as the host read them from the local source. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the guest decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
   content: string;
 }
 
@@ -171,7 +171,7 @@ export interface SourceFileRequest {
 
 // The read-source-file host function's reply: on success the file's bytes, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a guest carries a sandbox rejection or a read failure into its own diagnostics as a deterministic render failure.
 export interface SourceFileResponse {
-  // The file's raw bytes on success; absent on failure (base64 on the JSON wire).
+  // The file's raw bytes on success; absent on failure. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the guest decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
   content?: string;
   // The failure message on failure, naming the file and the reason; absent on success.
   error?: string;
