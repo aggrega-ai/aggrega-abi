@@ -210,6 +210,35 @@ cbor_case!(import_output, aggrega_abi::ImportOutput, "ImportOutput");
 cbor_case!(parse_source_response, aggrega_abi::ParseSourceResponse, "ParseSourceResponse");
 cbor_case!(fetch_external_input_response, aggrega_abi::FetchExternalInputResponse, "FetchExternalInputResponse");
 
+// The pack-source and read-source-file request and SUCCESS reply vectors. The
+// success reply is the half a failure envelope cannot stand in for: the two are the
+// two directions of one omission property, and an encoder emitting an error key
+// unconditionally passes any test built only from success fixtures while one
+// dropping it unconditionally passes any test built only from failure fixtures.
+// Each reply type's failure envelope is registered further down; the pair is the
+// assertion.
+//
+// The request vectors declare no omittable member, so their map head is a constant
+// and there is no omission direction to prove. They pin head and key order on the
+// payload the guest builds and the host decodes.
+//
+// The packed reply carries three files in the host's byte-order walk — Chart.yaml
+// before charts/ before templates/, byte order rather than case-insensitive order —
+// and one file's content is deliberately not valid UTF-8, proving the file bytes
+// cross as an opaque byte string rather than as text. This crate declares those
+// bytes as a base64 `String`, so the vector also pins that the CBOR half decodes to
+// the same byte string the other two languages emit; its base64 is the only place
+// in the corpus exercising both non-alphanumeric alphabet characters, which this
+// crate's hand-written base64 codec reaches on no other vector.
+//
+// SourcePackResponse and SourceFileResponse already carry a harness binding from
+// their failure-envelope vectors below, so they take cbor_vector alone — a second
+// impl_cbor_case for the same type would not compile.
+cbor_case!(source_pack_request, aggrega_abi::SourcePackRequest, "SourcePackRequest");
+cbor_vector!(source_pack_response, aggrega_abi::SourcePackResponse, "SourcePackResponse");
+cbor_case!(source_file_request, aggrega_abi::SourceFileRequest, "SourceFileRequest");
+cbor_vector!(source_file_response, aggrega_abi::SourceFileResponse, "SourceFileResponse");
+
 // The governance vectors cover the payload shapes reached only by a governance
 // attachment. RenderPolicyInput is the payload a policy attachment receives at
 // the render stage — rendered artifacts instead of the IR graph — carrying one

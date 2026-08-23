@@ -458,3 +458,42 @@ func TestSocketParity_FetchExternalInputResponseContent(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponseContent")
 }
+
+// The pack-source and read-source-file goldens below are the request and the
+// SUCCESS reply of each. The success reply is the half a failure envelope cannot
+// stand in for: the two are the two directions of one omission property, and an
+// encoder that emits an error key unconditionally passes any test built only from
+// success fixtures while one that drops it unconditionally passes any test built
+// only from failure fixtures. Each type's failure envelope lives beside the other
+// error-member goldens; together they are the assertion.
+//
+// The request goldens declare no omittable member, so their map head is a
+// constant and there is no omission direction to prove. They pin the head and key
+// order instead, on the payload the guest builds and the host decodes.
+
+func TestSocketParity_SourcePackRequest(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.SourcePackRequest](t, "SourcePackRequest")
+}
+
+// The packed reply carries three files in the host's byte-order walk — Chart.yaml
+// before charts/ before templates/, which is byte order and not case-insensitive
+// order — and one file's content is deliberately not valid UTF-8, so the file
+// bytes are proven to cross as an opaque byte string rather than as text. Its
+// base64 is also the only place in the corpus that exercises both non-alphanumeric
+// alphabet characters, which the hand-written base64 codecs in the other two
+// languages reach on no other golden.
+func TestSocketParity_SourcePackResponse(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.SourcePackResponse](t, "SourcePackResponse")
+}
+
+func TestSocketParity_SourceFileRequest(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.SourceFileRequest](t, "SourceFileRequest")
+}
+
+func TestSocketParity_SourceFileResponse(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.SourceFileResponse](t, "SourceFileResponse")
+}

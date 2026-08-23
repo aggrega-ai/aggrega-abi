@@ -123,6 +123,30 @@ const vectors: Array<[string, string]> = [
   ["ParseSourceResponse", "ParseSourceResponse"],
   ["FetchExternalInputResponse", "FetchExternalInputResponse"],
   ["FetchExternalInputResponseContent", "FetchExternalInputResponse"],
+  // The pack-source and read-source-file request and SUCCESS reply vectors. The
+  // success reply is the half a failure envelope cannot stand in for: the two are the
+  // two directions of one omission property, and an encoder emitting an error key
+  // unconditionally passes any test built only from success fixtures while one
+  // dropping it unconditionally passes any test built only from failure fixtures.
+  // Each reply type's failure envelope is listed among the error envelopes below;
+  // the pair is the assertion.
+  //
+  // The request vectors declare no omittable member, so their map head is a constant
+  // and there is no omission direction to prove. They pin head and key order on the
+  // payload the guest builds and the host decodes.
+  //
+  // The packed reply carries three files in the host's byte-order walk — Chart.yaml
+  // before charts/ before templates/, byte order rather than case-insensitive order —
+  // and one file's content is deliberately not valid UTF-8, proving the file bytes
+  // cross as an opaque byte string rather than as text. This package declares those
+  // bytes as a base64 string, so the vector also pins that the CBOR half decodes to
+  // the same byte string the other two languages emit; its base64 is the only place
+  // in the corpus exercising both non-alphanumeric alphabet characters, which this
+  // package's hand-written base64 codec reaches on no other vector.
+  ["SourcePackRequest", "SourcePackRequest"],
+  ["SourcePackResponse", "SourcePackResponse"],
+  ["SourceFileRequest", "SourceFileRequest"],
+  ["SourceFileResponse", "SourceFileResponse"],
   // The governance vectors cover the payload shapes reached only by a governance
   // attachment. RenderPolicyInput is the payload a policy attachment receives at
   // the render stage — rendered artifacts instead of the IR graph — carrying one
