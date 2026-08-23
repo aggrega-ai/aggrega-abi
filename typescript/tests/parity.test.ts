@@ -121,6 +121,18 @@ const vectors: Array<[string, string]> = [
   ["ImportInput", "ImportInput"],
   ["ImportOutput", "ImportOutput"],
   ["ParseSourceResponse", "ParseSourceResponse"],
+  // The parse-source reply's SUCCESS shape, the half its failure envelope cannot
+  // stand in for: the two are the two directions of one omission property, and an
+  // encoder emitting an error key unconditionally passes any test built only from
+  // success fixtures while one dropping it unconditionally passes any test built
+  // only from failure fixtures. It also carries the opaque tree, which crosses as
+  // a byte string of the JSON document's verbatim bytes; the failure envelope
+  // reaches no opaque field at all, so the tree member's bytes are pinned here.
+  // This package is the one that holds the tree as a PARSED value and
+  // re-serialises it, where the other two carry the bytes verbatim, so the vector
+  // pins that the re-serialisation reproduces the committed document exactly. The
+  // document is long enough that its byte-string length needs a two-byte head.
+  ["ParseSourceResponseTree", "ParseSourceResponse"],
   ["FetchExternalInputResponse", "FetchExternalInputResponse"],
   ["FetchExternalInputResponseContent", "FetchExternalInputResponse"],
   // The pack-source and read-source-file request and SUCCESS reply vectors. The

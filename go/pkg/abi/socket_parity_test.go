@@ -445,6 +445,22 @@ func TestSocketParity_ParseSourceResponse(t *testing.T) {
 	roundTripBothGolden[abi.ParseSourceResponse](t, "ParseSourceResponse")
 }
 
+// The tree golden is the parse-source reply's success path, and it is the half
+// the failure envelope above cannot stand in for: the two are the two directions
+// of one omission property, and an encoder emitting an error key unconditionally
+// passes any test built only from success fixtures while one dropping it
+// unconditionally passes any test built only from failure fixtures. It also
+// carries the opaque tree, which crosses as a byte string of the JSON document's
+// verbatim bytes; the failure envelope reaches no opaque field at all, so the
+// tree member's bytes are pinned here. The document is long enough that its
+// byte-string length needs a two-byte head, so the length is carried in the head
+// rather than in the initial byte and a head that disagreed with the body could
+// not hide behind a constant.
+func TestSocketParity_ParseSourceResponseTree(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.ParseSourceResponse](t, "ParseSourceResponseTree")
+}
+
 func TestSocketParity_FetchExternalInputResponse(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponse")

@@ -208,6 +208,18 @@ cbor_case!(parse_output, aggrega_abi::ParseOutput, "ParseOutput");
 cbor_case!(import_input, aggrega_abi::ImportInput, "ImportInput");
 cbor_case!(import_output, aggrega_abi::ImportOutput, "ImportOutput");
 cbor_case!(parse_source_response, aggrega_abi::ParseSourceResponse, "ParseSourceResponse");
+// A second vector for ParseSourceResponse, so cbor_vector rather than cbor_case:
+// the trait binding for this type is declared once, on the failure vector above.
+// This one is the SUCCESS shape, the half that failure vector cannot stand in for
+// — the two are the two directions of one omission property, and an encoder
+// emitting an error key unconditionally passes any test built only from success
+// fixtures while one dropping it unconditionally passes any test built only from
+// failure fixtures. It also carries the opaque tree, which crosses as a byte
+// string of the JSON document's verbatim bytes; the failure envelope reaches no
+// opaque field at all, so the tree member's bytes are pinned here. The document
+// is long enough that its byte-string length needs a two-byte head, so the length
+// rides in the head rather than in the initial byte.
+cbor_vector!(parse_source_response_tree, aggrega_abi::ParseSourceResponse, "ParseSourceResponseTree");
 cbor_case!(fetch_external_input_response, aggrega_abi::FetchExternalInputResponse, "FetchExternalInputResponse");
 
 // The pack-source and read-source-file request and SUCCESS reply vectors. The

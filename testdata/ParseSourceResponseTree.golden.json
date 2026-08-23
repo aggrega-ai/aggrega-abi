@@ -1,0 +1,1 @@
+{"tree":{"variable":{"region":{"type":"string","default":"eu-west-1"},"replicas":{"type":"number","default":3}},"resource":{"service":{"api":{"name":"checkout-api","replicas":3,"ports":[8080,9090],"env":[{"name":"LOG_LEVEL","value":"info"},{"name":"REGION","value":"eu-west-1"}],"public":false,"sidecar":null}}},"output":{"endpoint":{"value":"api.internal"}}}}
