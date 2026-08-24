@@ -387,7 +387,7 @@ func TestMapBearingCensusIsComplete(t *testing.T) {
 
 	// The declared map fields across the generated codec. Counted from the field
 	// declarations, so a nested map counts once as the field that declares it.
-	const wantMapFields = 40
+	const wantMapFields = 41
 
 	got := 0
 	for _, proto := range mapBearingPayloads {
@@ -405,7 +405,7 @@ func TestMapBearingCensusIsComplete(t *testing.T) {
 // map-bearing payload would otherwise count that payload's maps twice — once
 // through the embedding field and again through the embedded type's own census
 // entry. Two payloads embed another this way, so the difference is not
-// hypothetical: it is six fields on a surface of forty-six.
+// hypothetical: it is six fields on a surface of forty-seven.
 func countDeclaredMapFields(t reflect.Type) int {
 	n := 0
 	for i := 0; i < t.NumField(); i++ {
