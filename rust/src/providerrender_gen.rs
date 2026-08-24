@@ -290,7 +290,7 @@ pub struct AssembleBoundaryInput {
     pub aggregate_name: String,
 }
 
-/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, and the render output the render_node export produced for it.
+/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, its rendered values, and the render output the render_node export produced for it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderedNode {
     /// The node's absolute id within the topology graph.
@@ -305,6 +305,9 @@ pub struct RenderedNode {
     /// The deployment wave this node inherited from its containing boundary (default 0; negative permitted), so a boundary assembler can order the contributors it merges relative to one another. A dispatch group can merge contributors from several boundaries, each carrying its own wave, so the wave travels with every node here rather than once for the whole payload. An assembler whose output shape expresses no ordering ignores it.
     #[serde(default, skip_serializing_if = "is_default")]
     pub sync_wave: i64,
+    /// The node's rendered values dictionary, the same key set the render_node export received for this node, so a boundary assembler can place each contributor's inputs in the assembled artifact itself rather than beside that contributor's own files. Where the assembled artifact is the only position the target evaluates, that is the difference between an input the target reads and one it never reaches. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself. An assembler whose output shape carries no per-contributor inputs ignores it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub values: BTreeMap<String, Box<RawValue>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1810,6 +1813,7 @@ impl RenderedNode {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 3;
+        if !self.values.is_empty() { n += 1; }
         if self.sync_wave != 0 { n += 1; }
         if !self.annotations.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -1817,6 +1821,20 @@ impl RenderedNode {
         crate::cbor_gen::write_text(out, &self.id);
         crate::cbor_gen::write_text(out, "type");
         crate::cbor_gen::write_text(out, &self.r#type);
+        if !self.values.is_empty() {
+            crate::cbor_gen::write_text(out, "values");
+            {
+                let c = &self.values;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
         crate::cbor_gen::write_text(out, "rendered");
         self.rendered.append_cbor(out)?;
         if self.sync_wave != 0 {
@@ -1853,6 +1871,7 @@ impl RenderedNode {
         let mut f_rendered: Option<RenderNodeOutput> = None;
         let mut f_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_sync_wave: i64 = 0;
+        let mut f_values: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -1862,6 +1881,7 @@ impl RenderedNode {
                 "rendered" => f_rendered = Some(RenderNodeOutput::decode_cbor_from(dec)?),
                 "annotations" => f_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "sync_wave" => f_sync_wave = dec.read_int()?,
+                "values" => f_values = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
                 _ => dec.skip()?,
             }
         }
@@ -1871,6 +1891,7 @@ impl RenderedNode {
             rendered: f_rendered.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field rendered".to_string()))?,
             annotations: f_annotations,
             sync_wave: f_sync_wave,
+            values: f_values,
         })
     }
 }

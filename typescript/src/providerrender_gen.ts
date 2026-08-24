@@ -237,7 +237,7 @@ export interface AssembleBoundaryInput {
   aggregate_name?: string;
 }
 
-// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, and the render output the render_node export produced for it.
+// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, its rendered values, and the render output the render_node export produced for it.
 export interface RenderedNode {
   // The node's absolute id within the topology graph.
   id: string;
@@ -248,6 +248,8 @@ export interface RenderedNode {
   annotations?: Record<string, string>;
   // The deployment wave this node inherited from its containing boundary (default 0; negative permitted), so a boundary assembler can order the contributors it merges relative to one another. A dispatch group can merge contributors from several boundaries, each carrying its own wave, so the wave travels with every node here rather than once for the whole payload. An assembler whose output shape expresses no ordering ignores it.
   sync_wave?: number;
+  // The node's rendered values dictionary, the same key set the render_node export received for this node, so a boundary assembler can place each contributor's inputs in the assembled artifact itself rather than beside that contributor's own files. Where the assembled artifact is the only position the target evaluates, that is the difference between an input the target reads and one it never reaches. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself. An assembler whose output shape carries no per-contributor inputs ignores it.
+  values?: Record<string, unknown>;
 }
 
 export interface RenderEdge {
@@ -650,6 +652,7 @@ export function encodeRenderedNode(v: RenderedNode): string {
   parts.push(`${jstr("rendered")}:${encodeRenderNodeOutput(v.rendered)}`);
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) parts.push(`${jstr("annotations")}:${`{${Object.keys(v.annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.annotations![k0])}`).join(",")}}`}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
+  if (v.values !== undefined && Object.keys(v.values).length > 0) parts.push(`${jstr("values")}:${`{${Object.keys(v.values!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -1865,6 +1868,7 @@ export function encodeCBORRenderedNode(v: RenderedNode): Uint8Array {
 
 export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
   let n = 3;
+  if (v.values !== undefined && Object.keys(v.values).length > 0) n++;
   if (v.sync_wave !== undefined && v.sync_wave !== 0) n++;
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) n++;
   writeHead(out, 5, n);
@@ -1872,6 +1876,18 @@ export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
   writeText(out, v.id);
   writeText(out, "type");
   writeText(out, v.type);
+  if (v.values !== undefined && Object.keys(v.values).length > 0) {
+    writeText(out, "values");
+    {
+      const m0 = v.values;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+      }
+    }
+  }
   writeText(out, "rendered");
   appendCBORRenderNodeOutput(out, v.rendered);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) {
@@ -1908,6 +1924,7 @@ export function decodeCBORRenderedNodeFrom(dec: CborDec): RenderedNode {
       case "rendered": o["rendered"] = decodeCBORRenderNodeOutputFrom(dec); break;
       case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;
+      case "values": o["values"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       default: dec.skip();
     }
   }
