@@ -74,7 +74,7 @@ export interface IRFeatureEntry {
   sensitive?: boolean;
   // The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
   sensitive_inject?: unknown;
-  // The leaves this attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual authored leaf. A leaf appears only where the join is exact: an authored leaf path equal to a path the Feature's schema declares sensitive, with nothing read out of the path's own text and no value inspected. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf an author left readable. Absence therefore states that no authored leaf matched a declaration, never that nothing on this attachment carries sensitive material — a guest that reads an absent leaf as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent on an attachment learns that the attachment authors no declared-sensitive leaf and nothing about whether anything reads the key. Leaves arrive in the order the attachment authored them, the values pillar's before the infra pillar's — the same author order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Empty when the attachment authors no leaf its Feature declares sensitive.
+  // The leaves this attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual authored leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf an author left readable. Absence therefore states that no authored leaf matched a declaration, never that nothing on this attachment carries sensitive material — a guest that reads an absent leaf as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent on an attachment learns that the attachment authors no declared-sensitive leaf and nothing about whether anything reads the key. Leaves arrive in the order the attachment authored them, the values pillar's before the infra pillar's — the same author order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Empty when the attachment authors no leaf its Feature declares sensitive.
   sensitive_authored_leaves?: string[];
 }
 
@@ -84,6 +84,8 @@ export interface IRBoundaryFeature {
   type: string;
   // Physical sizing for the boundary attachment; the infra a boundary-scope FeatureRecipe evaluates its templates and source against.
   infra?: unknown;
+  // The leaves this boundary attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies. Only infra.<path> coordinates appear here, because a boundary-level attachment carries no values payload to author into. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. Absence states that no authored leaf matched a declaration, or that the attached Feature resolves to no schema this reader could read — never that nothing in this attachment's infra carries sensitive material. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the boundary authored them, which is the same author order the infra payload itself carries and what keeps the graph byte-identical across runs of identical input. Absent when the attachment authors no leaf its Feature declares sensitive.
+  sensitive_authored_leaves?: string[];
 }
 
 // The Enterprise Metadata Suite explicitly extracted from the Catalog entity, exposing lifecycle and ownership data to Wasm linters.
@@ -127,6 +129,8 @@ export interface IRNode {
   source_file?: string;
   // The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
   uses?: unknown;
+  // The leaves this node authors a value at that its Component declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. It names the node's OWN data — what values_mapping and infra_mapping carry for this node — and is a different subject from the marking on an attachment entry, which names data the attachment authored against its Feature's declaration. Neither is recoverable from the other: a node's Component and an attachment's Feature declare different schemas, and a node that attaches nothing still authors values. A leaf appears where a path the Component's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. Absence states that no authored leaf matched a declaration, or that the node's Component resolves to no schema this reader could read — never that nothing in this node's payload carries sensitive material. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the node authored them, the values pillar's before the infra pillar's, which is the same author order those payloads themselves carry and what keeps the graph byte-identical across runs of identical input. Absent when the node authors no leaf its Component declares sensitive.
+  sensitive_authored_leaves?: string[];
 }
 
 export interface IREdge {
@@ -249,6 +253,7 @@ export function encodeIRBoundaryFeature(v: IRBoundaryFeature): string {
   const parts: string[] = [];
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
   if (v.infra !== undefined && v.infra !== null) parts.push(`${jstr("infra")}:${encodeOpaque(v.infra)}`);
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) parts.push(`${jstr("sensitive_authored_leaves")}:${`[${v.sensitive_authored_leaves!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -288,6 +293,7 @@ export function encodeIRNode(v: IRNode): string {
   if (v.self_inject !== undefined && v.self_inject !== null) parts.push(`${jstr("self_inject")}:${encodeOpaque(v.self_inject)}`);
   if (v.source_file !== undefined && v.source_file !== "") parts.push(`${jstr("source_file")}:${jstr(v.source_file)}`);
   if (v.uses !== undefined && v.uses !== null) parts.push(`${jstr("uses")}:${encodeOpaque(v.uses)}`);
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) parts.push(`${jstr("sensitive_authored_leaves")}:${`[${v.sensitive_authored_leaves!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -632,12 +638,23 @@ export function encodeCBORIRBoundaryFeature(v: IRBoundaryFeature): Uint8Array {
 export function appendCBORIRBoundaryFeature(out: number[], v: IRBoundaryFeature): void {
   let n = 1;
   if (v.infra !== undefined && v.infra !== null) n++;
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "type");
   writeText(out, v.type);
   if (v.infra !== undefined && v.infra !== null) {
     writeText(out, "infra");
     writeBytes(out, utf8Encode(JSON.stringify(v.infra)));
+  }
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) {
+    writeText(out, "sensitive_authored_leaves");
+    {
+      const a0 = v.sensitive_authored_leaves;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
   }
 }
 
@@ -654,6 +671,7 @@ export function decodeCBORIRBoundaryFeatureFrom(dec: CborDec): IRBoundaryFeature
     switch (k) {
       case "type": o["type"] = dec.readText(); break;
       case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "sensitive_authored_leaves": o["sensitive_authored_leaves"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       default: dec.skip();
     }
   }
@@ -751,6 +769,7 @@ export function appendCBORIRNode(out: number[], v: IRNode): void {
   if (v.synthesized_boundary !== undefined && v.synthesized_boundary !== false) n++;
   if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) n++;
   if (v.synthesized_subsystem !== undefined && v.synthesized_subsystem !== false) n++;
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) n++;
   writeHead(out, 5, n);
   if (v.uses !== undefined && v.uses !== null) {
     writeText(out, "uses");
@@ -842,6 +861,16 @@ export function appendCBORIRNode(out: number[], v: IRNode): void {
     writeText(out, "synthesized_subsystem");
     writeBool(out, v.synthesized_subsystem);
   }
+  if (v.sensitive_authored_leaves !== undefined && v.sensitive_authored_leaves.length > 0) {
+    writeText(out, "sensitive_authored_leaves");
+    {
+      const a0 = v.sensitive_authored_leaves;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
 }
 
 export function decodeCBORIRNode(data: Uint8Array): IRNode {
@@ -871,6 +900,7 @@ export function decodeCBORIRNodeFrom(dec: CborDec): IRNode {
       case "self_inject": o["self_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "source_file": o["source_file"] = dec.readText(); break;
       case "uses": o["uses"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "sensitive_authored_leaves": o["sensitive_authored_leaves"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       default: dec.skip();
     }
   }

@@ -197,6 +197,14 @@ cbor_vector!(ir_node_projection_sensitive_rendered_keys, aggrega_abi::IRNodeProj
 // empty, so every other vector's bytes are the same whether the codec handles the
 // field or drops it, and a regression there would move nothing and fail nowhere.
 cbor_vector!(ir_feature_entry_sensitive_authored_leaves, aggrega_abi::IRFeatureEntry, "IRFeatureEntrySensitiveAuthoredLeaves");
+// The same marking at its other two units. A node's own values and infra are
+// governed by the node's Component, and a boundary attachment's infra by the
+// Feature it names, so neither is recoverable from the entry vector above.
+// IRNode is cbor_vector rather than cbor_case because its trait binding is
+// already declared by the map-order vector further down; IRBoundaryFeature is
+// cbor_case because no other vector carries that shape on its own.
+cbor_vector!(ir_node_sensitive_authored_leaves, aggrega_abi::IRNode, "IRNodeSensitiveAuthoredLeaves");
+cbor_case!(ir_boundary_feature_sensitive_authored_leaves, aggrega_abi::IRBoundaryFeature, "IRBoundaryFeatureSensitiveAuthoredLeaves");
 cbor_case!(assemble_boundary_input, aggrega_abi::AssembleBoundaryInput, "AssembleBoundaryInput");
 cbor_case!(assemble_boundary_output, aggrega_abi::AssembleBoundaryOutput, "AssembleBoundaryOutput");
 cbor_case!(link_publish_input, aggrega_abi::LinkPublishInput, "LinkPublishInput");

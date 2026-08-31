@@ -89,7 +89,7 @@ pub struct IRFeatureEntry {
     /// The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sensitive_inject: Option<Box<RawValue>>,
-    /// The leaves this attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual authored leaf. A leaf appears only where the join is exact: an authored leaf path equal to a path the Feature's schema declares sensitive, with nothing read out of the path's own text and no value inspected. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf an author left readable. Absence therefore states that no authored leaf matched a declaration, never that nothing on this attachment carries sensitive material — a guest that reads an absent leaf as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent on an attachment learns that the attachment authors no declared-sensitive leaf and nothing about whether anything reads the key. Leaves arrive in the order the attachment authored them, the values pillar's before the infra pillar's — the same author order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Empty when the attachment authors no leaf its Feature declares sensitive.
+    /// The leaves this attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual authored leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf an author left readable. Absence therefore states that no authored leaf matched a declaration, never that nothing on this attachment carries sensitive material — a guest that reads an absent leaf as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent on an attachment learns that the attachment authors no declared-sensitive leaf and nothing about whether anything reads the key. Leaves arrive in the order the attachment authored them, the values pillar's before the infra pillar's — the same author order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Empty when the attachment authors no leaf its Feature declares sensitive.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sensitive_authored_leaves: Vec<String>,
 }
@@ -103,6 +103,9 @@ pub struct IRBoundaryFeature {
     /// Physical sizing for the boundary attachment; the infra a boundary-scope FeatureRecipe evaluates its templates and source against.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub infra: Option<Box<RawValue>>,
+    /// The leaves this boundary attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies. Only infra.<path> coordinates appear here, because a boundary-level attachment carries no values payload to author into. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. Absence states that no authored leaf matched a declaration, or that the attached Feature resolves to no schema this reader could read — never that nothing in this attachment's infra carries sensitive material. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the boundary authored them, which is the same author order the infra payload itself carries and what keeps the graph byte-identical across runs of identical input. Absent when the attachment authors no leaf its Feature declares sensitive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sensitive_authored_leaves: Vec<String>,
 }
 
 /// The Enterprise Metadata Suite explicitly extracted from the Catalog entity, exposing lifecycle and ownership data to Wasm linters.
@@ -166,6 +169,9 @@ pub struct IRNode {
     /// The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uses: Option<Box<RawValue>>,
+    /// The leaves this node authors a value at that its Component declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. It names the node's OWN data — what values_mapping and infra_mapping carry for this node — and is a different subject from the marking on an attachment entry, which names data the attachment authored against its Feature's declaration. Neither is recoverable from the other: a node's Component and an attachment's Feature declare different schemas, and a node that attaches nothing still authors values. A leaf appears where a path the Component's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. Absence states that no authored leaf matched a declaration, or that the node's Component resolves to no schema this reader could read — never that nothing in this node's payload carries sensitive material. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the node authored them, the values pillar's before the infra pillar's, which is the same author order those payloads themselves carry and what keeps the graph byte-identical across runs of identical input. Absent when the node authors no leaf its Component declares sensitive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sensitive_authored_leaves: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -592,12 +598,23 @@ impl IRBoundaryFeature {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
         if self.infra.is_some() { n += 1; }
+        if !self.sensitive_authored_leaves.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "type");
         crate::cbor_gen::write_text(out, &self.r#type);
         if let Some(ref x) = self.infra {
             crate::cbor_gen::write_text(out, "infra");
             crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
+        if !self.sensitive_authored_leaves.is_empty() {
+            crate::cbor_gen::write_text(out, "sensitive_authored_leaves");
+            {
+                let c = &self.sensitive_authored_leaves;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
         }
         Ok(())
     }
@@ -612,18 +629,21 @@ impl IRBoundaryFeature {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_type: Option<String> = None;
         let mut f_infra: Option<Box<RawValue>> = None;
+        let mut f_sensitive_authored_leaves: Vec<String> = Vec::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "type" => f_type = Some(dec.read_text()?),
                 "infra" => f_infra = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "sensitive_authored_leaves" => f_sensitive_authored_leaves = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             r#type: f_type.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field type".to_string()))?,
             infra: f_infra,
+            sensitive_authored_leaves: f_sensitive_authored_leaves,
         })
     }
 }
@@ -739,6 +759,7 @@ impl IRNode {
         if self.synthesized_boundary { n += 1; }
         if !self.aggregate_annotations.is_empty() { n += 1; }
         if self.synthesized_subsystem { n += 1; }
+        if !self.sensitive_authored_leaves.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if let Some(ref x) = self.uses {
             crate::cbor_gen::write_text(out, "uses");
@@ -838,6 +859,16 @@ impl IRNode {
             crate::cbor_gen::write_text(out, "synthesized_subsystem");
             crate::cbor_gen::write_bool(out, self.synthesized_subsystem);
         }
+        if !self.sensitive_authored_leaves.is_empty() {
+            crate::cbor_gen::write_text(out, "sensitive_authored_leaves");
+            {
+                let c = &self.sensitive_authored_leaves;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -865,6 +896,7 @@ impl IRNode {
         let mut f_self_inject: Option<Box<RawValue>> = None;
         let mut f_source_file: String = String::new();
         let mut f_uses: Option<Box<RawValue>> = None;
+        let mut f_sensitive_authored_leaves: Vec<String> = Vec::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -885,6 +917,7 @@ impl IRNode {
                 "self_inject" => f_self_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "source_file" => f_source_file = dec.read_text()?,
                 "uses" => f_uses = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "sensitive_authored_leaves" => f_sensitive_authored_leaves = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
                 _ => dec.skip()?,
             }
         }
@@ -905,6 +938,7 @@ impl IRNode {
             self_inject: f_self_inject,
             source_file: f_source_file,
             uses: f_uses,
+            sensitive_authored_leaves: f_sensitive_authored_leaves,
         })
     }
 }
