@@ -416,6 +416,42 @@ pub struct BoundaryEnvOverridesOutput {
     pub overrides: BTreeMap<String, BTreeMap<String, String>>,
 }
 
+/// The payload a Provider guest receives on its optional name_bound export: one name the host proposes to use as a node's component identity, for the guest to judge against every name it would derive from that identity for its target. The guest answers with a constraint rather than with a name of its own — a derived name travelling back would put the host in the business of composing names for a target it knows nothing about, which is exactly what asking the question removes. A provider whose target bounds or restricts the names it accepts advertises the export; a provider whose target accepts any name omits it and is never asked, and its rendering is unchanged.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct NameBoundInput {
+    /// The name the host proposes as the node's component identity. The guest derives from it, in memory, each name it would emit for its target and reports whether every one of them is a name that target accepts.
+    pub proposed: String,
+    /// Whether the proposed name is one a person wrote rather than one the compiler composed from authored parts. It is carried so a guest can phrase its reason for the reader who is able to act on it. It does not decide what a refusal does: an authored name is refused and a composed one is shortened, and that decision is the host's.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub authored: bool,
+}
+
+/// One name kind's verdict on a proposed identity: whether the name the guest would derive for that kind is one its target accepts, and — where a shorter identity would be accepted — the greatest length that would be. It carries a constraint and a reason, never a name the guest built.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DerivedNameVerdict {
+    /// The guest's own name for the kind of name this verdict covers, written in the target's vocabulary rather than the compiler's — a chart installer's release name, a container orchestrator's service name. It reaches a reader verbatim in a refusal, so it is written for somebody who knows the target.
+    pub kind: String,
+    /// Whether the name the guest would derive for this kind from the proposed identity is one the target accepts.
+    pub usable: bool,
+    /// The greatest number of characters a proposed identity may carry for this kind's derived name to be one the target accepts. Present only on a refusal that a shorter identity would satisfy. ABSENT means length is not what the target objected to — either there is no length limit at all, or the objection is one no shortening repairs, such as a character the target's grammar refuses in the position it landed in. Absent is therefore distinct from a bound of zero, which does state a length: that no identity of any length yields an acceptable name of this kind. The host shortens to a present bound and asks again; on an absent bound it stops, because there is nothing left to try.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bound: Option<i64>,
+    /// Why the target does not accept the derived name, in the target's own terms, for a reader deciding what to write instead. Empty when the verdict is usable.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reason: String,
+}
+
+/// The payload a Provider guest returns from its name_bound export: one verdict per kind of name it would derive from the proposed identity. A proposal is usable when every verdict is; where one is not, the host shortens the proposal to the smallest bound the refusing verdicts carry and asks again, and it stops when a refusing verdict carries no bound. An empty list of verdicts means the guest derives no name from a component identity, which is the same answer as accepting the proposal.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct NameBoundOutput {
+    /// One entry per kind of name the guest derives from a component identity, in the guest's own order. A guest reports every kind it would derive rather than only the kinds that refused, so a reader sees which names were judged and a host reading the entries needs no second call to learn the rest.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub names: Vec<DerivedNameVerdict>,
+    /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from a refusing verdict: a verdict reports a name the target will not accept, while error reports that the question itself could not be answered. The host surfaces a present error as a failed plugin invocation.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+}
+
 /// One endpoint of a cross-boundary link: the node, the boundary path its rendered output assembles into, and the provider that rendered it. The two endpoints of a link name the consuming and consumed ends of a uses edge whose ends assemble into different dispatch groups.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LinkEndpoint {
@@ -2445,6 +2481,172 @@ impl BoundaryEnvOverridesOutput {
         }
         Ok(Self {
             overrides: f_overrides,
+        })
+    }
+}
+
+impl NameBoundInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if self.authored { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if self.authored {
+            crate::cbor_gen::write_text(out, "authored");
+            crate::cbor_gen::write_bool(out, self.authored);
+        }
+        crate::cbor_gen::write_text(out, "proposed");
+        crate::cbor_gen::write_text(out, &self.proposed);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_proposed: Option<String> = None;
+        let mut f_authored: bool = false;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "proposed" => f_proposed = Some(dec.read_text()?),
+                "authored" => f_authored = dec.read_bool()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            proposed: f_proposed.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field proposed".to_string()))?,
+            authored: f_authored,
+        })
+    }
+}
+
+impl DerivedNameVerdict {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if self.bound.is_some() { n += 1; }
+        if !self.reason.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "kind");
+        crate::cbor_gen::write_text(out, &self.kind);
+        if let Some(ref x) = self.bound {
+            crate::cbor_gen::write_text(out, "bound");
+            crate::cbor_gen::write_int(out, *x);
+        }
+        if !self.reason.is_empty() {
+            crate::cbor_gen::write_text(out, "reason");
+            crate::cbor_gen::write_text(out, &self.reason);
+        }
+        crate::cbor_gen::write_text(out, "usable");
+        crate::cbor_gen::write_bool(out, self.usable);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_kind: Option<String> = None;
+        let mut f_usable: Option<bool> = None;
+        let mut f_bound: Option<i64> = None;
+        let mut f_reason: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "kind" => f_kind = Some(dec.read_text()?),
+                "usable" => f_usable = Some(dec.read_bool()?),
+                "bound" => f_bound = Some(dec.read_int()?),
+                "reason" => f_reason = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            kind: f_kind.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field kind".to_string()))?,
+            usable: f_usable.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field usable".to_string()))?,
+            bound: f_bound,
+            reason: f_reason,
+        })
+    }
+}
+
+impl NameBoundOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.error.is_empty() { n += 1; }
+        if !self.names.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        if !self.names.is_empty() {
+            crate::cbor_gen::write_text(out, "names");
+            {
+                let c = &self.names;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_names: Vec<DerivedNameVerdict> = Vec::new();
+        let mut f_error: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "names" => f_names = { let sn = dec.read_array_header()?; let mut sv: Vec<DerivedNameVerdict> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(DerivedNameVerdict::decode_cbor_from(dec)?); } sv },
+                "error" => f_error = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            names: f_names,
+            error: f_error,
         })
     }
 }

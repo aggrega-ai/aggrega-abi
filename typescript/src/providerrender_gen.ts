@@ -335,6 +335,34 @@ export interface BoundaryEnvOverridesOutput {
   overrides?: Record<string, Record<string, string>>;
 }
 
+// The payload a Provider guest receives on its optional name_bound export: one name the host proposes to use as a node's component identity, for the guest to judge against every name it would derive from that identity for its target. The guest answers with a constraint rather than with a name of its own — a derived name travelling back would put the host in the business of composing names for a target it knows nothing about, which is exactly what asking the question removes. A provider whose target bounds or restricts the names it accepts advertises the export; a provider whose target accepts any name omits it and is never asked, and its rendering is unchanged.
+export interface NameBoundInput {
+  // The name the host proposes as the node's component identity. The guest derives from it, in memory, each name it would emit for its target and reports whether every one of them is a name that target accepts.
+  proposed: string;
+  // Whether the proposed name is one a person wrote rather than one the compiler composed from authored parts. It is carried so a guest can phrase its reason for the reader who is able to act on it. It does not decide what a refusal does: an authored name is refused and a composed one is shortened, and that decision is the host's.
+  authored?: boolean;
+}
+
+// One name kind's verdict on a proposed identity: whether the name the guest would derive for that kind is one its target accepts, and — where a shorter identity would be accepted — the greatest length that would be. It carries a constraint and a reason, never a name the guest built.
+export interface DerivedNameVerdict {
+  // The guest's own name for the kind of name this verdict covers, written in the target's vocabulary rather than the compiler's — a chart installer's release name, a container orchestrator's service name. It reaches a reader verbatim in a refusal, so it is written for somebody who knows the target.
+  kind: string;
+  // Whether the name the guest would derive for this kind from the proposed identity is one the target accepts.
+  usable: boolean;
+  // The greatest number of characters a proposed identity may carry for this kind's derived name to be one the target accepts. Present only on a refusal that a shorter identity would satisfy. ABSENT means length is not what the target objected to — either there is no length limit at all, or the objection is one no shortening repairs, such as a character the target's grammar refuses in the position it landed in. Absent is therefore distinct from a bound of zero, which does state a length: that no identity of any length yields an acceptable name of this kind. The host shortens to a present bound and asks again; on an absent bound it stops, because there is nothing left to try.
+  bound?: number;
+  // Why the target does not accept the derived name, in the target's own terms, for a reader deciding what to write instead. Empty when the verdict is usable.
+  reason?: string;
+}
+
+// The payload a Provider guest returns from its name_bound export: one verdict per kind of name it would derive from the proposed identity. A proposal is usable when every verdict is; where one is not, the host shortens the proposal to the smallest bound the refusing verdicts carry and asks again, and it stops when a refusing verdict carries no bound. An empty list of verdicts means the guest derives no name from a component identity, which is the same answer as accepting the proposal.
+export interface NameBoundOutput {
+  // One entry per kind of name the guest derives from a component identity, in the guest's own order. A guest reports every kind it would derive rather than only the kinds that refused, so a reader sees which names were judged and a host reading the entries needs no second call to learn the rest.
+  names?: DerivedNameVerdict[];
+  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from a refusing verdict: a verdict reports a name the target will not accept, while error reports that the question itself could not be answered. The host surfaces a present error as a failed plugin invocation.
+  error?: string;
+}
+
 // One endpoint of a cross-boundary link: the node, the boundary path its rendered output assembles into, and the provider that rendered it. The two endpoints of a link name the consuming and consumed ends of a uses edge whose ends assemble into different dispatch groups.
 export interface LinkEndpoint {
   // The endpoint node's absolute id within the topology graph.
@@ -763,6 +791,41 @@ export function encodeBoundaryEnvOverridesOutput(v: BoundaryEnvOverridesOutput):
 
 export function decodeBoundaryEnvOverridesOutput(data: string): BoundaryEnvOverridesOutput {
   return JSON.parse(data) as BoundaryEnvOverridesOutput;
+}
+
+export function encodeNameBoundInput(v: NameBoundInput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("proposed")}:${jstr(v.proposed)}`);
+  if (v.authored !== undefined && v.authored !== false) parts.push(`${jstr("authored")}:${String(v.authored)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeNameBoundInput(data: string): NameBoundInput {
+  return JSON.parse(data) as NameBoundInput;
+}
+
+export function encodeDerivedNameVerdict(v: DerivedNameVerdict): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
+  parts.push(`${jstr("usable")}:${String(v.usable)}`);
+  if (v.bound !== undefined && v.bound !== null) parts.push(`${jstr("bound")}:${String(v.bound)}`);
+  if (v.reason !== undefined && v.reason !== "") parts.push(`${jstr("reason")}:${jstr(v.reason)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeDerivedNameVerdict(data: string): DerivedNameVerdict {
+  return JSON.parse(data) as DerivedNameVerdict;
+}
+
+export function encodeNameBoundOutput(v: NameBoundOutput): string {
+  const parts: string[] = [];
+  if (v.names !== undefined && v.names.length > 0) parts.push(`${jstr("names")}:${`[${v.names!.map((e0) => encodeDerivedNameVerdict(e0)).join(",")}]`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeNameBoundOutput(data: string): NameBoundOutput {
+  return JSON.parse(data) as NameBoundOutput;
 }
 
 export function encodeLinkEndpoint(v: LinkEndpoint): string {
@@ -2363,6 +2426,135 @@ export function decodeCBORBoundaryEnvOverridesOutputFrom(dec: CborDec): Boundary
     }
   }
   return o as BoundaryEnvOverridesOutput;
+}
+
+export function encodeCBORNameBoundInput(v: NameBoundInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORNameBoundInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORNameBoundInput(out: number[], v: NameBoundInput): void {
+  let n = 1;
+  if (v.authored !== undefined && v.authored !== false) n++;
+  writeHead(out, 5, n);
+  if (v.authored !== undefined && v.authored !== false) {
+    writeText(out, "authored");
+    writeBool(out, v.authored);
+  }
+  writeText(out, "proposed");
+  writeText(out, v.proposed);
+}
+
+export function decodeCBORNameBoundInput(data: Uint8Array): NameBoundInput {
+  const dec = new CborDec(data);
+  return decodeCBORNameBoundInputFrom(dec);
+}
+
+export function decodeCBORNameBoundInputFrom(dec: CborDec): NameBoundInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "proposed": o["proposed"] = dec.readText(); break;
+      case "authored": o["authored"] = dec.readBool(); break;
+      default: dec.skip();
+    }
+  }
+  return o as NameBoundInput;
+}
+
+export function encodeCBORDerivedNameVerdict(v: DerivedNameVerdict): Uint8Array {
+  const out: number[] = [];
+  appendCBORDerivedNameVerdict(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORDerivedNameVerdict(out: number[], v: DerivedNameVerdict): void {
+  let n = 2;
+  if (v.bound !== undefined && v.bound !== null) n++;
+  if (v.reason !== undefined && v.reason !== "") n++;
+  writeHead(out, 5, n);
+  writeText(out, "kind");
+  writeText(out, v.kind);
+  if (v.bound !== undefined && v.bound !== null) {
+    writeText(out, "bound");
+    writeInt(out, v.bound);
+  }
+  if (v.reason !== undefined && v.reason !== "") {
+    writeText(out, "reason");
+    writeText(out, v.reason);
+  }
+  writeText(out, "usable");
+  writeBool(out, v.usable);
+}
+
+export function decodeCBORDerivedNameVerdict(data: Uint8Array): DerivedNameVerdict {
+  const dec = new CborDec(data);
+  return decodeCBORDerivedNameVerdictFrom(dec);
+}
+
+export function decodeCBORDerivedNameVerdictFrom(dec: CborDec): DerivedNameVerdict {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "kind": o["kind"] = dec.readText(); break;
+      case "usable": o["usable"] = dec.readBool(); break;
+      case "bound": o["bound"] = dec.readInt(); break;
+      case "reason": o["reason"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as DerivedNameVerdict;
+}
+
+export function encodeCBORNameBoundOutput(v: NameBoundOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORNameBoundOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORNameBoundOutput(out: number[], v: NameBoundOutput): void {
+  let n = 0;
+  if (v.error !== undefined && v.error !== "") n++;
+  if (v.names !== undefined && v.names.length > 0) n++;
+  writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  if (v.names !== undefined && v.names.length > 0) {
+    writeText(out, "names");
+    {
+      const a0 = v.names;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORDerivedNameVerdict(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORNameBoundOutput(data: Uint8Array): NameBoundOutput {
+  const dec = new CborDec(data);
+  return decodeCBORNameBoundOutputFrom(dec);
+}
+
+export function decodeCBORNameBoundOutputFrom(dec: CborDec): NameBoundOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "names": o["names"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDerivedNameVerdictFrom(dec)); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as NameBoundOutput;
 }
 
 export function encodeCBORLinkEndpoint(v: LinkEndpoint): Uint8Array {

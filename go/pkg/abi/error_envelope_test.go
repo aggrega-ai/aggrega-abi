@@ -45,6 +45,7 @@ var errorEnvelopeVectors = []struct {
 	{"ErrorEnvelopeImportOutput", abi.ImportOutput{}},
 	{"ErrorEnvelopeLinterOutput", abi.LinterOutput{}},
 	{"ErrorEnvelopeMutatorOutput", abi.MutatorOutput{}},
+	{"ErrorEnvelopeNameBoundOutput", abi.NameBoundOutput{}},
 	{"ErrorEnvelopeParseOutput", abi.ParseOutput{}},
 	{"ErrorEnvelopePolicyOutput", abi.PolicyOutput{}},
 	{"ErrorEnvelopeRenderNodeOutput", abi.RenderNodeOutput{}},
@@ -87,6 +88,10 @@ func TestSocketParity_ErrorEnvelopes(t *testing.T) {
 	t.Run("MutatorOutput", func(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.MutatorOutput](t, "ErrorEnvelopeMutatorOutput")
+	})
+	t.Run("NameBoundOutput", func(t *testing.T) {
+		t.Parallel()
+		roundTripBothGolden[abi.NameBoundOutput](t, "ErrorEnvelopeNameBoundOutput")
 	})
 	t.Run("ParseOutput", func(t *testing.T) {
 		t.Parallel()
