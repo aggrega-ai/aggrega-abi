@@ -37,7 +37,7 @@ export interface RenderNodeInput {
   artifacts_projection?: ArtifactsProjection;
 }
 
-// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, and build provenance. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
+// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
 export interface IRNodeProjection {
   // The node's absolute id within the topology graph.
   id: string;
@@ -61,8 +61,10 @@ export interface IRNodeProjection {
   recipe_name?: string;
   // The bound Recipe's version, paired with recipe_name to form the aggrega.ai/recipe-uri annotation; when either half is empty the annotation is not stamped.
   recipe_version?: string;
-  // The Kubernetes-safe component identity. When non-empty it overrides the node id as the app.kubernetes.io/name and aggrega.ai/component-id label value, for resources whose node id carries marker syntax that needs sanitization; empty means the node id is already label-valid and is used directly.
+  // The Kubernetes-safe component identity — what a resource this node emits BELONGS to, which is what provenance records and what a selector queries. When non-empty it overrides the node id as the app.kubernetes.io/name and aggrega.ai/component-id label value; empty means the node id is already label-valid and is used directly. It is carried for every resource a Feature attachment emits, whatever way the attachment delivers them, so an attachment's resources are distinguishable from its host component's by label alone. What a guest derives its own names from is a separate carry, derived_name_basis, and the two answer different questions.
   label_component_id?: string;
+  // The identity a guest derives its own names from when it renders source an author wrote — the release name a chart installer's templates read, and the prefix on the files that render emits. Empty means the node id is used directly, which is the value for an ordinary component and for a per-component Feature attachment: an attachment delivering a chart or a fragment its author wrote renders it against the HOST component's name, because the author's own templates name resources after that name and a different one would rename resources already deployed. A node whose id carries marker syntax a target's name alphabet refuses carries this explicitly instead, so the name a guest derives stays one the target accepts. It is deliberately separate from label_component_id: a guest that BUILDS resources itself rather than rendering an author's source names them after the identity, so a Feature attachment's own resources cannot collide with its host's, while the name an author's source renders against stays put. The two carry the same value wherever a node's identity is also what its source renders against.
+  derived_name_basis?: string;
   // The recipe-author-declared output labels (recipe.spec.outputLabels) the guest stamps onto every emitted manifest alongside the build-identity provenance, keyed by label name. Disjoint from the provenance keyspace by load-time validation (no aggrega.ai/ or app.kubernetes.io/ key), so stamping never collides with a provenance label. A guest whose output is not Kubernetes YAML translates them onto its own label surface (Compose service labels) or ignores them.
   output_labels?: Record<string, string>;
   // The build-identity provenance the guest stamps onto every emitted manifest as aggrega.ai labels.
@@ -279,7 +281,7 @@ export interface AssembleBoundaryOutput {
   diagnostics?: Diagnostic[];
   // Whether the orchestrator nests each contributor's per-node files under a per-node sub-directory rather than emitting them flat; the assembler signals this per provider (an assembler that folds the per-node fragments into one document emits flat, so false; one that composes them into an enclosing structure nests, so true). The directory those sub-directories sit under is nest_segment.
   nest_per_node?: boolean;
-  // The directory a nesting assembler places each contributor's per-node files under: the orchestrator joins this segment, the node's identity, and each file's own path. Read only when nest_per_node is true. Absent, the orchestrator applies its own default segment, so an assembler that names none keeps the layout it already emitted. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the orchestrator composes the node identity into it and a path fragment would place a node's files somewhere other than beneath the dispatch position.
+  // The directory a nesting assembler places each contributor's per-node files under: the orchestrator joins this segment, the contributor's authoring-level name, and each file's own path. Read only when nest_per_node is true. Absent, the orchestrator applies its own default segment, so an assembler that names none keeps the layout it already emitted. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the orchestrator composes the contributor's name into it and a path fragment would place a node's files somewhere other than beneath the dispatch position.
   nest_segment?: string;
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
   error?: string;
@@ -337,7 +339,7 @@ export interface BoundaryEnvOverridesOutput {
 
 // The payload a Provider guest receives on its optional name_bound export: one name the host proposes to use as a node's component identity, for the guest to judge against every name it would derive from that identity for its target. The guest answers with a constraint rather than with a name of its own — a derived name travelling back would put the host in the business of composing names for a target it knows nothing about, which is exactly what asking the question removes. A provider whose target bounds or restricts the names it accepts advertises the export; a provider whose target accepts any name omits it and is never asked, and its rendering is unchanged.
 export interface NameBoundInput {
-  // The name the host proposes as the node's component identity. The guest derives from it, in memory, each name it would emit for its target and reports whether every one of them is a name that target accepts.
+  // The name the host proposes as the node's component identity. The guest derives from it, in memory, every name it derives from a component identity and reports whether each one is a name its target accepts. A verdict speaks about the PROPOSAL rather than about the node: the host asks one question wherever it composes an identity, and it does not say which of that node's names this identity will end up being the basis for, so a guest answers as though it were the basis for all of them. That is the conservative direction, because the host only ever shortens on the answer and never lengthens — a name the node will in fact derive from some other carry is therefore judged too strictly rather than too loosely.
   proposed: string;
   // Whether the proposed name is one a person wrote rather than one the compiler composed from authored parts. It is carried so a guest can phrase its reason for the reader who is able to act on it. It does not decide what a refusal does: an authored name is refused and a composed one is shortened, and that decision is the host's.
   authored?: boolean;
@@ -461,6 +463,7 @@ export function encodeIRNodeProjection(v: IRNodeProjection): string {
   if (v.recipe_name !== undefined && v.recipe_name !== "") parts.push(`${jstr("recipe_name")}:${jstr(v.recipe_name)}`);
   if (v.recipe_version !== undefined && v.recipe_version !== "") parts.push(`${jstr("recipe_version")}:${jstr(v.recipe_version)}`);
   if (v.label_component_id !== undefined && v.label_component_id !== "") parts.push(`${jstr("label_component_id")}:${jstr(v.label_component_id)}`);
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") parts.push(`${jstr("derived_name_basis")}:${jstr(v.derived_name_basis)}`);
   if (v.output_labels !== undefined && Object.keys(v.output_labels).length > 0) parts.push(`${jstr("output_labels")}:${`{${Object.keys(v.output_labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.output_labels![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("provenance")}:${encodeNodeProvenance(v.provenance)}`);
   return `{${parts.join(",")}}`;
@@ -980,6 +983,7 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
   if (v.boundary_path !== undefined && v.boundary_path !== "") n++;
   if (v.output_labels !== undefined && Object.keys(v.output_labels).length > 0) n++;
   if (v.recipe_version !== undefined && v.recipe_version !== "") n++;
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") n++;
   if (v.label_component_id !== undefined && v.label_component_id !== "") n++;
   if (v.sensitive_rendered_keys !== undefined && Object.keys(v.sensitive_rendered_keys).length > 0) n++;
   writeHead(out, 5, n);
@@ -1061,6 +1065,10 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
   }
   writeText(out, "resolved_recipe");
   writeText(out, v.resolved_recipe);
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") {
+    writeText(out, "derived_name_basis");
+    writeText(out, v.derived_name_basis);
+  }
   if (v.label_component_id !== undefined && v.label_component_id !== "") {
     writeText(out, "label_component_id");
     writeText(out, v.label_component_id);
@@ -1102,6 +1110,7 @@ export function decodeCBORIRNodeProjectionFrom(dec: CborDec): IRNodeProjection {
       case "recipe_name": o["recipe_name"] = dec.readText(); break;
       case "recipe_version": o["recipe_version"] = dec.readText(); break;
       case "label_component_id": o["label_component_id"] = dec.readText(); break;
+      case "derived_name_basis": o["derived_name_basis"] = dec.readText(); break;
       case "output_labels": o["output_labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "provenance": o["provenance"] = decodeCBORNodeProvenanceFrom(dec); break;
       default: dec.skip();
