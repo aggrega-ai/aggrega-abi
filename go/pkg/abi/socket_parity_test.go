@@ -463,9 +463,12 @@ func TestImportOutputUnknownKind(t *testing.T) {
 }
 
 // The two host-function reply goldens below carry a failure envelope: the
-// free-form error message plus the machine-matchable error_code. A byte-match
-// proves the code field crosses the wire byte-identically across the three
-// codecs, so a guest matches on the code without parsing the message.
+// free-form error message plus the machine-matchable hostfunc_error_code. A
+// byte-match proves the code field crosses the wire byte-identically across the
+// three codecs, so a guest matches on the code without parsing the message. The
+// key names the closed host-function catalogue rather than failure in general: a
+// socket output travelling the other way reports a guest-raised condition under
+// condition_code and condition_short_code, from a different register.
 
 func TestSocketParity_ParseSourceResponse(t *testing.T) {
 	t.Parallel()

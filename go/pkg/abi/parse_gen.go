@@ -66,8 +66,8 @@ type ParseSourceResponse struct {
 	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty" cbor:"tree,omitempty"`
 	// Error The failure message on failure, naming the format and the reason; absent on success.
 	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
-	// ErrorCode The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
-	ErrorCode string `json:"error_code,omitempty" yaml:"error_code,omitempty" cbor:"error_code,omitempty"`
+	// HostfuncErrorCode The machine-matchable failure identity on failure, drawn from the closed host-function error-code catalog, set beside the human error message; absent on success. That catalog is a fixed vocabulary naming the ways a host function can fail, and it is a different vocabulary from the halting conditions the compiler registers, whose identifiers a guest reports on a socket output as condition_code and condition_short_code — the key name says which of the two a value belongs to, so the two are never read as one set. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+	HostfuncErrorCode string `json:"hostfunc_error_code,omitempty" yaml:"hostfunc_error_code,omitempty" cbor:"hostfunc_error_code,omitempty"`
 }
 
 // MarshalJSON encodes ParseInput in field-declaration order, omitting
@@ -532,13 +532,13 @@ func (t ParseSourceResponse) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"error\":")
 		writeJSONString(&buf, t.Error)
 	}
-	if t.ErrorCode != "" {
+	if t.HostfuncErrorCode != "" {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
-		buf.WriteString("\"error_code\":")
-		writeJSONString(&buf, t.ErrorCode)
+		buf.WriteString("\"hostfunc_error_code\":")
+		writeJSONString(&buf, t.HostfuncErrorCode)
 	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
@@ -570,11 +570,11 @@ func (t *ParseSourceResponse) UnmarshalJSON(data []byte) error {
 			} else {
 				t.Error = s
 			}
-		case "error_code":
+		case "hostfunc_error_code":
 			if s, err := readString(dec); err != nil {
 				return err
 			} else {
-				t.ErrorCode = s
+				t.HostfuncErrorCode = s
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -595,7 +595,7 @@ func (t *ParseSourceResponse) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *ParseSourceResponse) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "tree", "error", "error_code"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "tree", "error", "hostfunc_error_code"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -1012,7 +1012,7 @@ func (t ParseSourceResponse) appendCBOR(dst []byte) ([]byte, error) {
 	if t.Error != "" {
 		n++
 	}
-	if t.ErrorCode != "" {
+	if t.HostfuncErrorCode != "" {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
@@ -1024,9 +1024,9 @@ func (t ParseSourceResponse) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "error")
 		dst = appendCBORTextString(dst, t.Error)
 	}
-	if t.ErrorCode != "" {
-		dst = appendCBORTextString(dst, "error_code")
-		dst = appendCBORTextString(dst, t.ErrorCode)
+	if t.HostfuncErrorCode != "" {
+		dst = appendCBORTextString(dst, "hostfunc_error_code")
+		dst = appendCBORTextString(dst, t.HostfuncErrorCode)
 	}
 	return dst, nil
 }
@@ -1061,11 +1061,11 @@ func (t *ParseSourceResponse) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.Error = s
 			}
-		case "error_code":
+		case "hostfunc_error_code":
 			if s, err := dec.readTextString(); err != nil {
 				return err
 			} else {
-				t.ErrorCode = s
+				t.HostfuncErrorCode = s
 			}
 		default:
 			if err := dec.skip(); err != nil {
@@ -1083,7 +1083,7 @@ func (t *ParseSourceResponse) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *ParseSourceResponse) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "tree", "error", "error_code"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "tree", "error", "hostfunc_error_code"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

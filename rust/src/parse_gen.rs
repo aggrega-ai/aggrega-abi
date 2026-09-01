@@ -73,9 +73,9 @@ pub struct ParseSourceResponse {
     /// The failure message on failure, naming the format and the reason; absent on success.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
-    /// The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+    /// The machine-matchable failure identity on failure, drawn from the closed host-function error-code catalog, set beside the human error message; absent on success. That catalog is a fixed vocabulary naming the ways a host function can fail, and it is a different vocabulary from the halting conditions the compiler registers, whose identifiers a guest reports on a socket output as condition_code and condition_short_code — the key name says which of the two a value belongs to, so the two are never read as one set. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
     #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub error_code: String,
+    pub hostfunc_error_code: String,
 }
 
 
@@ -331,7 +331,7 @@ impl ParseSourceResponse {
         let mut n: u64 = 0;
         if self.tree.is_some() { n += 1; }
         if !self.error.is_empty() { n += 1; }
-        if !self.error_code.is_empty() { n += 1; }
+        if !self.hostfunc_error_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if let Some(ref x) = self.tree {
             crate::cbor_gen::write_text(out, "tree");
@@ -341,9 +341,9 @@ impl ParseSourceResponse {
             crate::cbor_gen::write_text(out, "error");
             crate::cbor_gen::write_text(out, &self.error);
         }
-        if !self.error_code.is_empty() {
-            crate::cbor_gen::write_text(out, "error_code");
-            crate::cbor_gen::write_text(out, &self.error_code);
+        if !self.hostfunc_error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "hostfunc_error_code");
+            crate::cbor_gen::write_text(out, &self.hostfunc_error_code);
         }
         Ok(())
     }
@@ -358,21 +358,21 @@ impl ParseSourceResponse {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_tree: Option<Box<RawValue>> = None;
         let mut f_error: String = String::new();
-        let mut f_error_code: String = String::new();
+        let mut f_hostfunc_error_code: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "tree" => f_tree = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "error" => f_error = dec.read_text()?,
-                "error_code" => f_error_code = dec.read_text()?,
+                "hostfunc_error_code" => f_hostfunc_error_code = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             tree: f_tree,
             error: f_error,
-            error_code: f_error_code,
+            hostfunc_error_code: f_hostfunc_error_code,
         })
     }
 }

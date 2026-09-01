@@ -8,11 +8,17 @@
 
 // These consts are the single source of the host-function error-code wire
 // vocabulary, shared across every host-function reply envelope. The host sets
-// one as error_code beside the free-form error message when a callback fails;
-// a guest branches on the code without parsing the message, tolerating an
+// one as hostfunc_error_code beside the free-form error message when a callback
+// fails; a guest branches on the code without parsing the message, tolerating an
 // absent code (older host) or an unrecognized one (newer host) by falling back
 // to the message. Generated into Go, Rust, and TypeScript from one schema so
 // the three codecs share one closed vocabulary.
+//
+// This closed catalog is a different vocabulary from the halting conditions the
+// compiler registers. A guest reporting a condition it raised puts that
+// condition's own identifiers on its socket output, under condition_code and
+// condition_short_code, and those values are not members of this set. Each key
+// names the vocabulary it draws from, so neither can be read as the general case.
 
 export const CodeFetchRequestUnreadable = "fetch_request_unreadable";
 export const CodeFetchInputUnavailable = "fetch_input_unavailable";

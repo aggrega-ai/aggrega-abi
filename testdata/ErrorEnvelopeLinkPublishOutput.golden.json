@@ -1,1 +1,1 @@
-{"handle":{},"error":"the link could not be published","error_code":"example-provider-core/a-condition-the-guest-publishes","error_short_code":"E0000"}
+{"handle":{},"error":"the link could not be published","condition_code":"example-provider-core/a-condition-the-guest-publishes","condition_short_code":"E0000"}

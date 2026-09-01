@@ -76,8 +76,8 @@ export interface ParseSourceResponse {
   tree?: unknown;
   // The failure message on failure, naming the format and the reason; absent on success.
   error?: string;
-  // The machine-matchable failure identity on failure, from the closed host-function error-code catalog, set beside the human error message; absent on success. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
-  error_code?: string;
+  // The machine-matchable failure identity on failure, drawn from the closed host-function error-code catalog, set beside the human error message; absent on success. That catalog is a fixed vocabulary naming the ways a host function can fail, and it is a different vocabulary from the halting conditions the compiler registers, whose identifiers a guest reports on a socket output as condition_code and condition_short_code — the key name says which of the two a value belongs to, so the two are never read as one set. A guest branches on this code without parsing the message, tolerating an absent code (older host) or an unrecognized one (newer host) by falling back to the message.
+  hostfunc_error_code?: string;
 }
 
 export function encodeParseInput(v: ParseInput): string {
@@ -135,7 +135,7 @@ export function encodeParseSourceResponse(v: ParseSourceResponse): string {
   const parts: string[] = [];
   if (v.tree !== undefined && v.tree !== null) parts.push(`${jstr("tree")}:${encodeOpaque(v.tree)}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
-  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
+  if (v.hostfunc_error_code !== undefined && v.hostfunc_error_code !== "") parts.push(`${jstr("hostfunc_error_code")}:${jstr(v.hostfunc_error_code)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -334,7 +334,7 @@ export function appendCBORParseSourceResponse(out: number[], v: ParseSourceRespo
   let n = 0;
   if (v.tree !== undefined && v.tree !== null) n++;
   if (v.error !== undefined && v.error !== "") n++;
-  if (v.error_code !== undefined && v.error_code !== "") n++;
+  if (v.hostfunc_error_code !== undefined && v.hostfunc_error_code !== "") n++;
   writeHead(out, 5, n);
   if (v.tree !== undefined && v.tree !== null) {
     writeText(out, "tree");
@@ -344,9 +344,9 @@ export function appendCBORParseSourceResponse(out: number[], v: ParseSourceRespo
     writeText(out, "error");
     writeText(out, v.error);
   }
-  if (v.error_code !== undefined && v.error_code !== "") {
-    writeText(out, "error_code");
-    writeText(out, v.error_code);
+  if (v.hostfunc_error_code !== undefined && v.hostfunc_error_code !== "") {
+    writeText(out, "hostfunc_error_code");
+    writeText(out, v.hostfunc_error_code);
   }
 }
 
@@ -363,7 +363,7 @@ export function decodeCBORParseSourceResponseFrom(dec: CborDec): ParseSourceResp
     switch (k) {
       case "tree": o["tree"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "error": o["error"] = dec.readText(); break;
-      case "error_code": o["error_code"] = dec.readText(); break;
+      case "hostfunc_error_code": o["hostfunc_error_code"] = dec.readText(); break;
       default: dec.skip();
     }
   }

@@ -1,1 +1,1 @@
-{"error":"the requested file resolves outside the source root","error_code":"source_escape"}
+{"error":"the requested file resolves outside the source root","hostfunc_error_code":"source_escape"}

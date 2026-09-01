@@ -1,1 +1,1 @@
-{"patches":[],"error":"the link could not be resolved","error_code":"example-provider-core/a-condition-the-guest-publishes","error_short_code":"E0000"}
+{"patches":[],"error":"the link could not be resolved","condition_code":"example-provider-core/a-condition-the-guest-publishes","condition_short_code":"E0000"}
