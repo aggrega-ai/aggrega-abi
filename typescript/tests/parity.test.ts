@@ -228,6 +228,8 @@ const vectors: Array<[string, string]> = [
   ["ErrorEnvelopeAssembleBoundaryOutput", "AssembleBoundaryOutput"],
   ["ErrorEnvelopeFRPStepOutput", "FRPStepOutput"],
   ["ErrorEnvelopeImportOutput", "ImportOutput"],
+  ["ErrorEnvelopeLinkPublishOutput", "LinkPublishOutput"],
+  ["ErrorEnvelopeLinkResolveOutput", "LinkResolveOutput"],
   ["ErrorEnvelopeLinterOutput", "LinterOutput"],
   ["ErrorEnvelopeMutatorOutput", "MutatorOutput"],
   ["ErrorEnvelopeNameBoundOutput", "NameBoundOutput"],

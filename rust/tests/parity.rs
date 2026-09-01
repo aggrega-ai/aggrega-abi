@@ -343,6 +343,8 @@ cbor_vector!(error_envelope_annotation_transform_output, aggrega_abi::Annotation
 cbor_vector!(error_envelope_assemble_boundary_output, aggrega_abi::AssembleBoundaryOutput, "ErrorEnvelopeAssembleBoundaryOutput");
 cbor_vector!(error_envelope_frp_step_output, aggrega_abi::FRPStepOutput, "ErrorEnvelopeFRPStepOutput");
 cbor_vector!(error_envelope_import_output, aggrega_abi::ImportOutput, "ErrorEnvelopeImportOutput");
+cbor_vector!(error_envelope_link_publish_output, aggrega_abi::LinkPublishOutput, "ErrorEnvelopeLinkPublishOutput");
+cbor_vector!(error_envelope_link_resolve_output, aggrega_abi::LinkResolveOutput, "ErrorEnvelopeLinkResolveOutput");
 cbor_vector!(error_envelope_linter_output, aggrega_abi::LinterOutput, "ErrorEnvelopeLinterOutput");
 cbor_vector!(error_envelope_mutator_output, aggrega_abi::MutatorOutput, "ErrorEnvelopeMutatorOutput");
 cbor_case!(error_envelope_name_bound_output, aggrega_abi::NameBoundOutput, "ErrorEnvelopeNameBoundOutput");

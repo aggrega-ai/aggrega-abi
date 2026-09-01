@@ -113,6 +113,12 @@ pub struct RenderNodeOutput {
     /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
+    /// The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
+    /// The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_short_code: String,
 }
 
 /// The payload a Provider guest returns from its optional validate_node_input export: the diagnostics raised by a structural check of the node's resolved input. The export consumes the same RenderNodeInput projection render_node receives and emits no files — it only reports diagnostics. A halt-severity diagnostic stops the build loudly, naming the node and provider; a warn- or info-severity diagnostic surfaces to the build result without changing rendered output. An empty diagnostics list means the input passed the structural check.
@@ -124,6 +130,12 @@ pub struct ValidateNodeOutput {
     /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
+    /// The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
+    /// The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_short_code: String,
 }
 
 /// One output file a Provider guest emitted: its on-disk path relative to the node's output root, and its serialized bytes exactly as the guest produced them. The host writes these bytes verbatim and runs no serializer, so the on-disk output is byte-identical to what the guest emitted.
@@ -354,6 +366,12 @@ pub struct AssembleBoundaryOutput {
     /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
+    /// The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
+    /// The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_short_code: String,
 }
 
 /// The payload a Provider guest receives on its optional carve export: one named output file the pipeline carves into addressable units before a FeatureRecipe step edits some of them. A provider whose output shape the stock YAML codec cannot carve directly (a templated chart, for instance) advertises carve and reassemble so its own output-shape knowledge lives in the guest; a provider that omits the exports borrows the host's stock YAML codec.
@@ -453,6 +471,12 @@ pub struct NameBoundOutput {
     /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from a refusing verdict: a verdict reports a name the target will not accept, while error reports that the question itself could not be answered. The host surfaces a present error as a failed plugin invocation.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
+    /// The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
+    /// The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_short_code: String,
 }
 
 /// One endpoint of a cross-boundary link: the node, the boundary path its rendered output assembles into, and the provider that rendered it. The two endpoints of a link name the consuming and consumed ends of a uses edge whose ends assemble into different dispatch groups.
@@ -517,6 +541,15 @@ pub struct LinkPublishOutput {
     /// The producer-side artifact wiring, one structural patch per consumed-endpoint output file the publish must edit. Empty when the consumed endpoint's output needs no change for the link.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub patches: Vec<LinkPatch>,
+    /// A failure message set when the guest ran but could not publish the link; absent on success. The host surfaces a present error as a failed plugin invocation. A publish that cannot proceed — an export name the stack already declares under another entry, say — is reported here rather than only as a crash, so the condition behind it can be named.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+    /// The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
+    /// The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_short_code: String,
 }
 
 /// The payload a provider receives on its link_resolve export: one cross-boundary link, the published identity handle its consumed endpoint exposed, and the consuming endpoint's assembled files. The export returns the consumer-side artifact wiring that injects the reference into the consuming endpoint's assembled output.
@@ -536,6 +569,15 @@ pub struct LinkResolveInput {
 pub struct LinkResolveOutput {
     /// The consumer-side artifact wiring, one structural patch per consuming-endpoint output file the resolve must edit.
     pub patches: Vec<LinkPatch>,
+    /// A failure message set when the guest ran but could not resolve the link; absent on success. The host surfaces a present error as a failed plugin invocation. A resolve that cannot proceed — a reference the target can only carry as a whole scalar, met inside a larger string — is reported here rather than only as a crash, so the condition behind it can be named.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+    /// The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_code: String,
+    /// The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error_short_code: String,
 }
 
 
@@ -894,8 +936,10 @@ impl RenderNodeOutput {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
         if !self.error.is_empty() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
         if !self.diagnostics.is_empty() { n += 1; }
         if !self.derived_keys.is_empty() { n += 1; }
+        if !self.error_short_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.error.is_empty() {
             crate::cbor_gen::write_text(out, "error");
@@ -908,6 +952,10 @@ impl RenderNodeOutput {
             for ev in c {
                 ev.append_cbor(out)?;
             }
+        }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
         }
         if !self.diagnostics.is_empty() {
             crate::cbor_gen::write_text(out, "diagnostics");
@@ -939,6 +987,10 @@ impl RenderNodeOutput {
                 }
             }
         }
+        if !self.error_short_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_short_code");
+            crate::cbor_gen::write_text(out, &self.error_short_code);
+        }
         Ok(())
     }
 
@@ -954,6 +1006,8 @@ impl RenderNodeOutput {
         let mut f_derived_keys: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
         let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let mut f_error_short_code: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -962,6 +1016,8 @@ impl RenderNodeOutput {
                 "derived_keys" => f_derived_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
                 "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
                 "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                "error_short_code" => f_error_short_code = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
@@ -970,6 +1026,8 @@ impl RenderNodeOutput {
             derived_keys: f_derived_keys,
             diagnostics: f_diagnostics,
             error: f_error,
+            error_code: f_error_code,
+            error_short_code: f_error_short_code,
         })
     }
 }
@@ -986,11 +1044,17 @@ impl ValidateNodeOutput {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 0;
         if !self.error.is_empty() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
         if !self.diagnostics.is_empty() { n += 1; }
+        if !self.error_short_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.error.is_empty() {
             crate::cbor_gen::write_text(out, "error");
             crate::cbor_gen::write_text(out, &self.error);
+        }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
         }
         if !self.diagnostics.is_empty() {
             crate::cbor_gen::write_text(out, "diagnostics");
@@ -1001,6 +1065,10 @@ impl ValidateNodeOutput {
                     ev.append_cbor(out)?;
                 }
             }
+        }
+        if !self.error_short_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_short_code");
+            crate::cbor_gen::write_text(out, &self.error_short_code);
         }
         Ok(())
     }
@@ -1015,18 +1083,24 @@ impl ValidateNodeOutput {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
         let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let mut f_error_short_code: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
                 "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                "error_short_code" => f_error_short_code = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             diagnostics: f_diagnostics,
             error: f_error,
+            error_code: f_error_code,
+            error_short_code: f_error_short_code,
         })
     }
 }
@@ -2074,9 +2148,11 @@ impl AssembleBoundaryOutput {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
         if !self.error.is_empty() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
         if !self.diagnostics.is_empty() { n += 1; }
         if !self.nest_segment.is_empty() { n += 1; }
         if self.nest_per_node { n += 1; }
+        if !self.error_short_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.error.is_empty() {
             crate::cbor_gen::write_text(out, "error");
@@ -2089,6 +2165,10 @@ impl AssembleBoundaryOutput {
             for ev in c {
                 ev.append_cbor(out)?;
             }
+        }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
         }
         if !self.diagnostics.is_empty() {
             crate::cbor_gen::write_text(out, "diagnostics");
@@ -2108,6 +2188,10 @@ impl AssembleBoundaryOutput {
             crate::cbor_gen::write_text(out, "nest_per_node");
             crate::cbor_gen::write_bool(out, self.nest_per_node);
         }
+        if !self.error_short_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_short_code");
+            crate::cbor_gen::write_text(out, &self.error_short_code);
+        }
         Ok(())
     }
 
@@ -2124,6 +2208,8 @@ impl AssembleBoundaryOutput {
         let mut f_nest_per_node: bool = false;
         let mut f_nest_segment: String = String::new();
         let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let mut f_error_short_code: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -2133,6 +2219,8 @@ impl AssembleBoundaryOutput {
                 "nest_per_node" => f_nest_per_node = dec.read_bool()?,
                 "nest_segment" => f_nest_segment = dec.read_text()?,
                 "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                "error_short_code" => f_error_short_code = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
@@ -2142,6 +2230,8 @@ impl AssembleBoundaryOutput {
             nest_per_node: f_nest_per_node,
             nest_segment: f_nest_segment,
             error: f_error,
+            error_code: f_error_code,
+            error_short_code: f_error_short_code,
         })
     }
 }
@@ -2618,6 +2708,8 @@ impl NameBoundOutput {
         let mut n: u64 = 0;
         if !self.error.is_empty() { n += 1; }
         if !self.names.is_empty() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
+        if !self.error_short_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.error.is_empty() {
             crate::cbor_gen::write_text(out, "error");
@@ -2633,6 +2725,14 @@ impl NameBoundOutput {
                 }
             }
         }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
+        }
+        if !self.error_short_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_short_code");
+            crate::cbor_gen::write_text(out, &self.error_short_code);
+        }
         Ok(())
     }
 
@@ -2646,18 +2746,24 @@ impl NameBoundOutput {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_names: Vec<DerivedNameVerdict> = Vec::new();
         let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let mut f_error_short_code: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "names" => f_names = { let sn = dec.read_array_header()?; let mut sv: Vec<DerivedNameVerdict> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(DerivedNameVerdict::decode_cbor_from(dec)?); } sv },
                 "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                "error_short_code" => f_error_short_code = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             names: f_names,
             error: f_error,
+            error_code: f_error_code,
+            error_short_code: f_error_short_code,
         })
     }
 }
@@ -2962,8 +3068,15 @@ impl LinkPublishOutput {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
+        if !self.error.is_empty() { n += 1; }
         if !self.patches.is_empty() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
+        if !self.error_short_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
         crate::cbor_gen::write_text(out, "handle");
         {
             let c = &self.handle;
@@ -2986,6 +3099,14 @@ impl LinkPublishOutput {
                 }
             }
         }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
+        }
+        if !self.error_short_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_short_code");
+            crate::cbor_gen::write_text(out, &self.error_short_code);
+        }
         Ok(())
     }
 
@@ -2999,18 +3120,27 @@ impl LinkPublishOutput {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_handle: Option<BTreeMap<String, String>> = None;
         let mut f_patches: Vec<LinkPatch> = Vec::new();
+        let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let mut f_error_short_code: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "handle" => f_handle = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }),
                 "patches" => f_patches = { let sn = dec.read_array_header()?; let mut sv: Vec<LinkPatch> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(LinkPatch::decode_cbor_from(dec)?); } sv },
+                "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                "error_short_code" => f_error_short_code = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             handle: f_handle.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field handle".to_string()))?,
             patches: f_patches,
+            error: f_error,
+            error_code: f_error_code,
+            error_short_code: f_error_short_code,
         })
     }
 }
@@ -3094,8 +3224,15 @@ impl LinkResolveOutput {
     }
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let n: u64 = 1;
+        let mut n: u64 = 1;
+        if !self.error.is_empty() { n += 1; }
+        if !self.error_code.is_empty() { n += 1; }
+        if !self.error_short_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
         crate::cbor_gen::write_text(out, "patches");
         {
             let c = &self.patches;
@@ -3103,6 +3240,14 @@ impl LinkResolveOutput {
             for ev in c {
                 ev.append_cbor(out)?;
             }
+        }
+        if !self.error_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_code");
+            crate::cbor_gen::write_text(out, &self.error_code);
+        }
+        if !self.error_short_code.is_empty() {
+            crate::cbor_gen::write_text(out, "error_short_code");
+            crate::cbor_gen::write_text(out, &self.error_short_code);
         }
         Ok(())
     }
@@ -3116,16 +3261,25 @@ impl LinkResolveOutput {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_patches: Option<Vec<LinkPatch>> = None;
+        let mut f_error: String = String::new();
+        let mut f_error_code: String = String::new();
+        let mut f_error_short_code: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "patches" => f_patches = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<LinkPatch> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(LinkPatch::decode_cbor_from(dec)?); } sv }),
+                "error" => f_error = dec.read_text()?,
+                "error_code" => f_error_code = dec.read_text()?,
+                "error_short_code" => f_error_short_code = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             patches: f_patches.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field patches".to_string()))?,
+            error: f_error,
+            error_code: f_error_code,
+            error_short_code: f_error_short_code,
         })
     }
 }

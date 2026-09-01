@@ -95,6 +95,10 @@ export interface RenderNodeOutput {
   diagnostics?: Diagnostic[];
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
   error?: string;
+  // The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+  error_code?: string;
+  // The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+  error_short_code?: string;
 }
 
 // The payload a Provider guest returns from its optional validate_node_input export: the diagnostics raised by a structural check of the node's resolved input. The export consumes the same RenderNodeInput projection render_node receives and emits no files — it only reports diagnostics. A halt-severity diagnostic stops the build loudly, naming the node and provider; a warn- or info-severity diagnostic surfaces to the build result without changing rendered output. An empty diagnostics list means the input passed the structural check.
@@ -103,6 +107,10 @@ export interface ValidateNodeOutput {
   diagnostics?: Diagnostic[];
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
   error?: string;
+  // The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+  error_code?: string;
+  // The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+  error_short_code?: string;
 }
 
 // One output file a Provider guest emitted: its on-disk path relative to the node's output root, and its serialized bytes exactly as the guest produced them. The host writes these bytes verbatim and runs no serializer, so the on-disk output is byte-identical to what the guest emitted.
@@ -285,6 +293,10 @@ export interface AssembleBoundaryOutput {
   nest_segment?: string;
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
   error?: string;
+  // The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+  error_code?: string;
+  // The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+  error_short_code?: string;
 }
 
 // The payload a Provider guest receives on its optional carve export: one named output file the pipeline carves into addressable units before a FeatureRecipe step edits some of them. A provider whose output shape the stock YAML codec cannot carve directly (a templated chart, for instance) advertises carve and reassemble so its own output-shape knowledge lives in the guest; a provider that omits the exports borrows the host's stock YAML codec.
@@ -363,6 +375,10 @@ export interface NameBoundOutput {
   names?: DerivedNameVerdict[];
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from a refusing verdict: a verdict reports a name the target will not accept, while error reports that the question itself could not be answered. The host surfaces a present error as a failed plugin invocation.
   error?: string;
+  // The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+  error_code?: string;
+  // The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+  error_short_code?: string;
 }
 
 // One endpoint of a cross-boundary link: the node, the boundary path its rendered output assembles into, and the provider that rendered it. The two endpoints of a link name the consuming and consumed ends of a uses edge whose ends assemble into different dispatch groups.
@@ -417,6 +433,12 @@ export interface LinkPublishOutput {
   handle: Record<string, string>;
   // The producer-side artifact wiring, one structural patch per consumed-endpoint output file the publish must edit. Empty when the consumed endpoint's output needs no change for the link.
   patches?: LinkPatch[];
+  // A failure message set when the guest ran but could not publish the link; absent on success. The host surfaces a present error as a failed plugin invocation. A publish that cannot proceed — an export name the stack already declares under another entry, say — is reported here rather than only as a crash, so the condition behind it can be named.
+  error?: string;
+  // The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+  error_code?: string;
+  // The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+  error_short_code?: string;
 }
 
 // The payload a provider receives on its link_resolve export: one cross-boundary link, the published identity handle its consumed endpoint exposed, and the consuming endpoint's assembled files. The export returns the consumer-side artifact wiring that injects the reference into the consuming endpoint's assembled output.
@@ -433,6 +455,12 @@ export interface LinkResolveInput {
 export interface LinkResolveOutput {
   // The consumer-side artifact wiring, one structural patch per consuming-endpoint output file the resolve must edit.
   patches: LinkPatch[];
+  // A failure message set when the guest ran but could not resolve the link; absent on success. The host surfaces a present error as a failed plugin invocation. A resolve that cannot proceed — a reference the target can only carry as a whole scalar, met inside a larger string — is reported here rather than only as a crash, so the condition behind it can be named.
+  error?: string;
+  // The descriptive, machine-matchable identity of the condition the failure names, set beside the human error message; absent on success, and absent when the guest names no such condition. A guest that halts on a condition it publishes reports that condition's own identifier here, so a consumer branches on it instead of recovering an identity by reading the message. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and error_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+  error_code?: string;
+  // The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with error_code, for the reason stated there.
+  error_short_code?: string;
 }
 
 export function encodeRenderNodeInput(v: RenderNodeInput): string {
@@ -493,6 +521,8 @@ export function encodeRenderNodeOutput(v: RenderNodeOutput): string {
   if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) parts.push(`${jstr("derived_keys")}:${`{${Object.keys(v.derived_keys!).sort().map((k0) => `${jstr(k0)}:${`[${v.derived_keys![k0]!.map((e1) => jstr(e1)).join(",")}]`}`).join(",")}}`}`);
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
+  if (v.error_short_code !== undefined && v.error_short_code !== "") parts.push(`${jstr("error_short_code")}:${jstr(v.error_short_code)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -504,6 +534,8 @@ export function encodeValidateNodeOutput(v: ValidateNodeOutput): string {
   const parts: string[] = [];
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
+  if (v.error_short_code !== undefined && v.error_short_code !== "") parts.push(`${jstr("error_short_code")}:${jstr(v.error_short_code)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -722,6 +754,8 @@ export function encodeAssembleBoundaryOutput(v: AssembleBoundaryOutput): string 
   if (v.nest_per_node !== undefined && v.nest_per_node !== false) parts.push(`${jstr("nest_per_node")}:${String(v.nest_per_node)}`);
   if (v.nest_segment !== undefined && v.nest_segment !== "") parts.push(`${jstr("nest_segment")}:${jstr(v.nest_segment)}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
+  if (v.error_short_code !== undefined && v.error_short_code !== "") parts.push(`${jstr("error_short_code")}:${jstr(v.error_short_code)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -824,6 +858,8 @@ export function encodeNameBoundOutput(v: NameBoundOutput): string {
   const parts: string[] = [];
   if (v.names !== undefined && v.names.length > 0) parts.push(`${jstr("names")}:${`[${v.names!.map((e0) => encodeDerivedNameVerdict(e0)).join(",")}]`}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
+  if (v.error_short_code !== undefined && v.error_short_code !== "") parts.push(`${jstr("error_short_code")}:${jstr(v.error_short_code)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -886,6 +922,9 @@ export function encodeLinkPublishOutput(v: LinkPublishOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("handle")}:${`{${Object.keys(v.handle!).sort().map((k0) => `${jstr(k0)}:${jstr(v.handle![k0])}`).join(",")}}`}`);
   if (v.patches !== undefined && v.patches.length > 0) parts.push(`${jstr("patches")}:${`[${v.patches!.map((e0) => encodeLinkPatch(e0)).join(",")}]`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
+  if (v.error_short_code !== undefined && v.error_short_code !== "") parts.push(`${jstr("error_short_code")}:${jstr(v.error_short_code)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -908,6 +947,9 @@ export function decodeLinkResolveInput(data: string): LinkResolveInput {
 export function encodeLinkResolveOutput(v: LinkResolveOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("patches")}:${`[${v.patches!.map((e0) => encodeLinkPatch(e0)).join(",")}]`}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.error_code !== undefined && v.error_code !== "") parts.push(`${jstr("error_code")}:${jstr(v.error_code)}`);
+  if (v.error_short_code !== undefined && v.error_short_code !== "") parts.push(`${jstr("error_short_code")}:${jstr(v.error_short_code)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -1186,8 +1228,10 @@ export function encodeCBORRenderNodeOutput(v: RenderNodeOutput): Uint8Array {
 export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): void {
   let n = 1;
   if (v.error !== undefined && v.error !== "") n++;
+  if (v.error_code !== undefined && v.error_code !== "") n++;
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
   if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) n++;
+  if (v.error_short_code !== undefined && v.error_short_code !== "") n++;
   writeHead(out, 5, n);
   if (v.error !== undefined && v.error !== "") {
     writeText(out, "error");
@@ -1200,6 +1244,10 @@ export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): 
     for (const ee0 of a0) {
       appendCBORRenderedFile(out, ee0);
     }
+  }
+  if (v.error_code !== undefined && v.error_code !== "") {
+    writeText(out, "error_code");
+    writeText(out, v.error_code);
   }
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) {
     writeText(out, "diagnostics");
@@ -1229,6 +1277,10 @@ export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): 
       }
     }
   }
+  if (v.error_short_code !== undefined && v.error_short_code !== "") {
+    writeText(out, "error_short_code");
+    writeText(out, v.error_short_code);
+  }
 }
 
 export function decodeCBORRenderNodeOutput(data: Uint8Array): RenderNodeOutput {
@@ -1246,6 +1298,8 @@ export function decodeCBORRenderNodeOutputFrom(dec: CborDec): RenderNodeOutput {
       case "derived_keys": o["derived_keys"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); } return m; })(); break;
       case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
       case "error": o["error"] = dec.readText(); break;
+      case "error_code": o["error_code"] = dec.readText(); break;
+      case "error_short_code": o["error_short_code"] = dec.readText(); break;
       default: dec.skip();
     }
   }
@@ -1261,11 +1315,17 @@ export function encodeCBORValidateNodeOutput(v: ValidateNodeOutput): Uint8Array 
 export function appendCBORValidateNodeOutput(out: number[], v: ValidateNodeOutput): void {
   let n = 0;
   if (v.error !== undefined && v.error !== "") n++;
+  if (v.error_code !== undefined && v.error_code !== "") n++;
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
+  if (v.error_short_code !== undefined && v.error_short_code !== "") n++;
   writeHead(out, 5, n);
   if (v.error !== undefined && v.error !== "") {
     writeText(out, "error");
     writeText(out, v.error);
+  }
+  if (v.error_code !== undefined && v.error_code !== "") {
+    writeText(out, "error_code");
+    writeText(out, v.error_code);
   }
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) {
     writeText(out, "diagnostics");
@@ -1276,6 +1336,10 @@ export function appendCBORValidateNodeOutput(out: number[], v: ValidateNodeOutpu
         appendCBORDiagnostic(out, ee0);
       }
     }
+  }
+  if (v.error_short_code !== undefined && v.error_short_code !== "") {
+    writeText(out, "error_short_code");
+    writeText(out, v.error_short_code);
   }
 }
 
@@ -1292,6 +1356,8 @@ export function decodeCBORValidateNodeOutputFrom(dec: CborDec): ValidateNodeOutp
     switch (k) {
       case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
       case "error": o["error"] = dec.readText(); break;
+      case "error_code": o["error_code"] = dec.readText(); break;
+      case "error_short_code": o["error_short_code"] = dec.readText(); break;
       default: dec.skip();
     }
   }
@@ -2103,9 +2169,11 @@ export function encodeCBORAssembleBoundaryOutput(v: AssembleBoundaryOutput): Uin
 export function appendCBORAssembleBoundaryOutput(out: number[], v: AssembleBoundaryOutput): void {
   let n = 1;
   if (v.error !== undefined && v.error !== "") n++;
+  if (v.error_code !== undefined && v.error_code !== "") n++;
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
   if (v.nest_segment !== undefined && v.nest_segment !== "") n++;
   if (v.nest_per_node !== undefined && v.nest_per_node !== false) n++;
+  if (v.error_short_code !== undefined && v.error_short_code !== "") n++;
   writeHead(out, 5, n);
   if (v.error !== undefined && v.error !== "") {
     writeText(out, "error");
@@ -2118,6 +2186,10 @@ export function appendCBORAssembleBoundaryOutput(out: number[], v: AssembleBound
     for (const ee0 of a0) {
       appendCBORRenderedFile(out, ee0);
     }
+  }
+  if (v.error_code !== undefined && v.error_code !== "") {
+    writeText(out, "error_code");
+    writeText(out, v.error_code);
   }
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) {
     writeText(out, "diagnostics");
@@ -2137,6 +2209,10 @@ export function appendCBORAssembleBoundaryOutput(out: number[], v: AssembleBound
     writeText(out, "nest_per_node");
     writeBool(out, v.nest_per_node);
   }
+  if (v.error_short_code !== undefined && v.error_short_code !== "") {
+    writeText(out, "error_short_code");
+    writeText(out, v.error_short_code);
+  }
 }
 
 export function decodeCBORAssembleBoundaryOutput(data: Uint8Array): AssembleBoundaryOutput {
@@ -2155,6 +2231,8 @@ export function decodeCBORAssembleBoundaryOutputFrom(dec: CborDec): AssembleBoun
       case "nest_per_node": o["nest_per_node"] = dec.readBool(); break;
       case "nest_segment": o["nest_segment"] = dec.readText(); break;
       case "error": o["error"] = dec.readText(); break;
+      case "error_code": o["error_code"] = dec.readText(); break;
+      case "error_short_code": o["error_short_code"] = dec.readText(); break;
       default: dec.skip();
     }
   }
@@ -2530,6 +2608,8 @@ export function appendCBORNameBoundOutput(out: number[], v: NameBoundOutput): vo
   let n = 0;
   if (v.error !== undefined && v.error !== "") n++;
   if (v.names !== undefined && v.names.length > 0) n++;
+  if (v.error_code !== undefined && v.error_code !== "") n++;
+  if (v.error_short_code !== undefined && v.error_short_code !== "") n++;
   writeHead(out, 5, n);
   if (v.error !== undefined && v.error !== "") {
     writeText(out, "error");
@@ -2544,6 +2624,14 @@ export function appendCBORNameBoundOutput(out: number[], v: NameBoundOutput): vo
         appendCBORDerivedNameVerdict(out, ee0);
       }
     }
+  }
+  if (v.error_code !== undefined && v.error_code !== "") {
+    writeText(out, "error_code");
+    writeText(out, v.error_code);
+  }
+  if (v.error_short_code !== undefined && v.error_short_code !== "") {
+    writeText(out, "error_short_code");
+    writeText(out, v.error_short_code);
   }
 }
 
@@ -2560,6 +2648,8 @@ export function decodeCBORNameBoundOutputFrom(dec: CborDec): NameBoundOutput {
     switch (k) {
       case "names": o["names"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDerivedNameVerdictFrom(dec)); } return a; })(); break;
       case "error": o["error"] = dec.readText(); break;
+      case "error_code": o["error_code"] = dec.readText(); break;
+      case "error_short_code": o["error_short_code"] = dec.readText(); break;
       default: dec.skip();
     }
   }
@@ -2795,8 +2885,15 @@ export function encodeCBORLinkPublishOutput(v: LinkPublishOutput): Uint8Array {
 
 export function appendCBORLinkPublishOutput(out: number[], v: LinkPublishOutput): void {
   let n = 1;
+  if (v.error !== undefined && v.error !== "") n++;
   if (v.patches !== undefined && v.patches.length > 0) n++;
+  if (v.error_code !== undefined && v.error_code !== "") n++;
+  if (v.error_short_code !== undefined && v.error_short_code !== "") n++;
   writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
   writeText(out, "handle");
   {
     const m0 = v.handle;
@@ -2817,6 +2914,14 @@ export function appendCBORLinkPublishOutput(out: number[], v: LinkPublishOutput)
       }
     }
   }
+  if (v.error_code !== undefined && v.error_code !== "") {
+    writeText(out, "error_code");
+    writeText(out, v.error_code);
+  }
+  if (v.error_short_code !== undefined && v.error_short_code !== "") {
+    writeText(out, "error_short_code");
+    writeText(out, v.error_short_code);
+  }
 }
 
 export function decodeCBORLinkPublishOutput(data: Uint8Array): LinkPublishOutput {
@@ -2832,6 +2937,9 @@ export function decodeCBORLinkPublishOutputFrom(dec: CborDec): LinkPublishOutput
     switch (k) {
       case "handle": o["handle"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "patches": o["patches"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORLinkPatchFrom(dec)); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      case "error_code": o["error_code"] = dec.readText(); break;
+      case "error_short_code": o["error_short_code"] = dec.readText(); break;
       default: dec.skip();
     }
   }
@@ -2900,7 +3008,14 @@ export function encodeCBORLinkResolveOutput(v: LinkResolveOutput): Uint8Array {
 
 export function appendCBORLinkResolveOutput(out: number[], v: LinkResolveOutput): void {
   let n = 1;
+  if (v.error !== undefined && v.error !== "") n++;
+  if (v.error_code !== undefined && v.error_code !== "") n++;
+  if (v.error_short_code !== undefined && v.error_short_code !== "") n++;
   writeHead(out, 5, n);
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
   writeText(out, "patches");
   {
     const a0 = v.patches;
@@ -2908,6 +3023,14 @@ export function appendCBORLinkResolveOutput(out: number[], v: LinkResolveOutput)
     for (const ee0 of a0) {
       appendCBORLinkPatch(out, ee0);
     }
+  }
+  if (v.error_code !== undefined && v.error_code !== "") {
+    writeText(out, "error_code");
+    writeText(out, v.error_code);
+  }
+  if (v.error_short_code !== undefined && v.error_short_code !== "") {
+    writeText(out, "error_short_code");
+    writeText(out, v.error_short_code);
   }
 }
 
@@ -2923,6 +3046,9 @@ export function decodeCBORLinkResolveOutputFrom(dec: CborDec): LinkResolveOutput
     const k = dec.readText();
     switch (k) {
       case "patches": o["patches"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORLinkPatchFrom(dec)); } return a; })(); break;
+      case "error": o["error"] = dec.readText(); break;
+      case "error_code": o["error_code"] = dec.readText(); break;
+      case "error_short_code": o["error_short_code"] = dec.readText(); break;
       default: dec.skip();
     }
   }
