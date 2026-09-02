@@ -22,37 +22,37 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// One issue a Wasm plugin raised: a severity, a human-readable message, an optional location, and optional socket-specific fields. Every socket that emits diagnostics emits this shape; each populates the subset it uses (a parser sets a location span, an import sets code and source_ref, a publishing linter sets rule_id and classification, a policy sets only severity and message, a renderer sets a structured location and suggest) and omits the rest.
+// One issue a diagnostic emitter raised: a severity, a human-readable message, an optional location, and optional emitter-specific fields. An emitter is a Wasm plugin socket or the compiler itself — both report on this one shape, so a reader interprets an entry the same way whichever raised it. Each populates the subset it uses and omits the rest: a parser sets a location span, an import sets code and source_ref, a publishing linter sets rule_id and classification, a governance verdict sets the build-outcome severity and message and may add any of code, rule_id, classification, source_ref, location and suggest, and a render advisory sets code, source_ref and a structured location.
 export interface Diagnostic {
-  // The diagnostic's severity, drawn from one closed set every socket shares. halt stops the build and names what to fix. warn surfaces alongside a build that still completes. info records the observation and leaves the build outcome unchanged. A parser, an import, a publishing linter and a governance verdict all report from this one set, so a reader interprets a severity the same way whichever socket raised it.
+  // The diagnostic's severity, drawn from one closed set every socket shares. halt stops the build and names what to fix. warn surfaces alongside a build that still completes. info records the observation and leaves the build outcome unchanged. Every emitter reports from this one set, so a reader interprets a severity the same way whichever raised it.
   severity: string;
   // The human-readable diagnostic text.
   message: string;
-  // An optional stable, machine-matchable code for the diagnostic, independent of the human-readable message. Absent when the emitting socket assigns no code.
+  // An optional stable, machine-matchable code for the diagnostic, independent of the human-readable message. Absent when the emitter assigns no code. A code may come from a plugin socket or from the compiler's own advisories, which set one on every entry they raise.
   code?: string;
-  // The identifier of the rule that produced the diagnostic, when the emitting socket is rule-based (a publishing linter). Absent otherwise.
+  // The identifier of the rule that produced the diagnostic, when the emitter is rule-based (a publishing linter). Absent otherwise.
   rule_id?: string;
   // A semantic-version-impact classification the diagnostic carries, when the emitting rule assigns one (a schema-evolution rule). Absent for diagnostics that carry no classification.
   classification?: string;
   // An opaque reference to the source element the diagnostic concerns (for example the identifier of a source node an import could not resolve). Absent when the diagnostic references no specific source element.
   source_ref?: string;
-  // Where the diagnostic points, when the emitting socket can locate the issue. A parser fills the byte span; a renderer fills the structured position within a source document. Absent when the diagnostic has no location.
+  // Where the diagnostic points, when the emitter can locate the issue. A parser fills the byte span; a renderer fills the structured position within a source document. Absent when the diagnostic has no location.
   location?: Location;
-  // An optional remediation hint the emitting socket offers alongside the diagnostic. Absent when no hint is offered.
+  // An optional remediation hint the emitter offers alongside the diagnostic. Absent when no hint is offered.
   suggest?: string;
 }
 
 // Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind). Every field is optional; a socket populates the representation it can produce and omits the rest.
 export interface Location {
-  // The span of raw source bytes the diagnostic locates, when the emitting socket parses source and can pin the issue to a byte range (a parser). Absent otherwise.
+  // The span of raw source bytes the diagnostic locates, when the emitter parses source and can pin the issue to a byte range (a parser). Absent otherwise.
   span?: Span;
-  // A dotted path to the offending element within a structured source document, when the emitting socket locates the issue structurally (a renderer). Absent otherwise.
+  // A dotted path to the offending element within a structured source document, when the emitter locates the issue structurally (a renderer). Absent otherwise.
   key_path?: string;
-  // An identifier for the source artifact the diagnostic concerns, when the emitting socket knows it (a renderer). Absent otherwise.
+  // An identifier for the source artifact the diagnostic concerns, when the emitter knows it (a renderer). Absent otherwise.
   uri?: string;
-  // A line number within the structured source document, distinct from the raw-byte line and column carried by span. Present when the emitting socket knows a document line (a renderer). Absent otherwise.
+  // A line number within the structured source document, distinct from the raw-byte line and column carried by span. Present when the emitter knows a document line (a renderer). Absent otherwise.
   line?: number;
-  // An open string naming the source surface the location refers to, when the emitting socket distinguishes surfaces (a renderer). Absent otherwise.
+  // An open string naming the source surface the location refers to, when the emitter distinguishes surfaces (a renderer). Absent otherwise.
   kind?: string;
 }
 

@@ -12,17 +12,17 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
 }
 
-/// One issue a Wasm plugin raised: a severity, a human-readable message, an optional location, and optional socket-specific fields. Every socket that emits diagnostics emits this shape; each populates the subset it uses (a parser sets a location span, an import sets code and source_ref, a publishing linter sets rule_id and classification, a policy sets only severity and message, a renderer sets a structured location and suggest) and omits the rest.
+/// One issue a diagnostic emitter raised: a severity, a human-readable message, an optional location, and optional emitter-specific fields. An emitter is a Wasm plugin socket or the compiler itself — both report on this one shape, so a reader interprets an entry the same way whichever raised it. Each populates the subset it uses and omits the rest: a parser sets a location span, an import sets code and source_ref, a publishing linter sets rule_id and classification, a governance verdict sets the build-outcome severity and message and may add any of code, rule_id, classification, source_ref, location and suggest, and a render advisory sets code, source_ref and a structured location.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Diagnostic {
-    /// The diagnostic's severity, drawn from one closed set every socket shares. halt stops the build and names what to fix. warn surfaces alongside a build that still completes. info records the observation and leaves the build outcome unchanged. A parser, an import, a publishing linter and a governance verdict all report from this one set, so a reader interprets a severity the same way whichever socket raised it.
+    /// The diagnostic's severity, drawn from one closed set every socket shares. halt stops the build and names what to fix. warn surfaces alongside a build that still completes. info records the observation and leaves the build outcome unchanged. Every emitter reports from this one set, so a reader interprets a severity the same way whichever raised it.
     pub severity: String,
     /// The human-readable diagnostic text.
     pub message: String,
-    /// An optional stable, machine-matchable code for the diagnostic, independent of the human-readable message. Absent when the emitting socket assigns no code.
+    /// An optional stable, machine-matchable code for the diagnostic, independent of the human-readable message. Absent when the emitter assigns no code. A code may come from a plugin socket or from the compiler's own advisories, which set one on every entry they raise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub code: String,
-    /// The identifier of the rule that produced the diagnostic, when the emitting socket is rule-based (a publishing linter). Absent otherwise.
+    /// The identifier of the rule that produced the diagnostic, when the emitter is rule-based (a publishing linter). Absent otherwise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub rule_id: String,
     /// A semantic-version-impact classification the diagnostic carries, when the emitting rule assigns one (a schema-evolution rule). Absent for diagnostics that carry no classification.
@@ -31,10 +31,10 @@ pub struct Diagnostic {
     /// An opaque reference to the source element the diagnostic concerns (for example the identifier of a source node an import could not resolve). Absent when the diagnostic references no specific source element.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_ref: String,
-    /// Where the diagnostic points, when the emitting socket can locate the issue. A parser fills the byte span; a renderer fills the structured position within a source document. Absent when the diagnostic has no location.
+    /// Where the diagnostic points, when the emitter can locate the issue. A parser fills the byte span; a renderer fills the structured position within a source document. Absent when the diagnostic has no location.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<Box<Location>>,
-    /// An optional remediation hint the emitting socket offers alongside the diagnostic. Absent when no hint is offered.
+    /// An optional remediation hint the emitter offers alongside the diagnostic. Absent when no hint is offered.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub suggest: String,
 }
@@ -42,19 +42,19 @@ pub struct Diagnostic {
 /// Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind). Every field is optional; a socket populates the representation it can produce and omits the rest.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Location {
-    /// The span of raw source bytes the diagnostic locates, when the emitting socket parses source and can pin the issue to a byte range (a parser). Absent otherwise.
+    /// The span of raw source bytes the diagnostic locates, when the emitter parses source and can pin the issue to a byte range (a parser). Absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Box<Span>>,
-    /// A dotted path to the offending element within a structured source document, when the emitting socket locates the issue structurally (a renderer). Absent otherwise.
+    /// A dotted path to the offending element within a structured source document, when the emitter locates the issue structurally (a renderer). Absent otherwise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub key_path: String,
-    /// An identifier for the source artifact the diagnostic concerns, when the emitting socket knows it (a renderer). Absent otherwise.
+    /// An identifier for the source artifact the diagnostic concerns, when the emitter knows it (a renderer). Absent otherwise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub uri: String,
-    /// A line number within the structured source document, distinct from the raw-byte line and column carried by span. Present when the emitting socket knows a document line (a renderer). Absent otherwise.
+    /// A line number within the structured source document, distinct from the raw-byte line and column carried by span. Present when the emitter knows a document line (a renderer). Absent otherwise.
     #[serde(default, skip_serializing_if = "is_default")]
     pub line: i64,
-    /// An open string naming the source surface the location refers to, when the emitting socket distinguishes surfaces (a renderer). Absent otherwise.
+    /// An open string naming the source surface the location refers to, when the emitter distinguishes surfaces (a renderer). Absent otherwise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub kind: String,
 }

@@ -26,7 +26,7 @@ type ParseInput struct {
 
 // ParseOutput The payload a parser guest returns: the canonical structured tree of the parsed source, plus any diagnostics the parse raised and any source spans locating tree nodes back to the original bytes.
 type ParseOutput struct {
-	// Tree The canonical structured view of the parsed source, as a JSON document. The top level may be an object, an array, or a scalar, matching the parsed document's own shape (a JSON file, for example, may parse to any of these). The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
+	// Tree The canonical structured view of the parsed source, as a JSON document. Here "JSON document" names the form of the value a parser produces — which is the substance of what parsing is for — and not the encoding the value travels in: the tree is a JSON document whatever wire this socket carries it on. The top level may be an object, an array, or a scalar, matching the parsed document's own shape (a JSON file, for example, may parse to any of these). The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
 	Tree json.RawMessage `json:"tree" yaml:"tree" cbor:"tree"`
 	// Diagnostics Diagnostics the parse raised — for example a syntax error or a warning. Absent when the parse produced none.
 	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty" cbor:"diagnostics,omitempty"`
@@ -62,7 +62,7 @@ type SourceSpan struct {
 
 // ParseSourceResponse The parse-source host function's reply: on success the canonical structured tree the resolved parser produced, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a consumer guest carries a no-parser or a parse failure into its own diagnostics as a deterministic failure. This is the envelope a consumer socket receives when it asks the host to run a producer through the host; the request payload is a ParseInput.
 type ParseSourceResponse struct {
-	// Tree The canonical structured tree the resolved parser produced on success, as a JSON document carried verbatim; absent on failure.
+	// Tree The canonical structured tree the resolved parser produced on success, as a JSON document carried verbatim; absent on failure. As on the parse output's own tree, "JSON document" names the form of the value rather than the encoding it travels in.
 	Tree json.RawMessage `json:"tree,omitempty" yaml:"tree,omitempty" cbor:"tree,omitempty"`
 	// Error The failure message on failure, naming the format and the reason; absent on success.
 	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`

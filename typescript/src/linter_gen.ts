@@ -26,11 +26,11 @@ function encodeOpaque(v: unknown): string {
 
 // The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. policies carries the per-workspace publishing-discipline configuration the rule consults.
 export interface LinterInput {
-  // The rule the plugin should dispatch to. At v0.1.0 the only recognised value is 'schema-evolution'; the recognised set expands as further rules ship. Unknown rule_ids produce an 'unknown_rule' finding in the output.
+  // The rule the plugin should dispatch to, named by its rule id — the same kebab-case identifier the resulting finding carries in rule_id, so a suppressed or reported rule is named the same way on every surface. The recognised set is whatever the shipped plugin dispatches, and it expands as further rules ship; a rule id the plugin does not recognise produces an 'unknown_rule' finding rather than a silent pass.
   rule_id: string;
   // The entity kind the proposed/previous values encode. The schema-evolution rule's classification varies per kind; structural rules scope to specific kinds.
   entity_kind: string;
-  // Parsed structure of the entity being classified. YAML → JSON conversion happens host-side; the plugin consumes the structured value via serde_json.
+  // Parsed structure of the entity being classified. The host converts YAML to JSON before sending, so the plugin receives an already-structured value and never sees raw bytes.
   proposed: unknown;
   // Parsed structure of the previous-version entity, for rules that perform pairwise comparison (schema-evolution). Omitted when the rule does not need a previous-version reference (e.g., first publication, structural-only rules).
   previous?: unknown;
@@ -50,17 +50,17 @@ export interface LinterOutput {
   error?: string;
 }
 
-// Per-workspace publishing-discipline configuration the rule set consults. Mirrors workspaceconfig.PublishingDisciplineConfig field-for-field. Schema is the contract: both the Go workspaceconfig struct's godoc AND the Rust policies.rs struct doc cross-reference this $def. Field omission defaults each flag to false; the host's serialiser writes only fields with non-default values.
+// Per-workspace publishing-discipline configuration the rule set consults, assembled by the host from the workspace configuration's publishing-discipline settings and any command-line overrides. This schema is the contract for the shape. Field omission defaults each flag to false, and the host writes only the fields whose value is not the default.
 export interface Policies {
-  // When true, $dynamicAnchor / $dynamicRef usage in SchemaLibrary entries is permitted (suppresses the dynamic_refs rule). Default false.
+  // When true, $dynamicAnchor / $dynamicRef usage in SchemaLibrary entries is permitted (suppresses the dynamic-refs rule). Default false.
   allow_dynamic_refs?: boolean;
-  // When true, $id overrides in SchemaLibrary entries are permitted (suppresses the id_overrides rule). Default false.
+  // When true, $id overrides in SchemaLibrary entries are permitted (suppresses the id-overrides rule). Default false.
   allow_id_overrides?: boolean;
-  // When true, direct x-aggrega-selector / x-aggrega-inject authoring is permitted (suppresses the x_aggrega_discouragement rule). Default false.
+  // When true, direct x-aggrega-selector / x-aggrega-inject authoring is permitted (suppresses the x-aggrega-discouragement rule). Default false.
   allow_direct_x_aggrega_extensions?: boolean;
-  // When true, the annotation-prefix rule is suppressed entirely (both the bare aggrega.ai/ check and the feature.aggrega.ai/ kind-conditional check). Default false. Mirrors workspaceconfig.PublishingDisciplineConfig.AllowAggregaAIPrefix; the host serialises the field through the LinterInput.policies passthrough.
+  // When true, the annotation-prefix rule is suppressed entirely (both the bare aggrega.ai/ check and the feature.aggrega.ai/ kind-conditional check). Default false.
   allow_aggrega_ai_prefix?: boolean;
-  // When true, name-shape violations are permitted (suppresses the name_shape rule). Default false.
+  // When true, name-shape violations are permitted (suppresses the name-shape rule). Default false.
   allow_nonstandard_names?: boolean;
   // When true, suppress the category-matches-directory rule's findings. The standard-catalog convention requires Components under core/<category>/ to declare component.aggrega.ai/category={category} matching the directory segment, where {category} is one of the 15 closed-set values. Workspaces with legitimate persistent exceptions opt out here. Default false.
   allow_category_mismatches?: boolean;

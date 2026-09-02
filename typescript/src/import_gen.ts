@@ -28,7 +28,7 @@ function encodeOpaque(v: unknown): string {
 export interface ImportInput {
   // The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
   format: string;
-  // The primary source bytes to import, base64-encoded on the wire. The importer decodes the base64 to recover the original bytes and reads them as the named format.
+  // The primary source bytes to import, which the importer reads as the named format. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the importer decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
   bytes: string;
   // Named sources for a multi-file or directory import, each carrying its own bytes. Absent for a single-file import, where the primary bytes carry the whole source.
   sources?: ImportSource[];
@@ -40,7 +40,7 @@ export interface ImportInput {
 export interface ImportSource {
   // The name of this source within the import, such as a relative file path.
   name: string;
-  // This source's bytes, base64-encoded on the wire. The importer decodes the base64 to recover the original bytes.
+  // This source's bytes. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the importer decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
   bytes: string;
 }
 

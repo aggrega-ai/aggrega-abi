@@ -25,7 +25,7 @@ pub struct ParseInput {
 /// The payload a parser guest returns: the canonical structured tree of the parsed source, plus any diagnostics the parse raised and any source spans locating tree nodes back to the original bytes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParseOutput {
-    /// The canonical structured view of the parsed source, as a JSON document. The top level may be an object, an array, or a scalar, matching the parsed document's own shape (a JSON file, for example, may parse to any of these). The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
+    /// The canonical structured view of the parsed source, as a JSON document. Here "JSON document" names the form of the value a parser produces — which is the substance of what parsing is for — and not the encoding the value travels in: the tree is a JSON document whatever wire this socket carries it on. The top level may be an object, an array, or a scalar, matching the parsed document's own shape (a JSON file, for example, may parse to any of these). The host pipes the tree through opaquely, carrying it verbatim without interpreting its content.
     pub tree: Box<RawValue>,
     /// Diagnostics the parse raised — for example a syntax error or a warning. Absent when the parse produced none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -67,7 +67,7 @@ pub struct SourceSpan {
 /// The parse-source host function's reply: on success the canonical structured tree the resolved parser produced, on failure an error message. Exactly one of the two fields is populated. Failure is delivered in-band rather than by trapping, so a consumer guest carries a no-parser or a parse failure into its own diagnostics as a deterministic failure. This is the envelope a consumer socket receives when it asks the host to run a producer through the host; the request payload is a ParseInput.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ParseSourceResponse {
-    /// The canonical structured tree the resolved parser produced on success, as a JSON document carried verbatim; absent on failure.
+    /// The canonical structured tree the resolved parser produced on success, as a JSON document carried verbatim; absent on failure. As on the parse output's own tree, "JSON document" names the form of the value rather than the encoding it travels in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tree: Option<Box<RawValue>>,
     /// The failure message on failure, naming the format and the reason; absent on success.
