@@ -255,6 +255,8 @@ export interface RenderedNode {
   type: string;
   // The identity this contributor derives its own names from inside the assembled artifact — a logical id an assembler mints for one of the contributor's published entries, a per-contributor scope in a merged document. Empty means the id is used directly, which is the value for an ordinary component. It is the same carry the render_node call for this contributor received, and carrying it on both is what keeps the two answers equal: a name the contributor declared while rendering and the name the assembled artifact ends up addressing that content by are derived from one identity rather than from two that happen to agree. A contributor whose id is a dispatch identity a target's name alphabet refuses carries this explicitly, so the assembled artifact addresses its content by a name the target accepts, and two contributors an author can tell apart cannot arrive under one.
   derived_name_basis?: string;
+  // The directory this contributor's rendered files sit in, relative to the assembled artifact's own position, carrying no trailing separator. A guest that has to name a contributor's files from inside the assembled artifact — the source path of a module block, an include directive — reads the position from here rather than composing one from the contributor's identity, so the path the assembled artifact points at is the path the files were written to. The two are not always one directory apart: a contributor the host placed inside another contributor's position sits deeper than the contributors placed directly beneath the assembly. Present only where the assembling provider places each contributor under a position of its own; a provider that folds its contributors into one document places no per-contributor directory and receives none.
+  output_directory?: string;
   rendered: RenderNodeOutput;
   // The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
   annotations?: Record<string, string>;
@@ -711,6 +713,7 @@ export function encodeRenderedNode(v: RenderedNode): string {
   parts.push(`${jstr("id")}:${jstr(v.id)}`);
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
   if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") parts.push(`${jstr("derived_name_basis")}:${jstr(v.derived_name_basis)}`);
+  if (v.output_directory !== undefined && v.output_directory !== "") parts.push(`${jstr("output_directory")}:${jstr(v.output_directory)}`);
   parts.push(`${jstr("rendered")}:${encodeRenderNodeOutput(v.rendered)}`);
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) parts.push(`${jstr("annotations")}:${`{${Object.keys(v.annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.annotations![k0])}`).join(",")}}`}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
@@ -2006,6 +2009,7 @@ export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
   if (v.values !== undefined && Object.keys(v.values).length > 0) n++;
   if (v.sync_wave !== undefined && v.sync_wave !== 0) n++;
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) n++;
+  if (v.output_directory !== undefined && v.output_directory !== "") n++;
   if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") n++;
   writeHead(out, 5, n);
   writeText(out, "id");
@@ -2042,6 +2046,10 @@ export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
       }
     }
   }
+  if (v.output_directory !== undefined && v.output_directory !== "") {
+    writeText(out, "output_directory");
+    writeText(out, v.output_directory);
+  }
   if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") {
     writeText(out, "derived_name_basis");
     writeText(out, v.derived_name_basis);
@@ -2062,6 +2070,7 @@ export function decodeCBORRenderedNodeFrom(dec: CborDec): RenderedNode {
       case "id": o["id"] = dec.readText(); break;
       case "type": o["type"] = dec.readText(); break;
       case "derived_name_basis": o["derived_name_basis"] = dec.readText(); break;
+      case "output_directory": o["output_directory"] = dec.readText(); break;
       case "rendered": o["rendered"] = decodeCBORRenderNodeOutputFrom(dec); break;
       case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;

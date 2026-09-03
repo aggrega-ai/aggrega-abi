@@ -316,6 +316,9 @@ pub struct RenderedNode {
     /// The identity this contributor derives its own names from inside the assembled artifact — a logical id an assembler mints for one of the contributor's published entries, a per-contributor scope in a merged document. Empty means the id is used directly, which is the value for an ordinary component. It is the same carry the render_node call for this contributor received, and carrying it on both is what keeps the two answers equal: a name the contributor declared while rendering and the name the assembled artifact ends up addressing that content by are derived from one identity rather than from two that happen to agree. A contributor whose id is a dispatch identity a target's name alphabet refuses carries this explicitly, so the assembled artifact addresses its content by a name the target accepts, and two contributors an author can tell apart cannot arrive under one.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub derived_name_basis: String,
+    /// The directory this contributor's rendered files sit in, relative to the assembled artifact's own position, carrying no trailing separator. A guest that has to name a contributor's files from inside the assembled artifact — the source path of a module block, an include directive — reads the position from here rather than composing one from the contributor's identity, so the path the assembled artifact points at is the path the files were written to. The two are not always one directory apart: a contributor the host placed inside another contributor's position sits deeper than the contributors placed directly beneath the assembly. Present only where the assembling provider places each contributor under a position of its own; a provider that folds its contributors into one document places no per-contributor directory and receives none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub output_directory: String,
     pub rendered: RenderNodeOutput,
     /// The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -1934,6 +1937,7 @@ impl RenderedNode {
         if !self.values.is_empty() { n += 1; }
         if self.sync_wave != 0 { n += 1; }
         if !self.annotations.is_empty() { n += 1; }
+        if !self.output_directory.is_empty() { n += 1; }
         if !self.derived_name_basis.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "id");
@@ -1974,6 +1978,10 @@ impl RenderedNode {
                 }
             }
         }
+        if !self.output_directory.is_empty() {
+            crate::cbor_gen::write_text(out, "output_directory");
+            crate::cbor_gen::write_text(out, &self.output_directory);
+        }
         if !self.derived_name_basis.is_empty() {
             crate::cbor_gen::write_text(out, "derived_name_basis");
             crate::cbor_gen::write_text(out, &self.derived_name_basis);
@@ -1992,6 +2000,7 @@ impl RenderedNode {
         let mut f_id: Option<String> = None;
         let mut f_type: Option<String> = None;
         let mut f_derived_name_basis: String = String::new();
+        let mut f_output_directory: String = String::new();
         let mut f_rendered: Option<RenderNodeOutput> = None;
         let mut f_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_sync_wave: i64 = 0;
@@ -2003,6 +2012,7 @@ impl RenderedNode {
                 "id" => f_id = Some(dec.read_text()?),
                 "type" => f_type = Some(dec.read_text()?),
                 "derived_name_basis" => f_derived_name_basis = dec.read_text()?,
+                "output_directory" => f_output_directory = dec.read_text()?,
                 "rendered" => f_rendered = Some(RenderNodeOutput::decode_cbor_from(dec)?),
                 "annotations" => f_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "sync_wave" => f_sync_wave = dec.read_int()?,
@@ -2014,6 +2024,7 @@ impl RenderedNode {
             id: f_id.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field id".to_string()))?,
             r#type: f_type.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field type".to_string()))?,
             derived_name_basis: f_derived_name_basis,
+            output_directory: f_output_directory,
             rendered: f_rendered.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field rendered".to_string()))?,
             annotations: f_annotations,
             sync_wave: f_sync_wave,
