@@ -113,6 +113,10 @@ type ProviderContract struct {
 	ReusableInstance bool `json:"reusable_instance,omitempty" yaml:"reusable_instance,omitempty" cbor:"reusable_instance,omitempty"`
 	// CrossBoundaryLinking Whether the plugin wires cross-boundary uses edges — edges whose consuming and consumed ends assemble into different dispatch groups — by producing provider-native cross-reference wiring through its link_publish and link_resolve exports. A plugin declares it true only when it exports both. Absent (false) is the safe default: the plugin wires no cross-boundary edges.
 	CrossBoundaryLinking bool `json:"cross_boundary_linking,omitempty" yaml:"cross_boundary_linking,omitempty" cbor:"cross_boundary_linking,omitempty"`
+	// NestSegment The directory the plugin's target places each contributor's own sub-directory under, for a plugin that nests a dispatch group's per-node output. The host joins this segment, the contributor's authoring-level name, and each file's own path. Read only when boundary_assembly is nest. Absent, the host places each contributor's sub-directory directly at the dispatch position, with no enclosing directory. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the host composes the contributor's name into it and a path fragment would place a contributor's files somewhere other than beneath the dispatch position.
+	NestSegment string `json:"nest_segment,omitempty" yaml:"nest_segment,omitempty" cbor:"nest_segment,omitempty"`
+	// AttachmentSegment The directory the plugin's target places an attached Feature's rendered files under, within the position of the component or boundary that Feature is attached to. The host joins this segment with the attachment's own coordinates and each file's own path, so telling two attachments apart is the host's guarantee rather than the plugin's. Two plugins that assemble their output the same way can still need opposite answers here — one whose target reads only the files sitting directly in a directory needs an attachment's files beside the ones already there, while one whose target discovers units in a named child directory needs them inside it — which is why the answer is the plugin's to declare rather than something the host derives from boundary_assembly. Absent, the host applies its own default directory, so a plugin that names none emits the layout it already emitted. The value names one directory and never a path, refused on the same terms as nest_segment and for the same reason: the host composes the attachment's coordinates into it, and a path fragment would place those files outside the position the attachment renders into.
+	AttachmentSegment string `json:"attachment_segment,omitempty" yaml:"attachment_segment,omitempty" cbor:"attachment_segment,omitempty"`
 }
 
 // InputKinds Which Recipe input kinds a plugin renders. Each field is an independent claim; a plugin may report any combination.
@@ -1037,6 +1041,22 @@ func (t ProviderContract) MarshalJSON() ([]byte, error) {
 			buf.WriteString("false")
 		}
 	}
+	if t.NestSegment != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"nest_segment\":")
+		writeJSONString(&buf, t.NestSegment)
+	}
+	if t.AttachmentSegment != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"attachment_segment\":")
+		writeJSONString(&buf, t.AttachmentSegment)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -1118,6 +1138,18 @@ func (t *ProviderContract) UnmarshalJSON(data []byte) error {
 			} else {
 				t.CrossBoundaryLinking = v
 			}
+		case "nest_segment":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.NestSegment = s
+			}
+		case "attachment_segment":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.AttachmentSegment = s
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -1137,7 +1169,7 @@ func (t *ProviderContract) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *ProviderContract) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "input_kinds", "boundary_assembly", "artifact_delimiters", "source_filter", "assembly_name_annotation", "reusable_instance", "cross_boundary_linking"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "input_kinds", "boundary_assembly", "artifact_delimiters", "source_filter", "assembly_name_annotation", "reusable_instance", "cross_boundary_linking", "nest_segment", "attachment_segment"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -2158,10 +2190,16 @@ func (t ProviderContract) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t ProviderContract) appendCBOR(dst []byte) ([]byte, error) {
 	n := 2
+	if t.NestSegment != "" {
+		n++
+	}
 	if len(t.SourceFilter) != 0 {
 		n++
 	}
 	if t.ReusableInstance != false {
+		n++
+	}
+	if t.AttachmentSegment != "" {
 		n++
 	}
 	if t.ArtifactDelimiters != nil {
@@ -2179,6 +2217,10 @@ func (t ProviderContract) appendCBOR(dst []byte) ([]byte, error) {
 	if dst, err = t.InputKinds.appendCBOR(dst); err != nil {
 		return nil, err
 	}
+	if t.NestSegment != "" {
+		dst = appendCBORTextString(dst, "nest_segment")
+		dst = appendCBORTextString(dst, t.NestSegment)
+	}
 	if len(t.SourceFilter) != 0 {
 		dst = appendCBORTextString(dst, "source_filter")
 		dst = appendCBORHead(dst, 4, uint64(len(t.SourceFilter)))
@@ -2192,6 +2234,10 @@ func (t ProviderContract) appendCBOR(dst []byte) ([]byte, error) {
 	if t.ReusableInstance != false {
 		dst = appendCBORTextString(dst, "reusable_instance")
 		dst = appendCBORBool(dst, t.ReusableInstance)
+	}
+	if t.AttachmentSegment != "" {
+		dst = appendCBORTextString(dst, "attachment_segment")
+		dst = appendCBORTextString(dst, t.AttachmentSegment)
 	}
 	if t.ArtifactDelimiters != nil {
 		dst = appendCBORTextString(dst, "artifact_delimiters")
@@ -2290,6 +2336,18 @@ func (t *ProviderContract) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.CrossBoundaryLinking = v
 			}
+		case "nest_segment":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.NestSegment = s
+			}
+		case "attachment_segment":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.AttachmentSegment = s
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -2306,7 +2364,7 @@ func (t *ProviderContract) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *ProviderContract) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "input_kinds", "boundary_assembly", "artifact_delimiters", "source_filter", "assembly_name_annotation", "reusable_instance", "cross_boundary_linking"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "input_kinds", "boundary_assembly", "artifact_delimiters", "source_filter", "assembly_name_annotation", "reusable_instance", "cross_boundary_linking", "nest_segment", "attachment_segment"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

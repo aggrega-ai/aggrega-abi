@@ -352,7 +352,7 @@ pub struct SubChart {
     pub chart_yaml: String,
 }
 
-/// The payload a Provider guest returns from its assemble_boundary export: the serialized bytes of each assembled file, any diagnostics the guest raised while assembling, whether the orchestrator nests each contributor's per-node files under a per-node sub-directory, and the directory it nests them under. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
+/// The payload a Provider guest returns from its assemble_boundary export: the serialized bytes of each assembled file and any diagnostics the guest raised while assembling. Where the assembled group's per-node files sit is not part of this reply — it is a static property of the provider, declared once on its describe() contract and in hand before any node renders. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AssembleBoundaryOutput {
     /// The assembled output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
@@ -360,12 +360,6 @@ pub struct AssembleBoundaryOutput {
     /// Diagnostics the guest raised while assembling. Each element is the shared Wasm-plugin diagnostic shape.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
-    /// Whether the orchestrator nests each contributor's per-node files under a per-node sub-directory rather than emitting them flat; the assembler signals this per provider (an assembler that folds the per-node fragments into one document emits flat, so false; one that composes them into an enclosing structure nests, so true). The directory those sub-directories sit under is nest_segment.
-    #[serde(default, skip_serializing_if = "is_default")]
-    pub nest_per_node: bool,
-    /// The directory a nesting assembler places each contributor's per-node files under: the orchestrator joins this segment, the contributor's authoring-level name, and each file's own path. Read only when nest_per_node is true. Absent, the orchestrator applies its own default segment, so an assembler that names none keeps the layout it already emitted. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the orchestrator composes the contributor's name into it and a path fragment would place a node's files somewhere other than beneath the dispatch position.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub nest_segment: String,
     /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
@@ -2160,8 +2154,6 @@ impl AssembleBoundaryOutput {
         let mut n: u64 = 1;
         if !self.error.is_empty() { n += 1; }
         if !self.diagnostics.is_empty() { n += 1; }
-        if !self.nest_segment.is_empty() { n += 1; }
-        if self.nest_per_node { n += 1; }
         if !self.condition_code.is_empty() { n += 1; }
         if !self.condition_short_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -2187,14 +2179,6 @@ impl AssembleBoundaryOutput {
                 }
             }
         }
-        if !self.nest_segment.is_empty() {
-            crate::cbor_gen::write_text(out, "nest_segment");
-            crate::cbor_gen::write_text(out, &self.nest_segment);
-        }
-        if self.nest_per_node {
-            crate::cbor_gen::write_text(out, "nest_per_node");
-            crate::cbor_gen::write_bool(out, self.nest_per_node);
-        }
         if !self.condition_code.is_empty() {
             crate::cbor_gen::write_text(out, "condition_code");
             crate::cbor_gen::write_text(out, &self.condition_code);
@@ -2216,8 +2200,6 @@ impl AssembleBoundaryOutput {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_files: Option<Vec<RenderedFile>> = None;
         let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
-        let mut f_nest_per_node: bool = false;
-        let mut f_nest_segment: String = String::new();
         let mut f_error: String = String::new();
         let mut f_condition_code: String = String::new();
         let mut f_condition_short_code: String = String::new();
@@ -2227,8 +2209,6 @@ impl AssembleBoundaryOutput {
             match k.as_str() {
                 "files" => f_files = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv }),
                 "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
-                "nest_per_node" => f_nest_per_node = dec.read_bool()?,
-                "nest_segment" => f_nest_segment = dec.read_text()?,
                 "error" => f_error = dec.read_text()?,
                 "condition_code" => f_condition_code = dec.read_text()?,
                 "condition_short_code" => f_condition_short_code = dec.read_text()?,
@@ -2238,8 +2218,6 @@ impl AssembleBoundaryOutput {
         Ok(Self {
             files: f_files.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field files".to_string()))?,
             diagnostics: f_diagnostics,
-            nest_per_node: f_nest_per_node,
-            nest_segment: f_nest_segment,
             error: f_error,
             condition_code: f_condition_code,
             condition_short_code: f_condition_short_code,
