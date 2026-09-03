@@ -249,10 +249,12 @@ export interface AssembleBoundaryInput {
 
 // One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, the values the compiler resolved for it where those are the compiler's to supply, and the render output the render_node export produced for it.
 export interface RenderedNode {
-  // The node's absolute id within the topology graph.
+  // The node's absolute id within the topology graph. A contributor that is not one of the graph's nodes — a Feature attached at a boundary rather than at a component — carries the compiler's own dispatch identity for it here instead, which is the same identity the render_node call for that contributor carried; it distinguishes one contributor from another and is not a name any target accepts. What such a contributor derives names from inside the assembled artifact is a separate carry, derived_name_basis.
   id: string;
   // The node's component-type label, carried on this shape — unlike the per-node render projection, which withholds it. Opaque metadata rather than a behavior switch: it is here so an assembler can group and label the nodes it merges, not so a guest can branch on it.
   type: string;
+  // The identity this contributor derives its own names from inside the assembled artifact — a logical id an assembler mints for one of the contributor's published entries, a per-contributor scope in a merged document. Empty means the id is used directly, which is the value for an ordinary component. It is the same carry the render_node call for this contributor received, and carrying it on both is what keeps the two answers equal: a name the contributor declared while rendering and the name the assembled artifact ends up addressing that content by are derived from one identity rather than from two that happen to agree. A contributor whose id is a dispatch identity a target's name alphabet refuses carries this explicitly, so the assembled artifact addresses its content by a name the target accepts, and two contributors an author can tell apart cannot arrive under one.
+  derived_name_basis?: string;
   rendered: RenderNodeOutput;
   // The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
   annotations?: Record<string, string>;
@@ -712,6 +714,7 @@ export function encodeRenderedNode(v: RenderedNode): string {
   const parts: string[] = [];
   parts.push(`${jstr("id")}:${jstr(v.id)}`);
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") parts.push(`${jstr("derived_name_basis")}:${jstr(v.derived_name_basis)}`);
   parts.push(`${jstr("rendered")}:${encodeRenderNodeOutput(v.rendered)}`);
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) parts.push(`${jstr("annotations")}:${`{${Object.keys(v.annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.annotations![k0])}`).join(",")}}`}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
@@ -2009,6 +2012,7 @@ export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
   if (v.values !== undefined && Object.keys(v.values).length > 0) n++;
   if (v.sync_wave !== undefined && v.sync_wave !== 0) n++;
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) n++;
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") n++;
   writeHead(out, 5, n);
   writeText(out, "id");
   writeText(out, v.id);
@@ -2044,6 +2048,10 @@ export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
       }
     }
   }
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") {
+    writeText(out, "derived_name_basis");
+    writeText(out, v.derived_name_basis);
+  }
 }
 
 export function decodeCBORRenderedNode(data: Uint8Array): RenderedNode {
@@ -2059,6 +2067,7 @@ export function decodeCBORRenderedNodeFrom(dec: CborDec): RenderedNode {
     switch (k) {
       case "id": o["id"] = dec.readText(); break;
       case "type": o["type"] = dec.readText(); break;
+      case "derived_name_basis": o["derived_name_basis"] = dec.readText(); break;
       case "rendered": o["rendered"] = decodeCBORRenderNodeOutputFrom(dec); break;
       case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;

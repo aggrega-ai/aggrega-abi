@@ -308,11 +308,14 @@ pub struct AssembleBoundaryInput {
 /// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, the values the compiler resolved for it where those are the compiler's to supply, and the render output the render_node export produced for it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderedNode {
-    /// The node's absolute id within the topology graph.
+    /// The node's absolute id within the topology graph. A contributor that is not one of the graph's nodes — a Feature attached at a boundary rather than at a component — carries the compiler's own dispatch identity for it here instead, which is the same identity the render_node call for that contributor carried; it distinguishes one contributor from another and is not a name any target accepts. What such a contributor derives names from inside the assembled artifact is a separate carry, derived_name_basis.
     pub id: String,
     /// The node's component-type label, carried on this shape — unlike the per-node render projection, which withholds it. Opaque metadata rather than a behavior switch: it is here so an assembler can group and label the nodes it merges, not so a guest can branch on it.
     #[serde(rename = "type")]
     pub r#type: String,
+    /// The identity this contributor derives its own names from inside the assembled artifact — a logical id an assembler mints for one of the contributor's published entries, a per-contributor scope in a merged document. Empty means the id is used directly, which is the value for an ordinary component. It is the same carry the render_node call for this contributor received, and carrying it on both is what keeps the two answers equal: a name the contributor declared while rendering and the name the assembled artifact ends up addressing that content by are derived from one identity rather than from two that happen to agree. A contributor whose id is a dispatch identity a target's name alphabet refuses carries this explicitly, so the assembled artifact addresses its content by a name the target accepts, and two contributors an author can tell apart cannot arrive under one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub derived_name_basis: String,
     pub rendered: RenderNodeOutput,
     /// The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -1937,6 +1940,7 @@ impl RenderedNode {
         if !self.values.is_empty() { n += 1; }
         if self.sync_wave != 0 { n += 1; }
         if !self.annotations.is_empty() { n += 1; }
+        if !self.derived_name_basis.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "id");
         crate::cbor_gen::write_text(out, &self.id);
@@ -1976,6 +1980,10 @@ impl RenderedNode {
                 }
             }
         }
+        if !self.derived_name_basis.is_empty() {
+            crate::cbor_gen::write_text(out, "derived_name_basis");
+            crate::cbor_gen::write_text(out, &self.derived_name_basis);
+        }
         Ok(())
     }
 
@@ -1989,6 +1997,7 @@ impl RenderedNode {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_id: Option<String> = None;
         let mut f_type: Option<String> = None;
+        let mut f_derived_name_basis: String = String::new();
         let mut f_rendered: Option<RenderNodeOutput> = None;
         let mut f_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_sync_wave: i64 = 0;
@@ -1999,6 +2008,7 @@ impl RenderedNode {
             match k.as_str() {
                 "id" => f_id = Some(dec.read_text()?),
                 "type" => f_type = Some(dec.read_text()?),
+                "derived_name_basis" => f_derived_name_basis = dec.read_text()?,
                 "rendered" => f_rendered = Some(RenderNodeOutput::decode_cbor_from(dec)?),
                 "annotations" => f_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "sync_wave" => f_sync_wave = dec.read_int()?,
@@ -2009,6 +2019,7 @@ impl RenderedNode {
         Ok(Self {
             id: f_id.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field id".to_string()))?,
             r#type: f_type.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field type".to_string()))?,
+            derived_name_basis: f_derived_name_basis,
             rendered: f_rendered.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field rendered".to_string()))?,
             annotations: f_annotations,
             sync_wave: f_sync_wave,
