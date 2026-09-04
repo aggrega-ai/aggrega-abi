@@ -479,6 +479,36 @@ pub struct NameBoundOutput {
     pub condition_short_code: String,
 }
 
+/// The payload a Provider guest receives on its optional rendered_name export: the two identities a target derives its own names from, and whether the node's Recipe declares source the author supplied. The guest answers with the name its target will give the resources it renders from that supplied source — the name the author's own templates render against, such as the release name a chart reads. A guest that derives no such name reports none, which is the honest answer for a target whose resource names a Recipe writes verbatim, and for one whose name is a function of where the files are placed rather than of the node. This export reports a name the guest itself composes and is not the exchange that asks the guest to judge a name the host proposes; those are different questions and each has its own export.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RenderedNameInput {
+    /// The node's own identity, as authored. It is carried unencoded: a target narrows it through its own alphabet, so encoding it first would put one escape inside another and spell the name differently from the one a recipe author predicts it by.
+    pub node_id: String,
+    /// The identity a contributor's own source renders against when it is not the node's own — set for a contributor whose identity a target's name alphabet refuses, absent otherwise. A guest resolves the pair the same way every other surface does: this value when it is present, the node id when it is not.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub derived_name_basis: String,
+    /// Whether the node's bound Recipe declares source the author supplied, read from the text the author wrote. It is carried so the question can be asked of any node and answered correctly: a guest reports no name for a node whose output it composes from a workload or an artifact set alone, because such output carries no author templates for a name to render against and is named after the node's identity instead.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub sourced: bool,
+}
+
+/// The payload a Provider guest returns from its rendered_name export: the name its target gives the resources it renders from the node's author-supplied source, or no name at all. An absent or empty name is a positive answer rather than a failure — it says this target derives no such name — and the host spends what it was told without reading it, so no knowledge of the target's naming crosses the boundary.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RenderedNameOutput {
+    /// The name the guest will itself render this node's author-supplied source under, already written into whatever alphabet its target accepts in that position. Empty or absent means the guest derives no such name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from reporting no name: no name is an answer about the target, while error reports that the question itself could not be answered. The host surfaces a present error as a failed plugin invocation.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+    /// The descriptive, machine-matchable identity of the condition the failure names — the code the condition is registered under, in the same open set the compiler registers its own halting conditions in. Set beside the human error message; absent on success, and absent when the guest names no such condition. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and condition_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub condition_code: String,
+    /// The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with condition_code, for the reason stated there.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub condition_short_code: String,
+}
+
 /// One endpoint of a cross-boundary link: the node, the boundary path its rendered output assembles into, and the provider that rendered it. The two endpoints of a link name the consuming and consumed ends of a uses edge whose ends assemble into different dispatch groups.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LinkEndpoint {
@@ -2761,6 +2791,129 @@ impl NameBoundOutput {
         }
         Ok(Self {
             names: f_names,
+            error: f_error,
+            condition_code: f_condition_code,
+            condition_short_code: f_condition_short_code,
+        })
+    }
+}
+
+impl RenderedNameInput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if self.sourced { n += 1; }
+        if !self.derived_name_basis.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "node_id");
+        crate::cbor_gen::write_text(out, &self.node_id);
+        if self.sourced {
+            crate::cbor_gen::write_text(out, "sourced");
+            crate::cbor_gen::write_bool(out, self.sourced);
+        }
+        if !self.derived_name_basis.is_empty() {
+            crate::cbor_gen::write_text(out, "derived_name_basis");
+            crate::cbor_gen::write_text(out, &self.derived_name_basis);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_node_id: Option<String> = None;
+        let mut f_derived_name_basis: String = String::new();
+        let mut f_sourced: bool = false;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "node_id" => f_node_id = Some(dec.read_text()?),
+                "derived_name_basis" => f_derived_name_basis = dec.read_text()?,
+                "sourced" => f_sourced = dec.read_bool()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            node_id: f_node_id.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field node_id".to_string()))?,
+            derived_name_basis: f_derived_name_basis,
+            sourced: f_sourced,
+        })
+    }
+}
+
+impl RenderedNameOutput {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.name.is_empty() { n += 1; }
+        if !self.error.is_empty() { n += 1; }
+        if !self.condition_code.is_empty() { n += 1; }
+        if !self.condition_short_code.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.name.is_empty() {
+            crate::cbor_gen::write_text(out, "name");
+            crate::cbor_gen::write_text(out, &self.name);
+        }
+        if !self.error.is_empty() {
+            crate::cbor_gen::write_text(out, "error");
+            crate::cbor_gen::write_text(out, &self.error);
+        }
+        if !self.condition_code.is_empty() {
+            crate::cbor_gen::write_text(out, "condition_code");
+            crate::cbor_gen::write_text(out, &self.condition_code);
+        }
+        if !self.condition_short_code.is_empty() {
+            crate::cbor_gen::write_text(out, "condition_short_code");
+            crate::cbor_gen::write_text(out, &self.condition_short_code);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_name: String = String::new();
+        let mut f_error: String = String::new();
+        let mut f_condition_code: String = String::new();
+        let mut f_condition_short_code: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "name" => f_name = dec.read_text()?,
+                "error" => f_error = dec.read_text()?,
+                "condition_code" => f_condition_code = dec.read_text()?,
+                "condition_short_code" => f_condition_short_code = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            name: f_name,
             error: f_error,
             condition_code: f_condition_code,
             condition_short_code: f_condition_short_code,

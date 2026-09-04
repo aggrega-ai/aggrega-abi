@@ -381,6 +381,28 @@ export interface NameBoundOutput {
   condition_short_code?: string;
 }
 
+// The payload a Provider guest receives on its optional rendered_name export: the two identities a target derives its own names from, and whether the node's Recipe declares source the author supplied. The guest answers with the name its target will give the resources it renders from that supplied source — the name the author's own templates render against, such as the release name a chart reads. A guest that derives no such name reports none, which is the honest answer for a target whose resource names a Recipe writes verbatim, and for one whose name is a function of where the files are placed rather than of the node. This export reports a name the guest itself composes and is not the exchange that asks the guest to judge a name the host proposes; those are different questions and each has its own export.
+export interface RenderedNameInput {
+  // The node's own identity, as authored. It is carried unencoded: a target narrows it through its own alphabet, so encoding it first would put one escape inside another and spell the name differently from the one a recipe author predicts it by.
+  node_id: string;
+  // The identity a contributor's own source renders against when it is not the node's own — set for a contributor whose identity a target's name alphabet refuses, absent otherwise. A guest resolves the pair the same way every other surface does: this value when it is present, the node id when it is not.
+  derived_name_basis?: string;
+  // Whether the node's bound Recipe declares source the author supplied, read from the text the author wrote. It is carried so the question can be asked of any node and answered correctly: a guest reports no name for a node whose output it composes from a workload or an artifact set alone, because such output carries no author templates for a name to render against and is named after the node's identity instead.
+  sourced?: boolean;
+}
+
+// The payload a Provider guest returns from its rendered_name export: the name its target gives the resources it renders from the node's author-supplied source, or no name at all. An absent or empty name is a positive answer rather than a failure — it says this target derives no such name — and the host spends what it was told without reading it, so no knowledge of the target's naming crosses the boundary.
+export interface RenderedNameOutput {
+  // The name the guest will itself render this node's author-supplied source under, already written into whatever alphabet its target accepts in that position. Empty or absent means the guest derives no such name.
+  name?: string;
+  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from reporting no name: no name is an answer about the target, while error reports that the question itself could not be answered. The host surfaces a present error as a failed plugin invocation.
+  error?: string;
+  // The descriptive, machine-matchable identity of the condition the failure names — the code the condition is registered under, in the same open set the compiler registers its own halting conditions in. Set beside the human error message; absent on success, and absent when the guest names no such condition. The host carries the value verbatim onto the structured diagnostic it publishes and derives nothing from it. This identifier and condition_short_code are reported together, because they name one condition in two forms: a guest that sets one and not the other has named a condition the host cannot resolve, and the host then reports its own generic plugin-failure condition instead while the message still carries the whole failure.
+  condition_code?: string;
+  // The compact identifier of the same condition — the letter E and four digits, the form a reader quotes, searches for and pastes into a report — set beside the human error message; absent on success, and absent when the guest names no such condition. The host prints it in the bracketed head of the diagnostic it renders for this failure, so a condition a guest raises is quotable exactly as one the compiler raises is. The host carries the value verbatim and never derives one, so a value of another shape reaches the reader as the guest wrote it. It is reported together with condition_code, for the reason stated there.
+  condition_short_code?: string;
+}
+
 // One endpoint of a cross-boundary link: the node, the boundary path its rendered output assembles into, and the provider that rendered it. The two endpoints of a link name the consuming and consumed ends of a uses edge whose ends assemble into different dispatch groups.
 export interface LinkEndpoint {
   // The endpoint node's absolute id within the topology graph.
@@ -865,6 +887,31 @@ export function encodeNameBoundOutput(v: NameBoundOutput): string {
 
 export function decodeNameBoundOutput(data: string): NameBoundOutput {
   return JSON.parse(data) as NameBoundOutput;
+}
+
+export function encodeRenderedNameInput(v: RenderedNameInput): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("node_id")}:${jstr(v.node_id)}`);
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") parts.push(`${jstr("derived_name_basis")}:${jstr(v.derived_name_basis)}`);
+  if (v.sourced !== undefined && v.sourced !== false) parts.push(`${jstr("sourced")}:${String(v.sourced)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeRenderedNameInput(data: string): RenderedNameInput {
+  return JSON.parse(data) as RenderedNameInput;
+}
+
+export function encodeRenderedNameOutput(v: RenderedNameOutput): string {
+  const parts: string[] = [];
+  if (v.name !== undefined && v.name !== "") parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.condition_code !== undefined && v.condition_code !== "") parts.push(`${jstr("condition_code")}:${jstr(v.condition_code)}`);
+  if (v.condition_short_code !== undefined && v.condition_short_code !== "") parts.push(`${jstr("condition_short_code")}:${jstr(v.condition_short_code)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeRenderedNameOutput(data: string): RenderedNameOutput {
+  return JSON.parse(data) as RenderedNameOutput;
 }
 
 export function encodeLinkEndpoint(v: LinkEndpoint): string {
@@ -2654,6 +2701,101 @@ export function decodeCBORNameBoundOutputFrom(dec: CborDec): NameBoundOutput {
     }
   }
   return o as NameBoundOutput;
+}
+
+export function encodeCBORRenderedNameInput(v: RenderedNameInput): Uint8Array {
+  const out: number[] = [];
+  appendCBORRenderedNameInput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORRenderedNameInput(out: number[], v: RenderedNameInput): void {
+  let n = 1;
+  if (v.sourced !== undefined && v.sourced !== false) n++;
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") n++;
+  writeHead(out, 5, n);
+  writeText(out, "node_id");
+  writeText(out, v.node_id);
+  if (v.sourced !== undefined && v.sourced !== false) {
+    writeText(out, "sourced");
+    writeBool(out, v.sourced);
+  }
+  if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") {
+    writeText(out, "derived_name_basis");
+    writeText(out, v.derived_name_basis);
+  }
+}
+
+export function decodeCBORRenderedNameInput(data: Uint8Array): RenderedNameInput {
+  const dec = new CborDec(data);
+  return decodeCBORRenderedNameInputFrom(dec);
+}
+
+export function decodeCBORRenderedNameInputFrom(dec: CborDec): RenderedNameInput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "node_id": o["node_id"] = dec.readText(); break;
+      case "derived_name_basis": o["derived_name_basis"] = dec.readText(); break;
+      case "sourced": o["sourced"] = dec.readBool(); break;
+      default: dec.skip();
+    }
+  }
+  return o as RenderedNameInput;
+}
+
+export function encodeCBORRenderedNameOutput(v: RenderedNameOutput): Uint8Array {
+  const out: number[] = [];
+  appendCBORRenderedNameOutput(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORRenderedNameOutput(out: number[], v: RenderedNameOutput): void {
+  let n = 0;
+  if (v.name !== undefined && v.name !== "") n++;
+  if (v.error !== undefined && v.error !== "") n++;
+  if (v.condition_code !== undefined && v.condition_code !== "") n++;
+  if (v.condition_short_code !== undefined && v.condition_short_code !== "") n++;
+  writeHead(out, 5, n);
+  if (v.name !== undefined && v.name !== "") {
+    writeText(out, "name");
+    writeText(out, v.name);
+  }
+  if (v.error !== undefined && v.error !== "") {
+    writeText(out, "error");
+    writeText(out, v.error);
+  }
+  if (v.condition_code !== undefined && v.condition_code !== "") {
+    writeText(out, "condition_code");
+    writeText(out, v.condition_code);
+  }
+  if (v.condition_short_code !== undefined && v.condition_short_code !== "") {
+    writeText(out, "condition_short_code");
+    writeText(out, v.condition_short_code);
+  }
+}
+
+export function decodeCBORRenderedNameOutput(data: Uint8Array): RenderedNameOutput {
+  const dec = new CborDec(data);
+  return decodeCBORRenderedNameOutputFrom(dec);
+}
+
+export function decodeCBORRenderedNameOutputFrom(dec: CborDec): RenderedNameOutput {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "name": o["name"] = dec.readText(); break;
+      case "error": o["error"] = dec.readText(); break;
+      case "condition_code": o["condition_code"] = dec.readText(); break;
+      case "condition_short_code": o["condition_short_code"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as RenderedNameOutput;
 }
 
 export function encodeCBORLinkEndpoint(v: LinkEndpoint): Uint8Array {
