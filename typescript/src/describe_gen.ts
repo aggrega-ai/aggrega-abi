@@ -124,8 +124,6 @@ export interface ProviderContract {
   cross_boundary_linking?: boolean;
   // The directory the plugin's target places each contributor's own sub-directory under, for a plugin that nests a dispatch group's per-node output. The host joins this segment, the contributor's authoring-level name, and each file's own path. Read only when boundary_assembly is nest. Absent, the host places each contributor's sub-directory directly at the dispatch position, with no enclosing directory. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the host composes the contributor's name into it and a path fragment would place a contributor's files somewhere other than beneath the dispatch position.
   nest_segment?: string;
-  // The directory the plugin's target places an attached Feature's rendered files under, within the position of the component or boundary that Feature is attached to. The host joins this segment with the attachment's own coordinates and each file's own path, so telling two attachments apart is the host's guarantee rather than the plugin's. Two plugins that assemble their output the same way can still need opposite answers here — one whose target reads only the files sitting directly in a directory needs an attachment's files beside the ones already there, while one whose target discovers units in a named child directory needs them inside it — which is why the answer is the plugin's to declare rather than something the host derives from boundary_assembly. The key carries three distinct states, and it is held by reference so that declaring no directory and declaring nothing at all stay apart: a non-empty value names the single directory an attachment's files sit inside; an empty value declares that the target wants no enclosing directory, so an attachment's files sit directly at the position of the component or boundary it is attached to; and an omitted key declares nothing, leaving the host to apply its own default directory. A non-empty value names one directory and never a path, refused on the same terms as nest_segment and for the same reason: the host composes the attachment's coordinates into it, and a path fragment would place those files outside the position the attachment renders into.
-  attachment_segment?: string;
 }
 
 // Which Recipe input kinds a plugin renders. Each field is an independent claim; a plugin may report any combination.
@@ -241,7 +239,6 @@ export function encodeProviderContract(v: ProviderContract): string {
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) parts.push(`${jstr("reusable_instance")}:${String(v.reusable_instance)}`);
   if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) parts.push(`${jstr("cross_boundary_linking")}:${String(v.cross_boundary_linking)}`);
   if (v.nest_segment !== undefined && v.nest_segment !== "") parts.push(`${jstr("nest_segment")}:${jstr(v.nest_segment)}`);
-  if (v.attachment_segment !== undefined && v.attachment_segment !== null) parts.push(`${jstr("attachment_segment")}:${jstr(v.attachment_segment)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -638,7 +635,6 @@ export function appendCBORProviderContract(out: number[], v: ProviderContract): 
   if (v.nest_segment !== undefined && v.nest_segment !== "") n++;
   if (v.source_filter !== undefined && v.source_filter.length > 0) n++;
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) n++;
-  if (v.attachment_segment !== undefined && v.attachment_segment !== null) n++;
   if (v.artifact_delimiters !== undefined && v.artifact_delimiters !== null) n++;
   if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) n++;
   if (v.assembly_name_annotation !== undefined && v.assembly_name_annotation !== null) n++;
@@ -664,10 +660,6 @@ export function appendCBORProviderContract(out: number[], v: ProviderContract): 
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) {
     writeText(out, "reusable_instance");
     writeBool(out, v.reusable_instance);
-  }
-  if (v.attachment_segment !== undefined && v.attachment_segment !== null) {
-    writeText(out, "attachment_segment");
-    writeText(out, v.attachment_segment);
   }
   if (v.artifact_delimiters !== undefined && v.artifact_delimiters !== null) {
     writeText(out, "artifact_delimiters");
@@ -702,7 +694,6 @@ export function decodeCBORProviderContractFrom(dec: CborDec): ProviderContract {
       case "reusable_instance": o["reusable_instance"] = dec.readBool(); break;
       case "cross_boundary_linking": o["cross_boundary_linking"] = dec.readBool(); break;
       case "nest_segment": o["nest_segment"] = dec.readText(); break;
-      case "attachment_segment": o["attachment_segment"] = dec.readText(); break;
       default: dec.skip();
     }
   }
