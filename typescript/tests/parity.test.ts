@@ -236,6 +236,7 @@ const vectors: Array<[string, string]> = [
   ["ErrorEnvelopeParseOutput", "ParseOutput"],
   ["ErrorEnvelopePolicyOutput", "PolicyOutput"],
   ["ErrorEnvelopeRenderNodeOutput", "RenderNodeOutput"],
+  ["ErrorEnvelopeRenderedNameOutput", "RenderedNameOutput"],
   ["ErrorEnvelopeSourceFileResponse", "SourceFileResponse"],
   ["ErrorEnvelopeSourcePackResponse", "SourcePackResponse"],
   ["ErrorEnvelopeValidateNodeOutput", "ValidateNodeOutput"],

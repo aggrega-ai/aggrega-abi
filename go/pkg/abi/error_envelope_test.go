@@ -51,6 +51,7 @@ var errorEnvelopeVectors = []struct {
 	{"ErrorEnvelopeParseOutput", abi.ParseOutput{}},
 	{"ErrorEnvelopePolicyOutput", abi.PolicyOutput{}},
 	{"ErrorEnvelopeRenderNodeOutput", abi.RenderNodeOutput{}},
+	{"ErrorEnvelopeRenderedNameOutput", abi.RenderedNameOutput{}},
 	{"ErrorEnvelopeSourceFileResponse", abi.SourceFileResponse{}},
 	{"ErrorEnvelopeSourcePackResponse", abi.SourcePackResponse{}},
 	{"ErrorEnvelopeValidateNodeOutput", abi.ValidateNodeOutput{}},
@@ -115,6 +116,10 @@ func TestSocketParity_ErrorEnvelopes(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.RenderNodeOutput](t, "ErrorEnvelopeRenderNodeOutput")
 	})
+	t.Run("RenderedNameOutput", func(t *testing.T) {
+		t.Parallel()
+		roundTripBothGolden[abi.RenderedNameOutput](t, "ErrorEnvelopeRenderedNameOutput")
+	})
 	t.Run("SourceFileResponse", func(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.SourceFileResponse](t, "ErrorEnvelopeSourceFileResponse")
@@ -172,8 +177,7 @@ func TestEveryErrorMemberIsPopulatedBySomeGolden(t *testing.T) {
 // TestErrorBearingCensusIsComplete counts the generated types that declare an
 // error member and compares that to the census this file covers. A new socket
 // output type ships with the member as shared boilerplate, so without this guard
-// its failure envelope would go unpinned exactly as the twelve above did, and
-// nothing would say so.
+// its failure envelope would go unpinned and nothing would say so.
 func TestErrorBearingCensusIsComplete(t *testing.T) {
 	t.Parallel()
 

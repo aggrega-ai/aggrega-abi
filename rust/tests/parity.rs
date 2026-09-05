@@ -336,9 +336,10 @@ cbor_case!(map_order_workload_projection, aggrega_abi::WorkloadProjection, "MapO
 // and FetchExternalInputResponse already carried a failure golden and are not
 // duplicated.
 //
-// The nine output types above already carry a harness binding from their success
-// vectors, so they take cbor_vector alone; the three host-function replies that had
-// no vector at all take cbor_case and gain their first coverage here.
+// Each type carries exactly one harness binding: a type bound by a vector
+// elsewhere takes cbor_vector alone, because a second impl_cbor_case for the same
+// type would not compile, and a type whose only binding is here takes cbor_case,
+// which declares the binding and the test together.
 cbor_vector!(error_envelope_annotation_transform_output, aggrega_abi::AnnotationTransformOutput, "ErrorEnvelopeAnnotationTransformOutput");
 cbor_vector!(error_envelope_assemble_boundary_output, aggrega_abi::AssembleBoundaryOutput, "ErrorEnvelopeAssembleBoundaryOutput");
 cbor_vector!(error_envelope_frp_step_output, aggrega_abi::FRPStepOutput, "ErrorEnvelopeFRPStepOutput");
@@ -351,6 +352,7 @@ cbor_case!(error_envelope_name_bound_output, aggrega_abi::NameBoundOutput, "Erro
 cbor_vector!(error_envelope_parse_output, aggrega_abi::ParseOutput, "ErrorEnvelopeParseOutput");
 cbor_vector!(error_envelope_policy_output, aggrega_abi::PolicyOutput, "ErrorEnvelopePolicyOutput");
 cbor_vector!(error_envelope_render_node_output, aggrega_abi::RenderNodeOutput, "ErrorEnvelopeRenderNodeOutput");
+cbor_case!(error_envelope_rendered_name_output, aggrega_abi::RenderedNameOutput, "ErrorEnvelopeRenderedNameOutput");
 cbor_case!(error_envelope_source_file_response, aggrega_abi::SourceFileResponse, "ErrorEnvelopeSourceFileResponse");
 cbor_case!(error_envelope_source_pack_response, aggrega_abi::SourcePackResponse, "ErrorEnvelopeSourcePackResponse");
 cbor_case!(error_envelope_validate_node_output, aggrega_abi::ValidateNodeOutput, "ErrorEnvelopeValidateNodeOutput");
