@@ -354,31 +354,34 @@ test("float-boundary vectors", () => {
   }
 });
 
-// The vector corpus is ONE golden read by three harnesses, and the value of that
-// arrangement is entirely in the word "one". Three codecs generated from a single
-// schema are only proven to produce a single wire if all three are held to the same
-// bytes; a vector exercised in one language and not another proves that language's
-// codec self-consistent and says nothing about parity.
+// The vector corpus is ONE golden read by every harness that enumerates it, and the
+// value of that arrangement is entirely in the word "one". Codecs generated from a
+// single schema are only proven to produce a single wire if all of them are held to
+// the same bytes; a vector exercised in one language and not another proves that
+// language's codec self-consistent and says nothing about parity.
 //
-// Nothing structural keeps them aligned. Each harness enumerates its vectors in its
+// Nothing structural keeps the harnesses aligned. Each enumerates its vectors in its
 // own idiom — the array above, call sites in Go, macro invocations in Rust — so
-// agreement across the three is a hand-maintained property, and a vector pair
-// committed to the shared tree is wired by whoever remembers to wire it in all three
-// places. The failure mode is silent in the worst way: the new vector passes wherever
-// it was wired, every existing vector keeps passing, and the language that never
-// received it reports nothing at all. Coverage does not go red when it is missing,
-// because missing coverage has no assertion to fail.
+// agreement across them is a hand-maintained property, and a vector pair committed
+// to the shared tree is wired by whoever remembers to wire it everywhere. The
+// failure mode is silent in the worst way: the new vector passes wherever it was
+// wired, every existing vector keeps passing, and the harness that never received it
+// reports nothing at all. Coverage does not go red when it is missing, because
+// missing coverage has no assertion to fail.
 //
 // The census below closes that on this side by deriving coverage FROM THE CORPUS
 // rather than from a list: the directory is the authority, so a pair is covered the
-// moment it lands or this test names it. Each of the other two harnesses carries the
-// same guard against the same directory. Here the comparison is exact in both
+// moment it lands or this test names it. Other harnesses carry the same guard against
+// the same directory, and NOT ALL OF THEM LIVE IN THIS REPOSITORY — the compiler's
+// independent byte-parity oracle carries one too. So a guard added or removed
+// elsewhere is invisible from here, which is why this says what the property is
+// rather than how many harnesses hold it. Here the comparison is exact in both
 // directions, because the vector list is data this test can read directly.
 
 // standaloneFixtures are the corpus files that are deliberately NOT vector pairs,
-// each consumed by its own dedicated test in all three harnesses. They are named so
-// that a fixture arriving in the corpus and wired nowhere cannot pass as one of
-// these.
+// each consumed by its own dedicated test in every harness that reads this tree.
+// They are named so that a fixture arriving in the corpus and wired nowhere cannot
+// pass as one of these.
 const standaloneFixtures = ["float_vectors.json"];
 
 // corpusVectors returns the vector names committed to the shared tree, having first

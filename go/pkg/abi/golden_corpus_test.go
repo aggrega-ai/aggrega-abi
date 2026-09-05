@@ -12,28 +12,32 @@ import (
 	"testing"
 )
 
-// The vector corpus under testdata/ is ONE golden read by three harnesses — this
-// Go package, the Rust crate, and the TypeScript package — and the value of that
-// arrangement is entirely in the word "one". Three codecs generated from a single
-// schema are only proven to produce a single wire if all three are held to the
-// same bytes; a vector exercised in one language and not another proves that
-// language's codec self-consistent and says nothing about parity.
+// The vector corpus under testdata/ is ONE golden read by every harness that
+// enumerates it, and the value of that arrangement is entirely in the word "one".
+// Codecs generated from a single schema are only proven to produce a single wire
+// if all of them are held to the same bytes; a vector exercised in one language
+// and not another proves that language's codec self-consistent and says nothing
+// about parity.
 //
-// Nothing structural keeps them aligned. Each harness enumerates its vectors in
+// Nothing structural keeps the harnesses aligned. Each enumerates its vectors in
 // its own idiom — call sites here, macro invocations in Rust, an array in
-// TypeScript — so agreement across the three is a hand-maintained property, and a
-// vector pair committed to testdata/ is wired by whoever remembers to wire it in
-// all three places. The failure mode is silent in the worst way: the new vector
-// passes wherever it was wired, every existing vector keeps passing, and the
-// language that never received it reports nothing at all. Coverage does not go
-// red when it is missing, because missing coverage has no assertion to fail.
+// TypeScript — so agreement across them is a hand-maintained property, and a
+// vector pair committed to testdata/ is wired by whoever remembers to wire it
+// everywhere. The failure mode is silent in the worst way: the new vector passes
+// wherever it was wired, every existing vector keeps passing, and the harness that
+// never received it reports nothing at all. Coverage does not go red when it is
+// missing, because missing coverage has no assertion to fail.
 //
 // This file closes that gap on the Go side by deriving coverage FROM THE CORPUS
 // rather than from a list. The directory is the authority: whatever pairs are
 // committed there are what the harness owes, so a new pair is covered the moment
-// it lands or this test names it. Each of the other two harnesses carries the
-// same guard against the same directory, which is what makes the three-way
-// property gated rather than coincidental.
+// it lands or this test names it. Other harnesses carry the same guard against the
+// same directory, and NOT ALL OF THEM LIVE IN THIS REPOSITORY — the compiler's
+// independent byte-parity oracle carries one too, holding these vectors against an
+// encoder this schema did not generate. So a guard added or removed elsewhere is
+// invisible from here, which is why this says what the property is rather than how
+// many harnesses hold it: a count here answers to nothing and goes stale the moment
+// one is added.
 //
 // Deriving the exercised set from the parity call sites — reading this package's
 // own test sources — is deliberate, and follows the same reasoning as the
@@ -48,9 +52,9 @@ import (
 var goldenPairSuffixes = []string{".golden.json", ".cbor.hex"}
 
 // standaloneFixtures are the testdata files that are deliberately NOT vector
-// pairs, each consumed by its own dedicated test in all three harnesses. They are
-// named so that a fixture arriving in the corpus and wired nowhere cannot pass as
-// one of these.
+// pairs, each consumed by its own dedicated test in every harness that reads this
+// tree. They are named so that a fixture arriving in the corpus and wired nowhere
+// cannot pass as one of these.
 var standaloneFixtures = []string{"float_vectors.json"}
 
 // parityCallSite matches an invocation of the shared parity helper and captures
