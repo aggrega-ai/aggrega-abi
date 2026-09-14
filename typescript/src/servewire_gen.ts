@@ -26,7 +26,7 @@ export type RequestId = string | number;
 // A value the caller mints so it can match progress notifications to the call that asked for them. It is echoed back on every notification unchanged, so a caller may compare it to the value it sent. It is accepted on every request, and a request that sends one in a session which declared no progress capability is refused.
 export type ProgressToken = string | number;
 
-// The absolute path of the workspace this request acts on. It is the request's subject: the session resolves it before the method runs, and a request that omits it or spells it as anything other than a string is refused.
+// The absolute path of the workspace this request acts on. It is the request's subject: the daemon resolves it before the method runs, and a request that omits it or spells it as anything other than a string is refused.
 export type WorkspaceRootSubject = string;
 
 // The absolute path of a workspace. This method's subject is not a workspace — it answers from what the binary itself carries — so the field is accepted and not read. It is admitted because a client may send it uniformly on every request without having to know which methods consult it.
@@ -87,10 +87,10 @@ export type RequestMethod =
 // Every method a client notification may name. The set is closed, and neither notification is answered.
 export type ClientNotificationMethod = "$/cancelRequest" | "aggrega/shutdown";
 
-// Every method a notification the session sends may name. The set is closed.
-export type SessionNotificationMethod = "$/progress" | "aggrega/publishDiagnostics";
+// Every method a notification the daemon sends may name. The set is closed.
+export type DaemonNotificationMethod = "$/progress" | "aggrega/publishDiagnostics";
 
-// A request the client sends and the session answers. The method names what is being asked; the params object carries that method's own fields plus the two every method admits. A request that omits params entirely is read as one whose fields are all absent.
+// A request the client sends and the daemon answers. The method names what is being asked; the params object carries that method's own fields plus the two every method admits. A request that omits params entirely is read as one whose fields are all absent.
 export interface Request {
   jsonrpc: ProtocolVersion;
   id: RequestId;
@@ -105,19 +105,19 @@ export interface ClientNotification {
   params?: unknown;
 }
 
-// A notification the session sends. It carries no identifier and is never answered.
-export interface SessionNotification {
+// A notification the daemon sends. It carries no identifier and is never answered.
+export interface DaemonNotification {
   jsonrpc: ProtocolVersion;
-  method: SessionNotificationMethod;
+  method: DaemonNotificationMethod;
   params: unknown;
 }
 
-// Asks the session to abandon a request already in flight, naming it by the identifier the request carried. A request already finished, or never sent, is silently nothing to cancel.
+// Asks the daemon to abandon a request already in flight, naming it by the identifier the request carried. A request already finished, or never sent, is silently nothing to cancel.
 export interface CancelRequestParams {
   id: RequestId;
 }
 
-// Asks the session to stop accepting work and finish what it has already taken. The notification carries no fields, and the notification itself is usually sent with no params object at all. A second one abandons the work still in flight instead of waiting for it.
+// Asks the daemon to stop accepting work and finish what it has already taken. The notification carries no fields, and the notification itself is usually sent with no params object at all. A second one abandons the work still in flight instead of waiting for it.
 export interface ShutdownParams {
 }
 
@@ -150,7 +150,7 @@ export interface ProgressEnd {
   kind: string;
 }
 
-// The findings for one file, pushed by the session when a validation produced them for a document other than the one the request named.
+// The findings for one file, pushed by the daemon when a validation produced them for a document other than the one the request named.
 export interface PublishDiagnosticsParams {
   // The file the findings are about.
   file: string;
@@ -181,7 +181,7 @@ export interface ErrorObject {
   data?: ErrorData;
 }
 
-// The condition the answer reports. The negative codes are the protocol's own reserved set; the four-digit codes are conditions this session raises, each naming a state a client can act on. The set is closed.
+// The condition the answer reports. The negative codes are the protocol's own reserved set; the four-digit codes are conditions this daemon raises, each naming a state a client can act on. The set is closed.
 export type ErrorCode = number;
 
 // The artifacts and source position the message refers to, carried structurally so a client need not read them back out of the prose. Every field is optional and a condition populates only what it has in hand; no field stands in for another, so a client learns what it received from the field it read rather than from the code beside it.
@@ -272,7 +272,7 @@ export interface InitializeParams {
   workDoneToken?: ProgressToken;
 }
 
-// What the client can handle. Unstated is taken as unsupported. Unknown members are ignored rather than refused, so a client may state a capability this session does not yet read.
+// What the client can handle. Unstated is taken as unsupported. Unknown members are ignored rather than refused, so a client may state a capability this daemon does not yet read.
 export interface ClientCapabilities {
   // Capabilities that are not tied to one kind of answer.
   general?: ClientCapabilitiesGeneral;
@@ -304,21 +304,21 @@ export interface ValidateParams {
   release?: string;
 }
 
-// Tells the session that a document it holds a reading of has changed, so the next answer about it is computed from the new bytes.
+// Tells the daemon that a document it holds a reading of has changed, so the next answer about it is computed from the new bytes.
 export interface InvalidateParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document that changed.
   file?: string;
-  // How much of what the session holds to drop.
+  // How much of what the daemon holds to drop.
   granularity?: string;
 }
 
-// Answers with the findings the session already holds for a document, without checking it again.
+// Answers with the findings the daemon already holds for a document, without checking it again.
 export interface DiagnosticsParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
-  // The document to report on. The session must already hold a reading of it.
+  // The document to report on. The daemon must already hold a reading of it.
   file?: string;
 }
 
@@ -806,11 +806,11 @@ export interface GetSchemaParams {
   kind?: string;
 }
 
-// What the session will do, settled against what the client said it can handle.
+// What the daemon will do in this session, settled against what the client said it can handle.
 export interface ServerCapabilities {
   // The encoding every position in this session is expressed in.
   positionEncoding: string;
-  // Whether the session will send progress notifications. Present only where the client declared it can receive them.
+  // Whether the daemon will send progress notifications in this session. Present only where the client declared it can receive them.
   workDoneProgress?: boolean;
 }
 
@@ -893,13 +893,13 @@ export interface CacheElement {
   note?: string;
 }
 
-// One cache the session reports on.
+// One cache the daemon reports on.
 export interface CacheClass {
   // Which cache this is.
   name: string;
   // Whether the cache belongs to this workspace or is shared across the machine.
   reach: string;
-  // Whether reclaiming this cache is something the session will do.
+  // Whether reclaiming this cache is something the daemon will do.
   prunable: boolean;
   // What the cache holds.
   elements: CacheElement[] | null;
@@ -1362,13 +1362,13 @@ export interface ValidateResult {
   checked?: string;
 }
 
-// Whether the session was holding anything about the document to drop.
+// Whether the daemon was holding anything about the document to drop.
 export interface InvalidateResult {
   // Whether anything was dropped.
   invalidated: boolean;
 }
 
-// The findings the session already holds for the document.
+// The findings the daemon already holds for the document.
 export interface DiagnosticsResult {
   // The findings. It is null rather than an empty list when there are none.
   diagnostics: Diagnostic[] | null;
@@ -1767,7 +1767,7 @@ export interface ActiveReleaseResult {
   trace?: string;
 }
 
-// What the edit wrote, and where. After a write the session's reading of the document is dropped, so the next answer about it is computed from the bytes the edit produced.
+// What the edit wrote, and where. After a write the daemon's reading of the document is dropped, so the next answer about it is computed from the bytes the edit produced.
 export interface EditDocumentResult {
   // The document that was edited.
   file: string;
@@ -1998,12 +1998,12 @@ export function decodeClientNotificationMethod(data: string): ClientNotification
   return JSON.parse(data) as ClientNotificationMethod;
 }
 
-export function encodeSessionNotificationMethod(v: SessionNotificationMethod): string {
+export function encodeDaemonNotificationMethod(v: DaemonNotificationMethod): string {
   return jstr(v);
 }
 
-export function decodeSessionNotificationMethod(data: string): SessionNotificationMethod {
-  return JSON.parse(data) as SessionNotificationMethod;
+export function decodeDaemonNotificationMethod(data: string): DaemonNotificationMethod {
+  return JSON.parse(data) as DaemonNotificationMethod;
 }
 
 export function encodeRequest(v: Request): string {
@@ -2031,16 +2031,16 @@ export function decodeClientNotification(data: string): ClientNotification {
   return JSON.parse(data) as ClientNotification;
 }
 
-export function encodeSessionNotification(v: SessionNotification): string {
+export function encodeDaemonNotification(v: DaemonNotification): string {
   const parts: string[] = [];
   parts.push(`${jstr("jsonrpc")}:${encodeProtocolVersion(v.jsonrpc)}`);
-  parts.push(`${jstr("method")}:${encodeSessionNotificationMethod(v.method)}`);
+  parts.push(`${jstr("method")}:${encodeDaemonNotificationMethod(v.method)}`);
   parts.push(`${jstr("params")}:${encodeOpaque(v.params)}`);
   return `{${parts.join(",")}}`;
 }
 
-export function decodeSessionNotification(data: string): SessionNotification {
-  return JSON.parse(data) as SessionNotification;
+export function decodeDaemonNotification(data: string): DaemonNotification {
+  return JSON.parse(data) as DaemonNotification;
 }
 
 export function encodeCancelRequestParams(v: CancelRequestParams): string {
