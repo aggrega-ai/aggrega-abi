@@ -67,8 +67,8 @@ type IRFeatureEntry struct {
 	Sensitive bool `json:"sensitive,omitempty" yaml:"sensitive,omitempty" cbor:"sensitive,omitempty"`
 	// SensitiveInject The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
 	SensitiveInject json.RawMessage `json:"sensitive_inject,omitempty" yaml:"sensitive_inject,omitempty" cbor:"sensitive_inject,omitempty"`
-	// SensitiveAuthoredLeaves The leaves this attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual authored leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf an author left readable. Absence therefore states that no authored leaf matched a declaration, never that nothing on this attachment carries sensitive material — a guest that reads an absent leaf as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent on an attachment learns that the attachment authors no declared-sensitive leaf and nothing about whether anything reads the key. Leaves arrive in the order the attachment authored them, the values pillar's before the infra pillar's — the same author order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Empty when the attachment authors no leaf its Feature declares sensitive.
-	SensitiveAuthoredLeaves []string `json:"sensitive_authored_leaves,omitempty" yaml:"sensitive_authored_leaves,omitempty" cbor:"sensitive_authored_leaves,omitempty"`
+	// SensitivePayloadLeaves The leaves this attachment's values and infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one a deployment wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf left readable. An absent key states that this attachment names no leaf its Feature declares sensitive. It does not assert that the payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent learns what absence states above and nothing about whether anything reads the key. Leaves arrive in the order the payload holds them, the values pillar's before the infra pillar's — the same order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
+	SensitivePayloadLeaves []string `json:"sensitive_payload_leaves,omitempty" yaml:"sensitive_payload_leaves,omitempty" cbor:"sensitive_payload_leaves,omitempty"`
 }
 
 // IRBoundaryFeature A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -77,8 +77,8 @@ type IRBoundaryFeature struct {
 	Type string `json:"type" yaml:"type" cbor:"type"`
 	// Infra Physical sizing for the boundary attachment; the infra a boundary-scope FeatureRecipe evaluates its templates and source against.
 	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
-	// SensitiveAuthoredLeaves The leaves this boundary attachment authors a value at that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies. Only infra.<path> coordinates appear here, because a boundary-level attachment carries no values payload to author into. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. Absence states that no authored leaf matched a declaration, or that the attached Feature resolves to no schema this reader could read — never that nothing in this attachment's infra carries sensitive material. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the boundary authored them, which is the same author order the infra payload itself carries and what keeps the graph byte-identical across runs of identical input. Absent when the attachment authors no leaf its Feature declares sensitive.
-	SensitiveAuthoredLeaves []string `json:"sensitive_authored_leaves,omitempty" yaml:"sensitive_authored_leaves,omitempty" cbor:"sensitive_authored_leaves,omitempty"`
+	// SensitivePayloadLeaves The leaves this boundary attachment's infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies. Only infra.<path> coordinates appear here, because a boundary-level attachment carries no values payload. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one a boundary wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. An absent key states that this attachment names no leaf its Feature declares sensitive, which includes the case where the attached Feature resolves to no schema this reader could read. It does not assert that the infra payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the payload holds them, which is the same order the infra payload itself carries and what keeps the graph byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
+	SensitivePayloadLeaves []string `json:"sensitive_payload_leaves,omitempty" yaml:"sensitive_payload_leaves,omitempty" cbor:"sensitive_payload_leaves,omitempty"`
 }
 
 // CatalogMetadata The Enterprise Metadata Suite explicitly extracted from the Catalog entity, exposing lifecycle and ownership data to Wasm linters.
@@ -122,8 +122,8 @@ type IRNode struct {
 	SourceFile string `json:"source_file,omitempty" yaml:"source_file,omitempty" cbor:"source_file,omitempty"`
 	// Uses The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
 	Uses json.RawMessage `json:"uses,omitempty" yaml:"uses,omitempty" cbor:"uses,omitempty"`
-	// SensitiveAuthoredLeaves The leaves this node authors a value at that its Component declares sensitive, each as the pillar-prefixed dotted path the authored datum occupies: values.<path> or infra.<path>. It names the node's OWN data — what values_mapping and infra_mapping carry for this node — and is a different subject from the marking on an attachment entry, which names data the attachment authored against its Feature's declaration. Neither is recoverable from the other: a node's Component and an attachment's Feature declare different schemas, and a node that attaches nothing still authors values. A leaf appears where a path the Component's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object an author declared sensitive is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. Absence states that no authored leaf matched a declaration, or that the node's Component resolves to no schema this reader could read — never that nothing in this node's payload carries sensitive material. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the node authored them, the values pillar's before the infra pillar's, which is the same author order those payloads themselves carry and what keeps the graph byte-identical across runs of identical input. Absent when the node authors no leaf its Component declares sensitive.
-	SensitiveAuthoredLeaves []string `json:"sensitive_authored_leaves,omitempty" yaml:"sensitive_authored_leaves,omitempty" cbor:"sensitive_authored_leaves,omitempty"`
+	// SensitivePayloadLeaves The leaves this node's values and infra payload carries that its Component declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. It names the node's OWN data — what values_mapping and infra_mapping carry for this node — and is a different subject from the marking on an attachment entry, which names data an attachment carries against its Feature's declaration. Neither is recoverable from the other: a node's Component and an attachment's Feature declare different schemas, and a node that attaches nothing still carries values. The payload read here is the one those two mappings carry, so a leaf standing at a value the Component's schema declares as a default is named alongside one a deployment wrote — a filled default is a datum the graph carries, and a marking read off the written blocks alone would leave it unnamed. A leaf appears where a path the Component's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. An absent key states that this node names no leaf its Component declares sensitive, which includes the case where the node's Component resolves to no schema this reader could read. It does not assert that the node's payload is insensitive, and it does not separate a node that has no such leaf to name from a producer that does not report this axis at all. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the payload holds them, the values pillar's before the infra pillar's, which is the same order those payloads themselves carry and what keeps the graph byte-identical across runs of identical input. Absent when the node carries no leaf its Component declares sensitive.
+	SensitivePayloadLeaves []string `json:"sensitive_payload_leaves,omitempty" yaml:"sensitive_payload_leaves,omitempty" cbor:"sensitive_payload_leaves,omitempty"`
 }
 
 type IREdge struct {
@@ -607,18 +607,18 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"sensitive_inject\":")
 		buf.Write(t.SensitiveInject)
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
+	if len(t.SensitivePayloadLeaves) != 0 {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
-		buf.WriteString("\"sensitive_authored_leaves\":")
+		buf.WriteString("\"sensitive_payload_leaves\":")
 		buf.WriteByte('[')
-		for i := range t.SensitiveAuthoredLeaves {
+		for i := range t.SensitivePayloadLeaves {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			ev := t.SensitiveAuthoredLeaves[i]
+			ev := t.SensitivePayloadLeaves[i]
 			writeJSONString(&buf, ev)
 		}
 		buf.WriteByte(']')
@@ -795,8 +795,8 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 			} else {
 				t.SensitiveInject = raw
 			}
-		case "sensitive_authored_leaves":
-			t.SensitiveAuthoredLeaves = nil
+		case "sensitive_payload_leaves":
+			t.SensitivePayloadLeaves = nil
 			if err := expectDelim(dec, '['); err != nil {
 				return err
 			}
@@ -807,7 +807,7 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 				} else {
 					elem = s
 				}
-				t.SensitiveAuthoredLeaves = append(t.SensitiveAuthoredLeaves, elem)
+				t.SensitivePayloadLeaves = append(t.SensitivePayloadLeaves, elem)
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
@@ -831,7 +831,7 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *IRFeatureEntry) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_authored_leaves"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -857,18 +857,18 @@ func (t IRBoundaryFeature) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"infra\":")
 		buf.Write(t.Infra)
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
+	if len(t.SensitivePayloadLeaves) != 0 {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
-		buf.WriteString("\"sensitive_authored_leaves\":")
+		buf.WriteString("\"sensitive_payload_leaves\":")
 		buf.WriteByte('[')
-		for i := range t.SensitiveAuthoredLeaves {
+		for i := range t.SensitivePayloadLeaves {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			ev := t.SensitiveAuthoredLeaves[i]
+			ev := t.SensitivePayloadLeaves[i]
 			writeJSONString(&buf, ev)
 		}
 		buf.WriteByte(']')
@@ -903,8 +903,8 @@ func (t *IRBoundaryFeature) UnmarshalJSON(data []byte) error {
 			} else {
 				t.Infra = raw
 			}
-		case "sensitive_authored_leaves":
-			t.SensitiveAuthoredLeaves = nil
+		case "sensitive_payload_leaves":
+			t.SensitivePayloadLeaves = nil
 			if err := expectDelim(dec, '['); err != nil {
 				return err
 			}
@@ -915,7 +915,7 @@ func (t *IRBoundaryFeature) UnmarshalJSON(data []byte) error {
 				} else {
 					elem = s
 				}
-				t.SensitiveAuthoredLeaves = append(t.SensitiveAuthoredLeaves, elem)
+				t.SensitivePayloadLeaves = append(t.SensitivePayloadLeaves, elem)
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
@@ -939,7 +939,7 @@ func (t *IRBoundaryFeature) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *IRBoundaryFeature) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "type", "infra", "sensitive_authored_leaves"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "type", "infra", "sensitive_payload_leaves"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -1316,18 +1316,18 @@ func (t IRNode) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"uses\":")
 		buf.Write(t.Uses)
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
+	if len(t.SensitivePayloadLeaves) != 0 {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
-		buf.WriteString("\"sensitive_authored_leaves\":")
+		buf.WriteString("\"sensitive_payload_leaves\":")
 		buf.WriteByte('[')
-		for i := range t.SensitiveAuthoredLeaves {
+		for i := range t.SensitivePayloadLeaves {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			ev := t.SensitiveAuthoredLeaves[i]
+			ev := t.SensitivePayloadLeaves[i]
 			writeJSONString(&buf, ev)
 		}
 		buf.WriteByte(']')
@@ -1510,8 +1510,8 @@ func (t *IRNode) UnmarshalJSON(data []byte) error {
 			} else {
 				t.Uses = raw
 			}
-		case "sensitive_authored_leaves":
-			t.SensitiveAuthoredLeaves = nil
+		case "sensitive_payload_leaves":
+			t.SensitivePayloadLeaves = nil
 			if err := expectDelim(dec, '['); err != nil {
 				return err
 			}
@@ -1522,7 +1522,7 @@ func (t *IRNode) UnmarshalJSON(data []byte) error {
 				} else {
 					elem = s
 				}
-				t.SensitiveAuthoredLeaves = append(t.SensitiveAuthoredLeaves, elem)
+				t.SensitivePayloadLeaves = append(t.SensitivePayloadLeaves, elem)
 			}
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
@@ -1546,7 +1546,7 @@ func (t *IRNode) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *IRNode) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "description", "labels", "component", "resolved_version", "sync_wave", "boundary_path", "subsystem_path", "synthesized_subsystem", "synthesized_boundary", "catalog_metadata", "catalog_annotations", "release_annotations", "aggregate_annotations", "self_inject", "source_file", "uses", "sensitive_authored_leaves"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "description", "labels", "component", "resolved_version", "sync_wave", "boundary_path", "subsystem_path", "synthesized_subsystem", "synthesized_boundary", "catalog_metadata", "catalog_annotations", "release_annotations", "aggregate_annotations", "self_inject", "source_file", "uses", "sensitive_payload_leaves"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -2706,7 +2706,7 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.CatalogAnnotations) != 0 {
 		n++
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
+	if len(t.SensitivePayloadLeaves) != 0 {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
@@ -2819,11 +2819,11 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 			}
 		}
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
-		dst = appendCBORTextString(dst, "sensitive_authored_leaves")
-		dst = appendCBORHead(dst, 4, uint64(len(t.SensitiveAuthoredLeaves)))
-		for i := range t.SensitiveAuthoredLeaves {
-			ev := t.SensitiveAuthoredLeaves[i]
+	if len(t.SensitivePayloadLeaves) != 0 {
+		dst = appendCBORTextString(dst, "sensitive_payload_leaves")
+		dst = appendCBORHead(dst, 4, uint64(len(t.SensitivePayloadLeaves)))
+		for i := range t.SensitivePayloadLeaves {
+			ev := t.SensitivePayloadLeaves[i]
 			dst = appendCBORTextString(dst, ev)
 		}
 	}
@@ -2998,7 +2998,7 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.SensitiveInject = json.RawMessage(v)
 			}
-		case "sensitive_authored_leaves":
+		case "sensitive_payload_leaves":
 			{
 				sn, err := dec.readArrayHeader()
 				if err != nil {
@@ -3014,7 +3014,7 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 					}
 					s = append(s, ev)
 				}
-				t.SensitiveAuthoredLeaves = s
+				t.SensitivePayloadLeaves = s
 			}
 		default:
 			if err := dec.skip(); err != nil {
@@ -3032,7 +3032,7 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *IRFeatureEntry) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_authored_leaves"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)
@@ -3052,7 +3052,7 @@ func (t IRBoundaryFeature) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Infra) != 0 {
 		n++
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
+	if len(t.SensitivePayloadLeaves) != 0 {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
@@ -3062,11 +3062,11 @@ func (t IRBoundaryFeature) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "infra")
 		dst = appendCBORByteString(dst, t.Infra)
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
-		dst = appendCBORTextString(dst, "sensitive_authored_leaves")
-		dst = appendCBORHead(dst, 4, uint64(len(t.SensitiveAuthoredLeaves)))
-		for i := range t.SensitiveAuthoredLeaves {
-			ev := t.SensitiveAuthoredLeaves[i]
+	if len(t.SensitivePayloadLeaves) != 0 {
+		dst = appendCBORTextString(dst, "sensitive_payload_leaves")
+		dst = appendCBORHead(dst, 4, uint64(len(t.SensitivePayloadLeaves)))
+		for i := range t.SensitivePayloadLeaves {
+			ev := t.SensitivePayloadLeaves[i]
 			dst = appendCBORTextString(dst, ev)
 		}
 	}
@@ -3103,7 +3103,7 @@ func (t *IRBoundaryFeature) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.Infra = json.RawMessage(v)
 			}
-		case "sensitive_authored_leaves":
+		case "sensitive_payload_leaves":
 			{
 				sn, err := dec.readArrayHeader()
 				if err != nil {
@@ -3119,7 +3119,7 @@ func (t *IRBoundaryFeature) decodeCBOR(dec *cborDec) error {
 					}
 					s = append(s, ev)
 				}
-				t.SensitiveAuthoredLeaves = s
+				t.SensitivePayloadLeaves = s
 			}
 		default:
 			if err := dec.skip(); err != nil {
@@ -3137,7 +3137,7 @@ func (t *IRBoundaryFeature) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *IRBoundaryFeature) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "type", "infra", "sensitive_authored_leaves"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "type", "infra", "sensitive_payload_leaves"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)
@@ -3346,7 +3346,7 @@ func (t IRNode) appendCBOR(dst []byte) ([]byte, error) {
 	if t.SynthesizedSubsystem != false {
 		n++
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
+	if len(t.SensitivePayloadLeaves) != 0 {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
@@ -3461,11 +3461,11 @@ func (t IRNode) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "synthesized_subsystem")
 		dst = appendCBORBool(dst, t.SynthesizedSubsystem)
 	}
-	if len(t.SensitiveAuthoredLeaves) != 0 {
-		dst = appendCBORTextString(dst, "sensitive_authored_leaves")
-		dst = appendCBORHead(dst, 4, uint64(len(t.SensitiveAuthoredLeaves)))
-		for i := range t.SensitiveAuthoredLeaves {
-			ev := t.SensitiveAuthoredLeaves[i]
+	if len(t.SensitivePayloadLeaves) != 0 {
+		dst = appendCBORTextString(dst, "sensitive_payload_leaves")
+		dst = appendCBORHead(dst, 4, uint64(len(t.SensitivePayloadLeaves)))
+		for i := range t.SensitivePayloadLeaves {
+			ev := t.SensitivePayloadLeaves[i]
 			dst = appendCBORTextString(dst, ev)
 		}
 	}
@@ -3652,7 +3652,7 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.Uses = json.RawMessage(v)
 			}
-		case "sensitive_authored_leaves":
+		case "sensitive_payload_leaves":
 			{
 				sn, err := dec.readArrayHeader()
 				if err != nil {
@@ -3668,7 +3668,7 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 					}
 					s = append(s, ev)
 				}
-				t.SensitiveAuthoredLeaves = s
+				t.SensitivePayloadLeaves = s
 			}
 		default:
 			if err := dec.skip(); err != nil {
@@ -3686,7 +3686,7 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *IRNode) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "description", "labels", "component", "resolved_version", "sync_wave", "boundary_path", "subsystem_path", "synthesized_subsystem", "synthesized_boundary", "catalog_metadata", "catalog_annotations", "release_annotations", "aggregate_annotations", "self_inject", "source_file", "uses", "sensitive_authored_leaves"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "description", "labels", "component", "resolved_version", "sync_wave", "boundary_path", "subsystem_path", "synthesized_subsystem", "synthesized_boundary", "catalog_metadata", "catalog_annotations", "release_annotations", "aggregate_annotations", "self_inject", "source_file", "uses", "sensitive_payload_leaves"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

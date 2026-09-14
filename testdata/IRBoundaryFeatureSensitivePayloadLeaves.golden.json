@@ -1,0 +1,1 @@
+{"type":"feature.mark/boundary-guard","infra":{"note":"boundary-wide","apiKey":"ak-plaintext","store":{"token":"store-token-plaintext"}},"sensitive_payload_leaves":["infra.apiKey","infra.store.token"]}

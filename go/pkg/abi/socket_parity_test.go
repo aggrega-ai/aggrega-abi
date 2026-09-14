@@ -289,27 +289,27 @@ func TestSocketParity_IRNodeProjectionSensitiveRenderedKeys(t *testing.T) {
 	roundTripBothGolden[abi.IRNodeProjection](t, "IRNodeProjectionSensitiveRenderedKeys")
 }
 
-// TestSocketParity_IRFeatureEntrySensitiveAuthoredLeaves pins an attachment entry
-// whose per-authored-leaf sensitivity marking is POPULATED, for the same reason
-// the projection vector above exists: the field is omitted from the payload when
-// it is empty, so every other vector carrying an attachment entry has the same
+// TestSocketParity_IRFeatureEntrySensitivePayloadLeaves pins an attachment entry
+// whose per-leaf sensitivity marking is POPULATED, for the same reason the
+// projection vector above exists: the field is omitted from the payload when it
+// is empty, so every other vector carrying an attachment entry has the same
 // bytes whether the codec handles the field or drops it, and a regression there
 // moves nothing and fails nowhere.
 //
 // It is a captured payload rather than an authored fixture — the entry the host
 // built for an attachment whose Feature declares one of its values leaves
-// sensitive and whose deployment authors a literal at that leaf. The entry also
+// sensitive and whose deployment carries a literal at that leaf. The entry also
 // carries the two other sensitivity units populated, so the vector shows the three
 // coexisting at their three different units rather than one standing in for
 // another.
-func TestSocketParity_IRFeatureEntrySensitiveAuthoredLeaves(t *testing.T) {
+func TestSocketParity_IRFeatureEntrySensitivePayloadLeaves(t *testing.T) {
 	t.Parallel()
-	roundTripBothGolden[abi.IRFeatureEntry](t, "IRFeatureEntrySensitiveAuthoredLeaves")
+	roundTripBothGolden[abi.IRFeatureEntry](t, "IRFeatureEntrySensitivePayloadLeaves")
 }
 
-// TestSocketParity_IRNodeSensitiveAuthoredLeaves pins a node whose OWN
-// per-authored-leaf marking is populated — the leaves a component's values and
-// infra carry that the component's own schema declares sensitive, which is a
+// TestSocketParity_IRNodeSensitivePayloadLeaves pins a node whose OWN per-leaf
+// marking is populated — the leaves a component's values and infra payload
+// carries that the component's own schema declares sensitive, which is a
 // different subject from the attachment marking above and rides a different
 // part of the graph.
 //
@@ -317,21 +317,21 @@ func TestSocketParity_IRFeatureEntrySensitiveAuthoredLeaves(t *testing.T) {
 // when it names nothing, so every other vector carrying a node has the same
 // bytes whether a codec handles the field or drops it, and a regression there
 // moves nothing and fails nowhere. The captured node also carries a coordinate
-// from each pillar, in author order with the values pillar first, so a codec
-// that sorted the sequence would be visible here rather than only in a build.
-func TestSocketParity_IRNodeSensitiveAuthoredLeaves(t *testing.T) {
+// from each pillar, values pillar first, so a codec that sorted the sequence
+// would be visible here rather than only in a build.
+func TestSocketParity_IRNodeSensitivePayloadLeaves(t *testing.T) {
 	t.Parallel()
-	roundTripBothGolden[abi.IRNode](t, "IRNodeSensitiveAuthoredLeaves")
+	roundTripBothGolden[abi.IRNode](t, "IRNodeSensitivePayloadLeaves")
 }
 
-// TestSocketParity_IRBoundaryFeatureSensitiveAuthoredLeaves pins the third
+// TestSocketParity_IRBoundaryFeatureSensitivePayloadLeaves pins the third
 // unit: a boundary-level attachment whose infra carries leaves the attached
-// Feature declares sensitive. A boundary attachment authors no values pillar,
-// so every coordinate here is an infra one — which is the shape the payload
+// Feature declares sensitive. A boundary attachment has no values pillar, so
+// every coordinate here is an infra one — which is the shape the payload
 // itself forces rather than a narrowing this vector chose.
-func TestSocketParity_IRBoundaryFeatureSensitiveAuthoredLeaves(t *testing.T) {
+func TestSocketParity_IRBoundaryFeatureSensitivePayloadLeaves(t *testing.T) {
 	t.Parallel()
-	roundTripBothGolden[abi.IRBoundaryFeature](t, "IRBoundaryFeatureSensitiveAuthoredLeaves")
+	roundTripBothGolden[abi.IRBoundaryFeature](t, "IRBoundaryFeatureSensitivePayloadLeaves")
 }
 
 func TestSocketParity_AssembleBoundaryInput(t *testing.T) {
