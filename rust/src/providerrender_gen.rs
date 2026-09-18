@@ -518,9 +518,9 @@ pub struct LinkEndpoint {
     pub boundary: String,
     /// The provider that rendered the endpoint (the bare provider name). Both endpoints of a wired link name the same provider; the host does not route a link whose endpoints name different providers.
     pub provider: String,
-    /// The deployment identity the endpoint's rendered output belongs to — the scope its assembled artifacts are named within. The host assembles it from the build's deployment identity and passes it verbatim; it infers no meaning from the value. A provider reads it to scope a cross-reference name to the deployment. An absent value is the empty string, which a provider treats as an unscoped name.
+    /// The Release the endpoint's rendered output belongs to — the scope its assembled artifacts are named within. The host assembles it from the Release the build resolved and passes it verbatim; it infers no meaning from the value. A provider reads it to scope a cross-reference name to the Release. An absent value is the empty string, which a provider treats as an unscoped name.
     #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub deployment: String,
+    pub release: String,
 }
 
 /// The generalized, domain-blind per-edge payload the host assembles for a uses edge whose consuming and consumed ends assemble into different dispatch groups. It carries both endpoints, both endpoints' placement annotations as opaque scalar maps the host does not interpret, the consumed endpoint's provides output, and the socket and inject mapping the edge wires. A provider reads it to produce the provider-native cross-reference wiring the two ends need; the host assembles it and passes the annotation map as opaque scalars, inferring no meaning from any value.
@@ -2932,18 +2932,18 @@ impl LinkEndpoint {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 3;
-        if !self.deployment.is_empty() { n += 1; }
+        if !self.release.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "node");
         crate::cbor_gen::write_text(out, &self.node);
+        if !self.release.is_empty() {
+            crate::cbor_gen::write_text(out, "release");
+            crate::cbor_gen::write_text(out, &self.release);
+        }
         crate::cbor_gen::write_text(out, "boundary");
         crate::cbor_gen::write_text(out, &self.boundary);
         crate::cbor_gen::write_text(out, "provider");
         crate::cbor_gen::write_text(out, &self.provider);
-        if !self.deployment.is_empty() {
-            crate::cbor_gen::write_text(out, "deployment");
-            crate::cbor_gen::write_text(out, &self.deployment);
-        }
         Ok(())
     }
 
@@ -2958,7 +2958,7 @@ impl LinkEndpoint {
         let mut f_node: Option<String> = None;
         let mut f_boundary: Option<String> = None;
         let mut f_provider: Option<String> = None;
-        let mut f_deployment: String = String::new();
+        let mut f_release: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -2966,7 +2966,7 @@ impl LinkEndpoint {
                 "node" => f_node = Some(dec.read_text()?),
                 "boundary" => f_boundary = Some(dec.read_text()?),
                 "provider" => f_provider = Some(dec.read_text()?),
-                "deployment" => f_deployment = dec.read_text()?,
+                "release" => f_release = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
@@ -2974,7 +2974,7 @@ impl LinkEndpoint {
             node: f_node.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field node".to_string()))?,
             boundary: f_boundary.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field boundary".to_string()))?,
             provider: f_provider.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field provider".to_string()))?,
-            deployment: f_deployment,
+            release: f_release,
         })
     }
 }

@@ -411,8 +411,8 @@ export interface LinkEndpoint {
   boundary: string;
   // The provider that rendered the endpoint (the bare provider name). Both endpoints of a wired link name the same provider; the host does not route a link whose endpoints name different providers.
   provider: string;
-  // The deployment identity the endpoint's rendered output belongs to — the scope its assembled artifacts are named within. The host assembles it from the build's deployment identity and passes it verbatim; it infers no meaning from the value. A provider reads it to scope a cross-reference name to the deployment. An absent value is the empty string, which a provider treats as an unscoped name.
-  deployment?: string;
+  // The Release the endpoint's rendered output belongs to — the scope its assembled artifacts are named within. The host assembles it from the Release the build resolved and passes it verbatim; it infers no meaning from the value. A provider reads it to scope a cross-reference name to the Release. An absent value is the empty string, which a provider treats as an unscoped name.
+  release?: string;
 }
 
 // The generalized, domain-blind per-edge payload the host assembles for a uses edge whose consuming and consumed ends assemble into different dispatch groups. It carries both endpoints, both endpoints' placement annotations as opaque scalar maps the host does not interpret, the consumed endpoint's provides output, and the socket and inject mapping the edge wires. A provider reads it to produce the provider-native cross-reference wiring the two ends need; the host assembles it and passes the annotation map as opaque scalars, inferring no meaning from any value.
@@ -919,7 +919,7 @@ export function encodeLinkEndpoint(v: LinkEndpoint): string {
   parts.push(`${jstr("node")}:${jstr(v.node)}`);
   parts.push(`${jstr("boundary")}:${jstr(v.boundary)}`);
   parts.push(`${jstr("provider")}:${jstr(v.provider)}`);
-  if (v.deployment !== undefined && v.deployment !== "") parts.push(`${jstr("deployment")}:${jstr(v.deployment)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2806,18 +2806,18 @@ export function encodeCBORLinkEndpoint(v: LinkEndpoint): Uint8Array {
 
 export function appendCBORLinkEndpoint(out: number[], v: LinkEndpoint): void {
   let n = 3;
-  if (v.deployment !== undefined && v.deployment !== "") n++;
+  if (v.release !== undefined && v.release !== "") n++;
   writeHead(out, 5, n);
   writeText(out, "node");
   writeText(out, v.node);
+  if (v.release !== undefined && v.release !== "") {
+    writeText(out, "release");
+    writeText(out, v.release);
+  }
   writeText(out, "boundary");
   writeText(out, v.boundary);
   writeText(out, "provider");
   writeText(out, v.provider);
-  if (v.deployment !== undefined && v.deployment !== "") {
-    writeText(out, "deployment");
-    writeText(out, v.deployment);
-  }
 }
 
 export function decodeCBORLinkEndpoint(data: Uint8Array): LinkEndpoint {
@@ -2834,7 +2834,7 @@ export function decodeCBORLinkEndpointFrom(dec: CborDec): LinkEndpoint {
       case "node": o["node"] = dec.readText(); break;
       case "boundary": o["boundary"] = dec.readText(); break;
       case "provider": o["provider"] = dec.readText(); break;
-      case "deployment": o["deployment"] = dec.readText(); break;
+      case "release": o["release"] = dec.readText(); break;
       default: dec.skip();
     }
   }
