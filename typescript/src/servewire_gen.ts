@@ -336,6 +336,8 @@ export interface BuildParams {
   workDoneToken?: ProgressToken;
   // The Release to build, as a path relative to the workspace root. An absolute path is refused.
   release?: string;
+  // Where in the workspace this build writes, as a path relative to the workspace root: the output directory resolves under it, the same way it resolves under the directory a build is run in. Absent, or empty, writes where a build run at the workspace root writes. An absolute path, or one that climbs out of the workspace, is refused.
+  outputDir?: string;
   // Whether to resolve the Release's dependencies first. Asking for it reaches the configured registries and writes the lockfile; unasked, the build reaches no registry.
   autoPull?: boolean;
 }
@@ -2351,6 +2353,7 @@ export function encodeBuildParams(v: BuildParams): string {
   if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
+  if (v.outputDir !== undefined && v.outputDir !== "") parts.push(`${jstr("outputDir")}:${jstr(v.outputDir)}`);
   if (v.autoPull !== undefined && v.autoPull !== false) parts.push(`${jstr("autoPull")}:${String(v.autoPull)}`);
   return `{${parts.join(",")}}`;
 }
