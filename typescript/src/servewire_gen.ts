@@ -65,6 +65,7 @@ export type RequestMethod =
   | "aggrega/irGraph"
   | "aggrega/lint"
   | "aggrega/logout"
+  | "aggrega/pin"
   | "aggrega/pluginAdd"
   | "aggrega/pluginGenCatalog"
   | "aggrega/pluginRemove"
@@ -380,6 +381,18 @@ export interface ResolveDependenciesParams {
   targets?: string[];
   // Whether to check each acquired artifact against the digest the lockfile pins.
   verify?: boolean;
+  // Whether to run the pin step `aggrega/pin` runs over the Recipes and FeatureRecipes the Release builds from the workspace's catalog directories, writing the `entity.lock` beside each, rather than refusing the request over one whose lock does not record a pin an input needs. Absent follows the workspace's `pin_sources_at_pull`; either value overrides that setting for this request.
+  pinSources?: boolean;
+}
+
+// Records, in the `entity.lock` beside a Recipe or FeatureRecipe, the content pin for every input the entity reads from outside its own document. No Release is named: an input whose identity the entity writes out in full names one artifact for every Release that uses the entity, so nothing a Release supplies is needed to pin it. It reaches the hosts the entity's sources name and it writes beside the entity; the entity document itself is never written.
+export interface PinParams {
+  workspaceRoot?: WorkspaceRootSubject;
+  workDoneToken?: ProgressToken;
+  // The entity document to pin, as a path relative to the workspace root.
+  entity?: string;
+  // Whether to answer with the lock the step would write rather than writing it. The inputs are still resolved, so the content cache still fills.
+  dryRun?: boolean;
 }
 
 // Reclaims cached content until what remains fits under a size the request names.
@@ -490,6 +503,8 @@ export interface PublishEntityParams {
   timestampUrl?: string;
   // The identity token to sign with, supplied by the caller rather than obtained at a terminal.
   identityToken?: string;
+  // Whether to run the pin step `aggrega/pin` runs on the entity before it is bundled, so the `entity.lock` the step writes beside it is part of what is published. The step runs ahead of every refusal that judges the entity, and under `dryRun` it reports the lock it would write and writes nothing. Absent follows the workspace's `pin_sources_at_push`; either value overrides that setting for this request.
+  pinSources?: boolean;
 }
 
 // Publishes an arbitrary file to a registry under a name and tag the request gives it.
@@ -1468,6 +1483,38 @@ export interface ResolveDependenciesResult {
   notices?: string[];
 }
 
+// What the pin step did to the lock beside an entity, or would do on a dry run. It is the answer to `aggrega/pin`, and a publication that ran the step carries it as its `pin`.
+export interface PinResult {
+  // The entity document the step read, as a path relative to the workspace root.
+  entity: string;
+  // The entity's kind, as its document declares it.
+  kind: string;
+  // The entity's name, as its document declares it.
+  name: string;
+  // Whether an entity of this kind reads anything a lock records a pin for, which a Recipe and a FeatureRecipe do. Where it is false nothing beside the entity was touched, `changed` is false, and `lock`, `removed`, `pins` and `content` are absent.
+  pinnable: boolean;
+  // The lock the step wrote, or would write, as a path relative to the workspace root.
+  lock?: string;
+  // Whether the lock moved, or would move on a dry run. False where the lock already recorded every pin the entity needs and was left byte-identical.
+  changed: boolean;
+  // Whether the move is a removal: the entity reads nothing a lock records a pin for, so no lock is left beside it.
+  removed?: boolean;
+  // Whether this reports what the step would do rather than what it did.
+  dryRun?: boolean;
+  // How many pins of each class the lock holds after the step, or would hold after a dry run. Every class the lock can hold is listed, a class with no pin included.
+  pins?: PinClassCount[];
+  // The lock a dry run would write. Absent where the lock would be left as it is or removed, and on every answer that is not a dry run.
+  content?: string;
+}
+
+// How many pins of one class a lock holds.
+export interface PinClassCount {
+  // The class of pin, in the words a refusal naming a missing one uses — `remote source` or `imported file`, for instance.
+  class: string;
+  // How many pins of that class the lock holds.
+  pins: number;
+}
+
 // What the caches serving this workspace hold.
 export interface CacheStatusResult {
   // Each cache and what it holds.
@@ -1598,7 +1645,7 @@ export interface LogoutResult {
   scope: CredentialStoreScope;
 }
 
-// What publishing an entity landed, and where.
+// What publishing an entity landed, and where. A publication that ran the pin step first also carries what that step did, as `pin`, which is absent where the step did not run.
 export interface PublishEntityResult {
   // The reference the entity was published under.
   reference: string;
@@ -1625,6 +1672,7 @@ export interface PublishEntityResult {
   // Whether this reports what publishing would have landed rather than what it did.
   dryRun: boolean;
   reach: PublicationReach;
+  pin?: PinResult;
 }
 
 // What publishing a file landed, and where.
@@ -2407,11 +2455,25 @@ export function encodeResolveDependenciesParams(v: ResolveDependenciesParams): s
   if (v.upgrade !== undefined && v.upgrade !== false) parts.push(`${jstr("upgrade")}:${String(v.upgrade)}`);
   if (v.targets !== undefined && v.targets.length > 0) parts.push(`${jstr("targets")}:${`[${v.targets!.map((e0) => jstr(e0)).join(",")}]`}`);
   if (v.verify !== undefined && v.verify !== false) parts.push(`${jstr("verify")}:${String(v.verify)}`);
+  if (v.pinSources !== undefined && v.pinSources !== null) parts.push(`${jstr("pinSources")}:${String(v.pinSources)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeResolveDependenciesParams(data: string): ResolveDependenciesParams {
   return JSON.parse(data) as ResolveDependenciesParams;
+}
+
+export function encodePinParams(v: PinParams): string {
+  const parts: string[] = [];
+  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
+  if (v.entity !== undefined && v.entity !== "") parts.push(`${jstr("entity")}:${jstr(v.entity)}`);
+  if (v.dryRun !== undefined && v.dryRun !== false) parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodePinParams(data: string): PinParams {
+  return JSON.parse(data) as PinParams;
 }
 
 export function encodeCacheEvictParams(v: CacheEvictParams): string {
@@ -2518,6 +2580,7 @@ export function encodePublishEntityParams(v: PublishEntityParams): string {
   if (v.rekorUrl !== undefined && v.rekorUrl !== "") parts.push(`${jstr("rekorUrl")}:${jstr(v.rekorUrl)}`);
   if (v.timestampUrl !== undefined && v.timestampUrl !== "") parts.push(`${jstr("timestampUrl")}:${jstr(v.timestampUrl)}`);
   if (v.identityToken !== undefined && v.identityToken !== "") parts.push(`${jstr("identityToken")}:${jstr(v.identityToken)}`);
+  if (v.pinSources !== undefined && v.pinSources !== null) parts.push(`${jstr("pinSources")}:${String(v.pinSources)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -3617,6 +3680,36 @@ export function decodeResolveDependenciesResult(data: string): ResolveDependenci
   return JSON.parse(data) as ResolveDependenciesResult;
 }
 
+export function encodePinResult(v: PinResult): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("entity")}:${jstr(v.entity)}`);
+  parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("pinnable")}:${String(v.pinnable)}`);
+  if (v.lock !== undefined && v.lock !== "") parts.push(`${jstr("lock")}:${jstr(v.lock)}`);
+  parts.push(`${jstr("changed")}:${String(v.changed)}`);
+  if (v.removed !== undefined && v.removed !== false) parts.push(`${jstr("removed")}:${String(v.removed)}`);
+  if (v.dryRun !== undefined && v.dryRun !== false) parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
+  if (v.pins !== undefined && v.pins.length > 0) parts.push(`${jstr("pins")}:${`[${v.pins!.map((e0) => encodePinClassCount(e0)).join(",")}]`}`);
+  if (v.content !== undefined && v.content !== "") parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodePinResult(data: string): PinResult {
+  return JSON.parse(data) as PinResult;
+}
+
+export function encodePinClassCount(v: PinClassCount): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("class")}:${jstr(v.class)}`);
+  parts.push(`${jstr("pins")}:${String(v.pins)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodePinClassCount(data: string): PinClassCount {
+  return JSON.parse(data) as PinClassCount;
+}
+
 export function encodeCacheStatusResult(v: CacheStatusResult): string {
   const parts: string[] = [];
   parts.push(`${jstr("classes")}:${v.classes === null ? "null" : `[${v.classes!.map((e0) => encodeCacheClass(e0)).join(",")}]`}`);
@@ -3771,6 +3864,7 @@ export function encodePublishEntityResult(v: PublishEntityResult): string {
   parts.push(`${jstr("alreadyPublished")}:${String(v.alreadyPublished)}`);
   parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
   parts.push(`${jstr("reach")}:${encodePublicationReach(v.reach)}`);
+  if (v.pin !== undefined) parts.push(`${jstr("pin")}:${encodePinResult(v.pin)}`);
   return `{${parts.join(",")}}`;
 }
 
