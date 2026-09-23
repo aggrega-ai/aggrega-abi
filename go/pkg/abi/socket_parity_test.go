@@ -368,8 +368,8 @@ func TestSocketParity_LinkResolveOutput(t *testing.T) {
 // plugin returns from describe(). One exercises a CLI descriptor with commands
 // and per-command flags (the surface unique to CLI plugins), the other a
 // provider descriptor carrying a full render-behavior contract (input kinds,
-// boundary assembly, artifact delimiters, source filter, the assembly-name
-// annotation, and the cross-boundary-linking claim) plus an opaque settings
+// boundary assembly, artifact delimiters, the assembly-name annotation, and the
+// cross-boundary-linking claim) plus an opaque settings
 // schema — so the byte-compare pins both the command/flag surface and the whole
 // contract block across the three codecs.
 

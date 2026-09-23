@@ -32,7 +32,7 @@ export interface PluginDescriptor {
   capabilities?: string[];
   // The exports the plugin offers, in declared order. The host validates that the per-type minimum export is present and binds the per-export host surface before invoking each export.
   exports: PluginExport[];
-  // The provider's render-behavior self-report — the input kinds it renders, how it assembles a dispatch group's per-node output, the artifact-template delimiter pair it applies, and any source-file restriction. It describes the provider as a whole rather than any one export. Absent for a plugin that declares no render-behavior contract.
+  // The provider's render-behavior self-report — the input kinds it renders, how it assembles a dispatch group's per-node output, and the artifact-template delimiter pair it applies. It describes the provider as a whole rather than any one export. Absent for a plugin that declares no render-behavior contract.
   contract?: ProviderContract;
   // The plugin's own one-line human-readable description of what it does, distinct from a per-export description and from the entity's metadata description. It is informational; the host neither validates nor acts on it.
   description?: string;
@@ -106,7 +106,7 @@ export interface PluginDescriptorMeta {
   commit?: string;
 }
 
-// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, the Go-template delimiter pair it applies to imported artifact files, and any restriction on which source files it consumes. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
+// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, and the Go-template delimiter pair it applies to imported artifact files. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
 export interface ProviderContract {
   // Which of the three Recipe input kinds the plugin renders: a sourced file set, a synthesized workload, and a standalone artifacts-only node.
   input_kinds: InputKinds;
@@ -114,8 +114,6 @@ export interface ProviderContract {
   boundary_assembly: string;
   // The Go-template delimiter pair the plugin applies to imported artifact files. Absent means the default open/close pair; a plugin whose target syntax collides with that pair reports an alternate pair here.
   artifact_delimiters?: ArtifactDelimiters;
-  // The source-file paths the plugin consumes when a node supplies a file set. Absent means the plugin consumes every file in the set.
-  source_filter?: string[];
   // A boundary annotation whose resolved value names the artifact the plugin assembles from a dispatch group. Absent means the plugin names its assembly from the dispatch path alone.
   assembly_name_annotation?: AssemblyNameAnnotation;
   // Whether one loaded plugin instance may serve every render, assemble, and validate crossing of the build rather than a fresh instance per crossing. A plugin declares it true only when it holds no state across crossings. Absent (false) is the safe default: the host loads a fresh instance per crossing.
@@ -234,7 +232,6 @@ export function encodeProviderContract(v: ProviderContract): string {
   parts.push(`${jstr("input_kinds")}:${encodeInputKinds(v.input_kinds)}`);
   parts.push(`${jstr("boundary_assembly")}:${jstr(v.boundary_assembly)}`);
   if (v.artifact_delimiters !== undefined && v.artifact_delimiters !== null) parts.push(`${jstr("artifact_delimiters")}:${encodeArtifactDelimiters(v.artifact_delimiters)}`);
-  if (v.source_filter !== undefined && v.source_filter.length > 0) parts.push(`${jstr("source_filter")}:${`[${v.source_filter!.map((e0) => jstr(e0)).join(",")}]`}`);
   if (v.assembly_name_annotation !== undefined && v.assembly_name_annotation !== null) parts.push(`${jstr("assembly_name_annotation")}:${encodeAssemblyNameAnnotation(v.assembly_name_annotation)}`);
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) parts.push(`${jstr("reusable_instance")}:${String(v.reusable_instance)}`);
   if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) parts.push(`${jstr("cross_boundary_linking")}:${String(v.cross_boundary_linking)}`);
@@ -633,7 +630,6 @@ export function encodeCBORProviderContract(v: ProviderContract): Uint8Array {
 export function appendCBORProviderContract(out: number[], v: ProviderContract): void {
   let n = 2;
   if (v.nest_segment !== undefined && v.nest_segment !== "") n++;
-  if (v.source_filter !== undefined && v.source_filter.length > 0) n++;
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) n++;
   if (v.artifact_delimiters !== undefined && v.artifact_delimiters !== null) n++;
   if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) n++;
@@ -644,16 +640,6 @@ export function appendCBORProviderContract(out: number[], v: ProviderContract): 
   if (v.nest_segment !== undefined && v.nest_segment !== "") {
     writeText(out, "nest_segment");
     writeText(out, v.nest_segment);
-  }
-  if (v.source_filter !== undefined && v.source_filter.length > 0) {
-    writeText(out, "source_filter");
-    {
-      const a0 = v.source_filter;
-      writeHead(out, 4, a0.length);
-      for (const ee0 of a0) {
-        writeText(out, ee0);
-      }
-    }
   }
   writeText(out, "boundary_assembly");
   writeText(out, v.boundary_assembly);
@@ -689,7 +675,6 @@ export function decodeCBORProviderContractFrom(dec: CborDec): ProviderContract {
       case "input_kinds": o["input_kinds"] = decodeCBORInputKindsFrom(dec); break;
       case "boundary_assembly": o["boundary_assembly"] = dec.readText(); break;
       case "artifact_delimiters": o["artifact_delimiters"] = decodeCBORArtifactDelimitersFrom(dec); break;
-      case "source_filter": o["source_filter"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       case "assembly_name_annotation": o["assembly_name_annotation"] = decodeCBORAssemblyNameAnnotationFrom(dec); break;
       case "reusable_instance": o["reusable_instance"] = dec.readBool(); break;
       case "cross_boundary_linking": o["cross_boundary_linking"] = dec.readBool(); break;

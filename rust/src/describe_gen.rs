@@ -25,7 +25,7 @@ pub struct PluginDescriptor {
     pub capabilities: Vec<String>,
     /// The exports the plugin offers, in declared order. The host validates that the per-type minimum export is present and binds the per-export host surface before invoking each export.
     pub exports: Vec<PluginExport>,
-    /// The provider's render-behavior self-report — the input kinds it renders, how it assembles a dispatch group's per-node output, the artifact-template delimiter pair it applies, and any source-file restriction. It describes the provider as a whole rather than any one export. Absent for a plugin that declares no render-behavior contract.
+    /// The provider's render-behavior self-report — the input kinds it renders, how it assembles a dispatch group's per-node output, and the artifact-template delimiter pair it applies. It describes the provider as a whole rather than any one export. Absent for a plugin that declares no render-behavior contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contract: Option<Box<ProviderContract>>,
     /// The plugin's own one-line human-readable description of what it does, distinct from a per-export description and from the entity's metadata description. It is informational; the host neither validates nor acts on it.
@@ -128,7 +128,7 @@ pub struct PluginDescriptorMeta {
     pub commit: String,
 }
 
-/// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, the Go-template delimiter pair it applies to imported artifact files, and any restriction on which source files it consumes. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
+/// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, and the Go-template delimiter pair it applies to imported artifact files. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProviderContract {
     /// Which of the three Recipe input kinds the plugin renders: a sourced file set, a synthesized workload, and a standalone artifacts-only node.
@@ -138,9 +138,6 @@ pub struct ProviderContract {
     /// The Go-template delimiter pair the plugin applies to imported artifact files. Absent means the default open/close pair; a plugin whose target syntax collides with that pair reports an alternate pair here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artifact_delimiters: Option<Box<ArtifactDelimiters>>,
-    /// The source-file paths the plugin consumes when a node supplies a file set. Absent means the plugin consumes every file in the set.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub source_filter: Vec<String>,
     /// A boundary annotation whose resolved value names the artifact the plugin assembles from a dispatch group. Absent means the plugin names its assembly from the dispatch path alone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assembly_name_annotation: Option<Box<AssemblyNameAnnotation>>,
@@ -641,7 +638,6 @@ impl ProviderContract {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
         if !self.nest_segment.is_empty() { n += 1; }
-        if !self.source_filter.is_empty() { n += 1; }
         if self.reusable_instance { n += 1; }
         if self.artifact_delimiters.is_some() { n += 1; }
         if self.cross_boundary_linking { n += 1; }
@@ -652,16 +648,6 @@ impl ProviderContract {
         if !self.nest_segment.is_empty() {
             crate::cbor_gen::write_text(out, "nest_segment");
             crate::cbor_gen::write_text(out, &self.nest_segment);
-        }
-        if !self.source_filter.is_empty() {
-            crate::cbor_gen::write_text(out, "source_filter");
-            {
-                let c = &self.source_filter;
-                crate::cbor_gen::write_head(out, 4, c.len() as u64);
-                for ev in c {
-                    crate::cbor_gen::write_text(out, ev);
-                }
-            }
         }
         crate::cbor_gen::write_text(out, "boundary_assembly");
         crate::cbor_gen::write_text(out, &self.boundary_assembly);
@@ -695,7 +681,6 @@ impl ProviderContract {
         let mut f_input_kinds: Option<InputKinds> = None;
         let mut f_boundary_assembly: Option<String> = None;
         let mut f_artifact_delimiters: Option<Box<ArtifactDelimiters>> = None;
-        let mut f_source_filter: Vec<String> = Vec::new();
         let mut f_assembly_name_annotation: Option<Box<AssemblyNameAnnotation>> = None;
         let mut f_reusable_instance: bool = false;
         let mut f_cross_boundary_linking: bool = false;
@@ -707,7 +692,6 @@ impl ProviderContract {
                 "input_kinds" => f_input_kinds = Some(InputKinds::decode_cbor_from(dec)?),
                 "boundary_assembly" => f_boundary_assembly = Some(dec.read_text()?),
                 "artifact_delimiters" => f_artifact_delimiters = Some(Box::new(ArtifactDelimiters::decode_cbor_from(dec)?)),
-                "source_filter" => f_source_filter = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
                 "assembly_name_annotation" => f_assembly_name_annotation = Some(Box::new(AssemblyNameAnnotation::decode_cbor_from(dec)?)),
                 "reusable_instance" => f_reusable_instance = dec.read_bool()?,
                 "cross_boundary_linking" => f_cross_boundary_linking = dec.read_bool()?,
@@ -719,7 +703,6 @@ impl ProviderContract {
             input_kinds: f_input_kinds.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field input_kinds".to_string()))?,
             boundary_assembly: f_boundary_assembly.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field boundary_assembly".to_string()))?,
             artifact_delimiters: f_artifact_delimiters,
-            source_filter: f_source_filter,
             assembly_name_annotation: f_assembly_name_annotation,
             reusable_instance: f_reusable_instance,
             cross_boundary_linking: f_cross_boundary_linking,
