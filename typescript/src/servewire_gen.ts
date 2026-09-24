@@ -357,7 +357,7 @@ export interface BuildPreviewParams {
 export interface EntityDefinitionParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
-  // The entity to resolve, by name.
+  // The entity to resolve, by name — or a registry reference, `oci://<host>/<repository>:<tag>` or `@<digest>` in place of `:<tag>`, to read the entity published at that coordinate.
   name?: string;
 }
 
@@ -1416,7 +1416,7 @@ export interface BuildPreviewResult {
   notices?: BuildNotice[];
 }
 
-// What an entity name resolves to, and the document defining it.
+// What an entity name resolves to, and the document defining it. An answer read from a registry reference carries `published`, and an answer the catalog resolved by name never does.
 export interface EntityDefinitionResult {
   // The entity kind.
   kind: string;
@@ -1434,6 +1434,19 @@ export interface EntityDefinitionResult {
   authoredLength: number;
   // The definition's text.
   definition: string;
+  published?: PublishedArtifact;
+}
+
+// What a registry reference read: the coordinate, how it held the entity, and the manifest it was read through. Every field is present wherever this is.
+export interface PublishedArtifact {
+  // The registry reference that was read.
+  reference: string;
+  // Whether the coordinate's bytes were an archive the entity document was unpacked from. False where the coordinate held the entity document itself.
+  archive: boolean;
+  // The artifact type the manifest declares.
+  mediaType: string;
+  // The digest of the manifest the entity was read through — the value to name after `@` to read the same bytes again exactly.
+  manifestDigest: string;
 }
 
 // Everything a Release depends on, as resolution reached it. It reports the closure rather than the graph derived from it: a different document about the same Release.
@@ -3635,11 +3648,25 @@ export function encodeEntityDefinitionResult(v: EntityDefinitionResult): string 
   parts.push(`${jstr("file")}:${jstr(v.file)}`);
   parts.push(`${jstr("authoredLength")}:${String(v.authoredLength)}`);
   parts.push(`${jstr("definition")}:${jstr(v.definition)}`);
+  if (v.published !== undefined) parts.push(`${jstr("published")}:${encodePublishedArtifact(v.published)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeEntityDefinitionResult(data: string): EntityDefinitionResult {
   return JSON.parse(data) as EntityDefinitionResult;
+}
+
+export function encodePublishedArtifact(v: PublishedArtifact): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("reference")}:${jstr(v.reference)}`);
+  parts.push(`${jstr("archive")}:${String(v.archive)}`);
+  parts.push(`${jstr("mediaType")}:${jstr(v.mediaType)}`);
+  parts.push(`${jstr("manifestDigest")}:${jstr(v.manifestDigest)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodePublishedArtifact(data: string): PublishedArtifact {
+  return JSON.parse(data) as PublishedArtifact;
 }
 
 export function encodeReleaseClosureResult(v: ReleaseClosureResult): string {
