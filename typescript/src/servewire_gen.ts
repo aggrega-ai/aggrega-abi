@@ -1686,6 +1686,8 @@ export interface PublishEntityResult {
   dryRun: boolean;
   reach: PublicationReach;
   pin?: PinResult;
+  // The entity's local source as authored, present when it is written as a template. Such a source names its directory only once a Release fills the template in, so the publication carries every file in the entity's directory rather than only the files the entity names. Absent where it carries only those files.
+  wholeDirectorySource?: string;
 }
 
 // What publishing a file landed, and where.
@@ -3892,6 +3894,7 @@ export function encodePublishEntityResult(v: PublishEntityResult): string {
   parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
   parts.push(`${jstr("reach")}:${encodePublicationReach(v.reach)}`);
   if (v.pin !== undefined) parts.push(`${jstr("pin")}:${encodePinResult(v.pin)}`);
+  if (v.wholeDirectorySource !== undefined && v.wholeDirectorySource !== "") parts.push(`${jstr("wholeDirectorySource")}:${jstr(v.wholeDirectorySource)}`);
   return `{${parts.join(",")}}`;
 }
 
