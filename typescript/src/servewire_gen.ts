@@ -379,7 +379,7 @@ export interface ResolveDependenciesParams {
   upgrade?: boolean;
   // The references to re-resolve, leaving the rest pinned as they are. Empty resolves everything.
   targets?: string[];
-  // Whether to check each acquired artifact against the digest the lockfile pins.
+  // Whether to compare the recorded lockfile against the resolution this request would perform without it, honouring the pins that request would honour, instead of writing it. A verify writes no lockfile, plugin trust record or `entity.lock`; the content cache is read and filled as that resolution would read and fill it. Drift, and a missing lockfile, fail the request.
   verify?: boolean;
   // Whether to run the pin step `aggrega/pin` runs over the Recipes and FeatureRecipes the Release builds from the workspace's catalog directories, writing the `entity.lock` beside each, rather than refusing the request over one whose lock does not record a pin an input needs. Absent follows the workspace's `pin_sources_at_pull`; either value overrides that setting for this request.
   pinSources?: boolean;
@@ -859,15 +859,15 @@ export interface ToolchainReport {
 
 // What a dependency resolution pinned and acquired.
 export interface DependencyResolutionReport {
-  // The lockfile that was written.
+  // The lockfile the resolution wrote, or the one a verify compared against.
   lockfile: string;
-  // Whether each acquired artifact was checked against the digest the lockfile pins.
+  // Whether the request was a verify, which compared the recorded lockfile and wrote no lockfile, plugin trust record or `entity.lock`.
   verified?: boolean;
-  // The entities that were pinned.
+  // The entities the resolution pinned, or a verify compared.
   entities: ClosureEntity[] | null;
-  // The libraries that were pinned.
+  // The libraries the resolution pinned, or a verify compared.
   libraries: ClosureEntity[] | null;
-  // The plugins that were pinned.
+  // The plugins the resolution pinned, or a verify compared.
   plugins: ClosureEntity[] | null;
   // How many source artifacts were acquired.
   sourceArtifacts: number;
@@ -1473,15 +1473,15 @@ export interface ReleaseClosureResult {
 
 // What a dependency resolution pinned and acquired, plus anything it wants the caller to know. The report's own fields are carried directly on this answer rather than nested under a member of it.
 export interface ResolveDependenciesResult {
-  // The lockfile that was written.
+  // The lockfile the resolution wrote, or the one a verify compared against.
   lockfile: string;
-  // Whether each acquired artifact was checked against the digest the lockfile pins.
+  // Whether the request was a verify, which compared the recorded lockfile and wrote no lockfile, plugin trust record or `entity.lock`.
   verified?: boolean;
-  // The entities that were pinned.
+  // The entities the resolution pinned, or a verify compared.
   entities: ClosureEntity[] | null;
-  // The libraries that were pinned.
+  // The libraries the resolution pinned, or a verify compared.
   libraries: ClosureEntity[] | null;
-  // The plugins that were pinned.
+  // The plugins the resolution pinned, or a verify compared.
   plugins: ClosureEntity[] | null;
   // How many source artifacts were acquired.
   sourceArtifacts: number;
