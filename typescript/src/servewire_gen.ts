@@ -379,7 +379,7 @@ export interface ResolveDependenciesParams {
   upgrade?: boolean;
   // The references to re-resolve, leaving the rest pinned as they are. Empty resolves everything.
   targets?: string[];
-  // Whether to compare the recorded lockfile against the resolution this request would perform without it, honouring the pins that request would honour, instead of writing it. A verify writes no lockfile, plugin trust record or `entity.lock`; the content cache is read and filled as that resolution would read and fill it. Drift, and a missing lockfile, fail the request.
+  // Whether to compare the recorded lockfile against the resolution this request would perform without it, honouring the pins that request would honour, instead of writing it. A verify writes no lockfile, plugin trust record or `entity.lock`; the content cache is read and filled as that resolution would read and fill it. Drift, and a missing lockfile, fail the request. It cannot be combined with `upgrade`, `targets` or `pinSources`, whichever value `pinSources` carries: a request sending one of them beside it is refused as invalid params before anything is resolved.
   verify?: boolean;
   // Whether to run the pin step `aggrega/pin` runs over the Recipes and FeatureRecipes the Release builds from the workspace's catalog directories, writing the `entity.lock` beside each, rather than refusing the request over one whose lock does not record a pin an input needs. Absent follows the workspace's `pin_sources_at_pull`; either value overrides that setting for this request.
   pinSources?: boolean;
