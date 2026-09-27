@@ -106,7 +106,7 @@ export interface PluginDescriptorMeta {
   commit?: string;
 }
 
-// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, and the Go-template delimiter pair it applies to imported artifact files. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
+// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, the Go-template delimiter pair it applies to imported artifact files, and the files its ecosystem never ships beside a source. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
 export interface ProviderContract {
   // Which of the three Recipe input kinds the plugin renders: a sourced file set, a synthesized workload, and a standalone artifacts-only node.
   input_kinds: InputKinds;
@@ -122,6 +122,16 @@ export interface ProviderContract {
   cross_boundary_linking?: boolean;
   // The directory the plugin's target places each contributor's own sub-directory under, for a plugin that nests a dispatch group's per-node output. The host joins this segment, the contributor's authoring-level name, and each file's own path. Read only when boundary_assembly is nest. Absent, the host places each contributor's sub-directory directly at the dispatch position, with no enclosing directory. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the host composes the contributor's name into it and a path fragment would place a contributor's files somewhere other than beneath the dispatch position.
   nest_segment?: string;
+  // The files this plugin's ecosystem never ships beside a source it renders, declared as ignore rules. The host reads the declaration when an author pins a Recipe or FeatureRecipe whose capability this plugin serves for them: it composes these rules with the author's own ignore file, records the composed rules in the entity lock beside the entity, and from then on every publication of the entity, every comparison of its local source and every render of it applies the recorded rules rather than asking a plugin again. So a Recipe published for a capability carries the files its publisher's rules kept, and a plugin renders it when it speaks the same ABI version, its contract matches its entity's claim, and it needs no file outside that set. A plugin that needs a file the set left out must fail its build loudly and name the file; the host's part is to refuse a pack or a read of a file the set does not hold, naming it. Absent declares no ignore rules, and a source the plugin renders then keeps every file the author's own rules keep.
+  source_ignore?: SourceIgnore;
+}
+
+// The ignore rules a plugin's ecosystem applies to a source directory, in gitignore syntax: a pattern holding no slash, or only a trailing one, matches a name at any depth, a pattern holding any other slash is read from the root of the directory it is scoped to, a trailing slash matches only a directory, and a leading ! brings back what an earlier rule excluded. Rules apply in order and a later match overrides an earlier one. A directory a rule excludes is not entered, so nothing under it comes back unless the directory itself is brought back first.
+export interface SourceIgnore {
+  // The ecosystem's own ignore patterns, each scoped to the root of the local source directory being walked, in the order they apply. Absent or empty declares none.
+  patterns?: string[];
+  // The names of the ignore files the ecosystem honours inside a source — .helmignore for a chart, for instance. Wherever the walk of a source finds a file of one of these names, its lines are read as further patterns in the same syntax, each scoped to the directory holding the file, and they apply after the patterns above; a blank line and a line opening with # are skipped. A file of such a name is itself carried unless a rule excludes it. Absent or empty names none.
+  files?: string[];
 }
 
 // Which Recipe input kinds a plugin renders. Each field is an independent claim; a plugin may report any combination.
@@ -236,11 +246,23 @@ export function encodeProviderContract(v: ProviderContract): string {
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) parts.push(`${jstr("reusable_instance")}:${String(v.reusable_instance)}`);
   if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) parts.push(`${jstr("cross_boundary_linking")}:${String(v.cross_boundary_linking)}`);
   if (v.nest_segment !== undefined && v.nest_segment !== "") parts.push(`${jstr("nest_segment")}:${jstr(v.nest_segment)}`);
+  if (v.source_ignore !== undefined && v.source_ignore !== null) parts.push(`${jstr("source_ignore")}:${encodeSourceIgnore(v.source_ignore)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeProviderContract(data: string): ProviderContract {
   return JSON.parse(data) as ProviderContract;
+}
+
+export function encodeSourceIgnore(v: SourceIgnore): string {
+  const parts: string[] = [];
+  if (v.patterns !== undefined && v.patterns.length > 0) parts.push(`${jstr("patterns")}:${`[${v.patterns!.map((e0) => jstr(e0)).join(",")}]`}`);
+  if (v.files !== undefined && v.files.length > 0) parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => jstr(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSourceIgnore(data: string): SourceIgnore {
+  return JSON.parse(data) as SourceIgnore;
 }
 
 export function encodeInputKinds(v: InputKinds): string {
@@ -630,6 +652,7 @@ export function encodeCBORProviderContract(v: ProviderContract): Uint8Array {
 export function appendCBORProviderContract(out: number[], v: ProviderContract): void {
   let n = 2;
   if (v.nest_segment !== undefined && v.nest_segment !== "") n++;
+  if (v.source_ignore !== undefined && v.source_ignore !== null) n++;
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) n++;
   if (v.artifact_delimiters !== undefined && v.artifact_delimiters !== null) n++;
   if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) n++;
@@ -640,6 +663,10 @@ export function appendCBORProviderContract(out: number[], v: ProviderContract): 
   if (v.nest_segment !== undefined && v.nest_segment !== "") {
     writeText(out, "nest_segment");
     writeText(out, v.nest_segment);
+  }
+  if (v.source_ignore !== undefined && v.source_ignore !== null) {
+    writeText(out, "source_ignore");
+    appendCBORSourceIgnore(out, v.source_ignore);
   }
   writeText(out, "boundary_assembly");
   writeText(out, v.boundary_assembly);
@@ -679,10 +706,63 @@ export function decodeCBORProviderContractFrom(dec: CborDec): ProviderContract {
       case "reusable_instance": o["reusable_instance"] = dec.readBool(); break;
       case "cross_boundary_linking": o["cross_boundary_linking"] = dec.readBool(); break;
       case "nest_segment": o["nest_segment"] = dec.readText(); break;
+      case "source_ignore": o["source_ignore"] = decodeCBORSourceIgnoreFrom(dec); break;
       default: dec.skip();
     }
   }
   return o as ProviderContract;
+}
+
+export function encodeCBORSourceIgnore(v: SourceIgnore): Uint8Array {
+  const out: number[] = [];
+  appendCBORSourceIgnore(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORSourceIgnore(out: number[], v: SourceIgnore): void {
+  let n = 0;
+  if (v.files !== undefined && v.files.length > 0) n++;
+  if (v.patterns !== undefined && v.patterns.length > 0) n++;
+  writeHead(out, 5, n);
+  if (v.files !== undefined && v.files.length > 0) {
+    writeText(out, "files");
+    {
+      const a0 = v.files;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+  if (v.patterns !== undefined && v.patterns.length > 0) {
+    writeText(out, "patterns");
+    {
+      const a0 = v.patterns;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORSourceIgnore(data: Uint8Array): SourceIgnore {
+  const dec = new CborDec(data);
+  return decodeCBORSourceIgnoreFrom(dec);
+}
+
+export function decodeCBORSourceIgnoreFrom(dec: CborDec): SourceIgnore {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "patterns": o["patterns"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "files": o["files"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as SourceIgnore;
 }
 
 export function encodeCBORInputKinds(v: InputKinds): Uint8Array {

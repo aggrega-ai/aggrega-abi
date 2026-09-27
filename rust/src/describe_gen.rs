@@ -128,7 +128,7 @@ pub struct PluginDescriptorMeta {
     pub commit: String,
 }
 
-/// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, and the Go-template delimiter pair it applies to imported artifact files. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
+/// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, the Go-template delimiter pair it applies to imported artifact files, and the files its ecosystem never ships beside a source. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProviderContract {
     /// Which of the three Recipe input kinds the plugin renders: a sourced file set, a synthesized workload, and a standalone artifacts-only node.
@@ -150,6 +150,20 @@ pub struct ProviderContract {
     /// The directory the plugin's target places each contributor's own sub-directory under, for a plugin that nests a dispatch group's per-node output. The host joins this segment, the contributor's authoring-level name, and each file's own path. Read only when boundary_assembly is nest. Absent, the host places each contributor's sub-directory directly at the dispatch position, with no enclosing directory. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the host composes the contributor's name into it and a path fragment would place a contributor's files somewhere other than beneath the dispatch position.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub nest_segment: String,
+    /// The files this plugin's ecosystem never ships beside a source it renders, declared as ignore rules. The host reads the declaration when an author pins a Recipe or FeatureRecipe whose capability this plugin serves for them: it composes these rules with the author's own ignore file, records the composed rules in the entity lock beside the entity, and from then on every publication of the entity, every comparison of its local source and every render of it applies the recorded rules rather than asking a plugin again. So a Recipe published for a capability carries the files its publisher's rules kept, and a plugin renders it when it speaks the same ABI version, its contract matches its entity's claim, and it needs no file outside that set. A plugin that needs a file the set left out must fail its build loudly and name the file; the host's part is to refuse a pack or a read of a file the set does not hold, naming it. Absent declares no ignore rules, and a source the plugin renders then keeps every file the author's own rules keep.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_ignore: Option<Box<SourceIgnore>>,
+}
+
+/// The ignore rules a plugin's ecosystem applies to a source directory, in gitignore syntax: a pattern holding no slash, or only a trailing one, matches a name at any depth, a pattern holding any other slash is read from the root of the directory it is scoped to, a trailing slash matches only a directory, and a leading ! brings back what an earlier rule excluded. Rules apply in order and a later match overrides an earlier one. A directory a rule excludes is not entered, so nothing under it comes back unless the directory itself is brought back first.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SourceIgnore {
+    /// The ecosystem's own ignore patterns, each scoped to the root of the local source directory being walked, in the order they apply. Absent or empty declares none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub patterns: Vec<String>,
+    /// The names of the ignore files the ecosystem honours inside a source — .helmignore for a chart, for instance. Wherever the walk of a source finds a file of one of these names, its lines are read as further patterns in the same syntax, each scoped to the directory holding the file, and they apply after the patterns above; a blank line and a line opening with # are skipped. A file of such a name is itself carried unless a rule excludes it. Absent or empty names none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
 }
 
 /// Which Recipe input kinds a plugin renders. Each field is an independent claim; a plugin may report any combination.
@@ -638,6 +652,7 @@ impl ProviderContract {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
         if !self.nest_segment.is_empty() { n += 1; }
+        if self.source_ignore.is_some() { n += 1; }
         if self.reusable_instance { n += 1; }
         if self.artifact_delimiters.is_some() { n += 1; }
         if self.cross_boundary_linking { n += 1; }
@@ -648,6 +663,10 @@ impl ProviderContract {
         if !self.nest_segment.is_empty() {
             crate::cbor_gen::write_text(out, "nest_segment");
             crate::cbor_gen::write_text(out, &self.nest_segment);
+        }
+        if let Some(ref x) = self.source_ignore {
+            crate::cbor_gen::write_text(out, "source_ignore");
+            x.append_cbor(out)?;
         }
         crate::cbor_gen::write_text(out, "boundary_assembly");
         crate::cbor_gen::write_text(out, &self.boundary_assembly);
@@ -685,6 +704,7 @@ impl ProviderContract {
         let mut f_reusable_instance: bool = false;
         let mut f_cross_boundary_linking: bool = false;
         let mut f_nest_segment: String = String::new();
+        let mut f_source_ignore: Option<Box<SourceIgnore>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -696,6 +716,7 @@ impl ProviderContract {
                 "reusable_instance" => f_reusable_instance = dec.read_bool()?,
                 "cross_boundary_linking" => f_cross_boundary_linking = dec.read_bool()?,
                 "nest_segment" => f_nest_segment = dec.read_text()?,
+                "source_ignore" => f_source_ignore = Some(Box::new(SourceIgnore::decode_cbor_from(dec)?)),
                 _ => dec.skip()?,
             }
         }
@@ -707,6 +728,70 @@ impl ProviderContract {
             reusable_instance: f_reusable_instance,
             cross_boundary_linking: f_cross_boundary_linking,
             nest_segment: f_nest_segment,
+            source_ignore: f_source_ignore,
+        })
+    }
+}
+
+impl SourceIgnore {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.files.is_empty() { n += 1; }
+        if !self.patterns.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.files.is_empty() {
+            crate::cbor_gen::write_text(out, "files");
+            {
+                let c = &self.files;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
+        if !self.patterns.is_empty() {
+            crate::cbor_gen::write_text(out, "patterns");
+            {
+                let c = &self.patterns;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_patterns: Vec<String> = Vec::new();
+        let mut f_files: Vec<String> = Vec::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "patterns" => f_patterns = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
+                "files" => f_files = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            patterns: f_patterns,
+            files: f_files,
         })
     }
 }
