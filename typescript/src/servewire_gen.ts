@@ -1173,13 +1173,17 @@ export interface HostUpdate {
   error?: string;
 }
 
-// One version the index holds for a reference: the manifest digest its tag resolved to when the index was built and, where the trust policy the index was built under verified the version's own signature, the signer it verified as. The signer is absent for a version with no signature, for one none of whose signatures verified, and where that policy pins neither a public key nor a trusted identity or switches signature verification off. None of those is a basis for naming a signer, and its absence says nothing more.
+// One version the index holds for a reference: the manifest digest its tag resolved to when the index was built; where the trust policy the index was built under verified the version's own signature, the signer it verified as; and, where anything records it, when the version was published, with the source that says so. The signer is absent for a version with no signature, for one none of whose signatures verified, and where that policy pins neither a public key nor a trusted identity or switches signature verification off. None of those is a basis for naming a signer, and its absence says nothing more. The publication date is absent where the publication stated none and no keyless signature that policy verified records one.
 export interface PublishedVersion {
   // The version, as its tag names it.
   version: string;
   // The digest of the manifest the version's tag resolved to when the index was built, which addresses the version by the bytes it names rather than by its tag.
   manifestDigest: string;
   signer?: VerifiedSignature;
+  // When the version was published, as an RFC 3339 timestamp in UTC to the second. Where it came from is `publishedAtSource`, and the two are present together or not at all.
+  publishedAt?: string;
+  // Where `publishedAt` came from, so a time a transparency log attests is never mistaken for one the publisher states. The set is closed.
+  publishedAtSource?: string;
 }
 
 // A signature that verified against a registry's trust policy: how it verified, the signer it verified as, and the digest of the signature bundle that verified.
@@ -1222,7 +1226,7 @@ export interface RegistrySearchRecord {
   listingDigest?: string;
   // The deprecation markers the index carries for this reference, each with the version it covers and the verified marker itself.
   deprecations?: unknown[];
-  // Every version the index holds for this reference, in the same order as `versions`, each with the manifest digest its tag resolved to when the index was built and, where the trust policy the index was built under verified that version's own signature, its verified signer. A version recorded with no signer carries no signature that policy verified, and nothing more is said about it. Only manifests and signature attachments are read from the registry to record this; no entity's content is fetched.
+  // Every version the index holds for this reference, in the same order as `versions`, each with the manifest digest its tag resolved to when the index was built, where the trust policy the index was built under verified that version's own signature its verified signer, and where anything records it its publication date and that date's source. A version recorded with no signer carries no signature that policy verified, and nothing more is said about it. Only manifests, signature attachments and publication-date attachments are read from the registry to record this; no entity's content is fetched.
   published?: PublishedVersion[];
   // The versions a published marker has deprecated.
   retracted?: string[];
@@ -3377,6 +3381,8 @@ export function encodePublishedVersion(v: PublishedVersion): string {
   parts.push(`${jstr("version")}:${jstr(v.version)}`);
   parts.push(`${jstr("manifestDigest")}:${jstr(v.manifestDigest)}`);
   if (v.signer !== undefined) parts.push(`${jstr("signer")}:${encodeVerifiedSignature(v.signer)}`);
+  if (v.publishedAt !== undefined && v.publishedAt !== "") parts.push(`${jstr("publishedAt")}:${jstr(v.publishedAt)}`);
+  if (v.publishedAtSource !== undefined && v.publishedAtSource !== "") parts.push(`${jstr("publishedAtSource")}:${jstr(v.publishedAtSource)}`);
   return `{${parts.join(",")}}`;
 }
 
