@@ -1173,6 +1173,27 @@ export interface HostUpdate {
   error?: string;
 }
 
+// One version the index holds for a reference: the manifest digest its tag resolved to when the index was built and, where the trust policy the index was built under verified the version's own signature, the signer it verified as. The signer is absent for a version with no signature, for one none of whose signatures verified, and where that policy pins neither a public key nor a trusted identity or switches signature verification off. None of those is a basis for naming a signer, and its absence says nothing more.
+export interface PublishedVersion {
+  // The version, as its tag names it.
+  version: string;
+  // The digest of the manifest the version's tag resolved to when the index was built, which addresses the version by the bytes it names rather than by its tag.
+  manifestDigest: string;
+  signer?: VerifiedSignature;
+}
+
+// A signature that verified against a registry's trust policy: how it verified, the signer it verified as, and the digest of the signature bundle that verified.
+export interface VerifiedSignature {
+  // The digest of the signature bundle that verified, as `sha256:` followed by 64 lowercase hex characters.
+  bundleDigest: string;
+  // The signer the signature verified as: for a keyless signature, the identity the signing certificate was issued for, which is its subject alternative name; for a keyed signature, `keyed:sha256:` followed by the lowercase hex SHA-256 of the pinned public key's PEM text.
+  identity?: string;
+  // The OIDC issuer recorded in the signing certificate, for a keyless signature. It is absent for a keyed signature.
+  issuer?: string;
+  // How the signature verified. The set is closed.
+  mode: string;
+}
+
 // One record a search matched, as the local index holds it, plus which of its versions a published marker has deprecated.
 export interface RegistrySearchRecord {
   // The reference the record resolves from.
@@ -1201,6 +1222,8 @@ export interface RegistrySearchRecord {
   listingDigest?: string;
   // The deprecation markers the index carries for this reference, each with the version it covers and the verified marker itself.
   deprecations?: unknown[];
+  // Every version the index holds for this reference, in the same order as `versions`, each with the manifest digest its tag resolved to when the index was built and, where the trust policy the index was built under verified that version's own signature, its verified signer. A version recorded with no signer carries no signature that policy verified, and nothing more is said about it. Only manifests and signature attachments are read from the registry to record this; no entity's content is fetched.
+  published?: PublishedVersion[];
   // The versions a published marker has deprecated.
   retracted?: string[];
 }
@@ -3349,6 +3372,31 @@ export function decodeHostUpdate(data: string): HostUpdate {
   return JSON.parse(data) as HostUpdate;
 }
 
+export function encodePublishedVersion(v: PublishedVersion): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("version")}:${jstr(v.version)}`);
+  parts.push(`${jstr("manifestDigest")}:${jstr(v.manifestDigest)}`);
+  if (v.signer !== undefined) parts.push(`${jstr("signer")}:${encodeVerifiedSignature(v.signer)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodePublishedVersion(data: string): PublishedVersion {
+  return JSON.parse(data) as PublishedVersion;
+}
+
+export function encodeVerifiedSignature(v: VerifiedSignature): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("bundleDigest")}:${jstr(v.bundleDigest)}`);
+  if (v.identity !== undefined && v.identity !== "") parts.push(`${jstr("identity")}:${jstr(v.identity)}`);
+  if (v.issuer !== undefined && v.issuer !== "") parts.push(`${jstr("issuer")}:${jstr(v.issuer)}`);
+  parts.push(`${jstr("mode")}:${jstr(v.mode)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeVerifiedSignature(data: string): VerifiedSignature {
+  return JSON.parse(data) as VerifiedSignature;
+}
+
 export function encodeRegistrySearchRecord(v: RegistrySearchRecord): string {
   const parts: string[] = [];
   parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
@@ -3364,6 +3412,7 @@ export function encodeRegistrySearchRecord(v: RegistrySearchRecord): string {
   if (v.manifestDigest !== undefined && v.manifestDigest !== "") parts.push(`${jstr("manifestDigest")}:${jstr(v.manifestDigest)}`);
   if (v.listingDigest !== undefined && v.listingDigest !== "") parts.push(`${jstr("listingDigest")}:${jstr(v.listingDigest)}`);
   if (v.deprecations !== undefined && v.deprecations.length > 0) parts.push(`${jstr("deprecations")}:${`[${v.deprecations!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
+  if (v.published !== undefined && v.published.length > 0) parts.push(`${jstr("published")}:${`[${v.published!.map((e0) => encodePublishedVersion(e0)).join(",")}]`}`);
   if (v.retracted !== undefined && v.retracted.length > 0) parts.push(`${jstr("retracted")}:${`[${v.retracted!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
