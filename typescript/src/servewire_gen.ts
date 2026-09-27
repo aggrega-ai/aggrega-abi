@@ -1847,12 +1847,16 @@ export interface AttachmentContainerResult {
 export interface ReleaseCandidatesResult {
   // Each Release document.
   releases: string[] | null;
+  // The lockfile of each Release listed, keyed by the Release exactly as it is listed. Each is the file a pull writes for that Release and a build reads, so a client reads where it lives rather than working it out. Empty when the workspace holds no Release.
+  lockfiles: Record<string, string>;
 }
 
 // Which Release a client should act on by default. A workspace pointing at no Release is an ordinary state rather than a failure, so it is reported here with an account of how the choice was attempted rather than raised as an error.
 export interface ActiveReleaseResult {
   // The Release that was settled on, or empty where none was.
   release: string;
+  // The lockfile of the Release that was settled on: the file a pull writes for it and a build reads. Absent where no Release was settled on.
+  lockfile?: string;
   // Why no Release was settled on.
   reason?: string;
   // Each step of the choice and what it found, so a caller can see which one would have settled it.
@@ -4116,6 +4120,7 @@ export function decodeAttachmentContainerResult(data: string): AttachmentContain
 export function encodeReleaseCandidatesResult(v: ReleaseCandidatesResult): string {
   const parts: string[] = [];
   parts.push(`${jstr("releases")}:${v.releases === null ? "null" : `[${v.releases!.map((e0) => jstr(e0)).join(",")}]`}`);
+  parts.push(`${jstr("lockfiles")}:${`{${Object.keys(v.lockfiles!).sort().map((k0) => `${jstr(k0)}:${jstr(v.lockfiles![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -4126,6 +4131,7 @@ export function decodeReleaseCandidatesResult(data: string): ReleaseCandidatesRe
 export function encodeActiveReleaseResult(v: ActiveReleaseResult): string {
   const parts: string[] = [];
   parts.push(`${jstr("release")}:${jstr(v.release)}`);
+  if (v.lockfile !== undefined && v.lockfile !== "") parts.push(`${jstr("lockfile")}:${jstr(v.lockfile)}`);
   if (v.reason !== undefined && v.reason !== "") parts.push(`${jstr("reason")}:${jstr(v.reason)}`);
   if (v.trace !== undefined && v.trace !== "") parts.push(`${jstr("trace")}:${jstr(v.trace)}`);
   return `{${parts.join(",")}}`;
