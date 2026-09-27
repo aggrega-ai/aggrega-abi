@@ -1396,6 +1396,8 @@ export interface InitializeResult {
   configSource: string;
   // The file that identified the workspace root, where one did.
   workspaceMarker?: string;
+  // The version of the binary answering this session: the same value `aggrega version` reports for that binary. It describes the running process, so once the file the daemon was started from has been replaced, this still names the version that is running while asking the file names the version that replaced it.
+  version: string;
 }
 
 // What checking found, and how much was checked.
@@ -3627,6 +3629,7 @@ export function encodeInitializeResult(v: InitializeResult): string {
   parts.push(`${jstr("workspaceRoot")}:${jstr(v.workspaceRoot)}`);
   parts.push(`${jstr("configSource")}:${jstr(v.configSource)}`);
   if (v.workspaceMarker !== undefined && v.workspaceMarker !== "") parts.push(`${jstr("workspaceMarker")}:${jstr(v.workspaceMarker)}`);
+  parts.push(`${jstr("version")}:${jstr(v.version)}`);
   return `{${parts.join(",")}}`;
 }
 
