@@ -685,7 +685,7 @@ export interface EditDocumentParams {
   dryRun?: boolean;
 }
 
-// Seeds a configuration document. It writes the machine-wide file by default, since a registry and the identities trusted on it are machine-wide tooling. It reaches the named registry to read the trust policy it advertises; a registry advertising nothing is reported as such and the seeding proceeds on the built-in baseline.
+// Seeds a configuration document. It writes the machine-wide file by default, since a registry and the identities trusted on it are machine-wide tooling. It reaches the named registry to read the trust policy it advertises; a registry advertising nothing is reported as such and the seeding proceeds, on the built-in baseline for the official hub and on no policy for any other registry.
 export interface ConfigInitParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
@@ -1119,17 +1119,19 @@ export interface Registry {
   trust: RegistryTrust;
 }
 
-// What reading a registry's advertised trust policy did. The three outcomes are kept apart because they mean different things: the policy was taken, the registry advertised nothing — which is not a failure — or no read was attempted.
+// What reading a registry's advertised trust policy did. The outcomes are kept apart because they mean different things: the advertised policy was taken, the registry advertised nothing — which is not a failure — the built-in baseline was pinned in its place, or no read was attempted.
 export interface TrustFetchOutcome {
   // Whether the advertised policy was taken.
   pinned: boolean;
-  // Whether the registry advertised no policy, in which case the operation proceeds on what the request stated.
+  // Whether the registry was asked and advertised no policy, in which case the operation proceeds on what the request stated. A registry the offline posture kept from being asked is never reported this way.
   notAdvertised?: boolean;
+  // Whether the built-in baseline was pinned because no advertised policy was taken, which only the official hub carries. It stands beside notAdvertised where the hub was asked and advertised nothing, and alone where the offline posture kept the hub from being asked.
+  baseline?: boolean;
   // Whether no read was attempted, because a stated policy overrode it or the request asked for none.
   skipped?: boolean;
   // How many signing identities the advertised policy carried.
   identities?: number;
-  // What the registry's endpoint did, where the policy was not taken.
+  // Why the advertised policy was not taken: what the registry's endpoint did, or the offline refusal that kept it from being asked.
   reason?: string;
 }
 
@@ -3331,6 +3333,7 @@ export function encodeTrustFetchOutcome(v: TrustFetchOutcome): string {
   const parts: string[] = [];
   parts.push(`${jstr("pinned")}:${String(v.pinned)}`);
   if (v.notAdvertised !== undefined && v.notAdvertised !== false) parts.push(`${jstr("notAdvertised")}:${String(v.notAdvertised)}`);
+  if (v.baseline !== undefined && v.baseline !== false) parts.push(`${jstr("baseline")}:${String(v.baseline)}`);
   if (v.skipped !== undefined && v.skipped !== false) parts.push(`${jstr("skipped")}:${String(v.skipped)}`);
   if (v.identities !== undefined && v.identities !== 0) parts.push(`${jstr("identities")}:${String(v.identities)}`);
   if (v.reason !== undefined && v.reason !== "") parts.push(`${jstr("reason")}:${jstr(v.reason)}`);
