@@ -1084,12 +1084,24 @@ export interface MarkupContent {
   value: string;
 }
 
-// One kind an author writes a document of, pairing the token a request names with the kind the document itself declares.
+// One kind an author writes a document of, pairing the token a request names with the kind the document itself declares, and saying which operations accept a document of that kind.
 export interface EntityKindDescriptor {
   // The lowercase-hyphenated token a request names.
   kind: string;
   // The kind the document's own header declares.
   documentKind: string;
+  // Which operations accept a document of this kind named on its own — by its path, or by its name for inspection — with nothing else sent beside it. A member is true when that operation does not refuse a document for being of this kind; a document it accepts may still be refused for what the document says.
+  acceptedBy: EntityKindAcceptance;
+}
+
+// For one kind an author writes, whether each operation accepts a document of that kind named on its own. Every member is present on every entry, so false is a statement rather than an omission.
+export interface EntityKindAcceptance {
+  // Whether the single-entity scope of `aggrega validate` — the command given one document's path — checks a document of this kind. A kind it refuses is checked by the whole-catalog scope or by the Release scope instead.
+  singleEntityValidation: boolean;
+  // Whether `aggrega/publishEntity` naming the document alone publishes a document of this kind. A kind whose publication also binds an executable named beside the document — a Plugin — is false, because a request naming the document alone is refused for it; a Manifest and a Release are false because neither kind is published.
+  publication: boolean;
+  // Whether `aggrega/entityDefinition` resolves a name to an entity of this kind, the name sent as it is written where one entity references another.
+  inspectionByName: boolean;
 }
 
 // The trust policy resolution applies to what a registry serves.
@@ -3294,11 +3306,24 @@ export function encodeEntityKindDescriptor(v: EntityKindDescriptor): string {
   const parts: string[] = [];
   parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
   parts.push(`${jstr("documentKind")}:${jstr(v.documentKind)}`);
+  parts.push(`${jstr("acceptedBy")}:${encodeEntityKindAcceptance(v.acceptedBy)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeEntityKindDescriptor(data: string): EntityKindDescriptor {
   return JSON.parse(data) as EntityKindDescriptor;
+}
+
+export function encodeEntityKindAcceptance(v: EntityKindAcceptance): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("singleEntityValidation")}:${String(v.singleEntityValidation)}`);
+  parts.push(`${jstr("publication")}:${String(v.publication)}`);
+  parts.push(`${jstr("inspectionByName")}:${String(v.inspectionByName)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeEntityKindAcceptance(data: string): EntityKindAcceptance {
+  return JSON.parse(data) as EntityKindAcceptance;
 }
 
 export function encodeRegistryTrust(v: RegistryTrust): string {
