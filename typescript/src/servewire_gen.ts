@@ -839,6 +839,8 @@ export interface ClosureEntity {
   version: string;
   // The entity kind.
   kind?: string;
+  // Where the run that produced this entry took the entity from, in the same word `aggrega pull --detail` prints for it: `fetched-fresh` (fetched from a registry during that run), `cache-reuse` (a copy already in the cache, reused without fetching), `local` (found on the local filesystem, such as a catalog directory), `in-binary` (the copy inside the compiler binary), or `external` (the Release's own Aggregate or Manifest, read from the file or entry the Release names rather than resolved as one of its dependencies; an Aggregate the run fetched from a registry is `fetched-fresh` instead). Present on the entries of a dependency resolution's report, where it describes what that run did on this machine, and absent from a listing of a Release's resolved dependencies, which describes what the Release depends on. The lockfile records no source. Omitted for an entity whose source the run did not record.
+  source?: string;
 }
 
 // One plugin the compiler itself carries, and the version of it that was used.
@@ -3026,6 +3028,7 @@ export function encodeClosureEntity(v: ClosureEntity): string {
   parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   parts.push(`${jstr("version")}:${jstr(v.version)}`);
   if (v.kind !== undefined && v.kind !== "") parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
+  if (v.source !== undefined && v.source !== "") parts.push(`${jstr("source")}:${jstr(v.source)}`);
   return `{${parts.join(",")}}`;
 }
 
