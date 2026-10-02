@@ -359,6 +359,16 @@ export interface EntityDefinitionParams {
   workDoneToken?: ProgressToken;
   // The entity to resolve, by name — or a registry reference, `oci://<host>/<repository>:<tag>` or `@<digest>` in place of `:<tag>`, to read the entity published at that coordinate.
   name?: string;
+  // The Release to resolve the name in the terms of, as a path relative to the workspace root. The name is then resolved through the catalog directories the workspace configuration gives that Release, so a name several variants in one workspace declare, one per Release, resolves to the variant that Release builds with, and a name it does not resolve is refused with an account naming that Release's entry under `workspace.releases`. Absent, the name is resolved over the workspace's own catalog directories. A registry reference takes no Release and is refused with one, as is a value that names no Release file.
+  release?: string;
+}
+
+// Answers with the entities the workspace holds: every entity its documents declare, and the Features its catalog directories declare.
+export interface CatalogIndexParams {
+  workspaceRoot?: WorkspaceRootSubject;
+  workDoneToken?: ProgressToken;
+  // The Release to list the entities in the terms of, as a path relative to the workspace root. The Features are then the ones the catalog directories the workspace configuration gives that Release declare, and a document under a catalog directory only other Releases read is left out, so a workspace keeping variants of one entity side by side, one per Release, is listed with the variant that Release builds with. Absent, the listing is the workspace's own. A value that names no Release file is refused.
+  release?: string;
 }
 
 // Answers with everything a Release depends on, as resolution reached it.
@@ -2492,11 +2502,24 @@ export function encodeEntityDefinitionParams(v: EntityDefinitionParams): string 
   if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.name !== undefined && v.name !== "") parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeEntityDefinitionParams(data: string): EntityDefinitionParams {
   return JSON.parse(data) as EntityDefinitionParams;
+}
+
+export function encodeCatalogIndexParams(v: CatalogIndexParams): string {
+  const parts: string[] = [];
+  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeCatalogIndexParams(data: string): CatalogIndexParams {
+  return JSON.parse(data) as CatalogIndexParams;
 }
 
 export function encodeReleaseClosureParams(v: ReleaseClosureParams): string {
