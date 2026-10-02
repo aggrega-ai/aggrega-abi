@@ -649,7 +649,7 @@ export interface AttachCandidatesParams {
   node?: string;
   // The graph node to judge candidates against, whose labels are the finalised set the build itself evaluates applicability with. An answer computed over this says what the build will do.
   graphNode?: string;
-  // The Release whose graph the node belongs to, as a path relative to the workspace root.
+  // The Release whose graph the node belongs to, as a path relative to the workspace root. The candidates are then drawn in that Release's terms: the Features the catalog directories the workspace configuration gives that Release declare, and the workspace's documents less any under one of the workspace's catalog directories the Release does not read, so a Feature kept for another Release is never offered for a node of this one's graph.
   release?: string;
   // Labels to judge against directly, in place of reading them from an entity or a graph node.
   labels?: Record<string, string>;
