@@ -753,7 +753,7 @@ export interface ScaffoldEntityParams {
   name?: string;
 }
 
-// Checks catalog publishing conventions over one entity, over everything a Release's closure reaches, or over everything under the configured catalog directories. Nothing is written under any mode.
+// Checks catalog publishing conventions over one entity, over everything a Release's closure reaches, or over everything under the configured catalog directories. Nothing is written under any mode. Naming neither an entity nor a Release checks the whole catalog: in a workspace whose configuration gives no Release catalog directories of its own, once over the workspace's directories; in a workspace that names Releases under workspace.releases, once for each Release over the directories that Release reads, never over all of them together.
 export interface LintParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
@@ -1975,13 +1975,13 @@ export interface ScaffoldEntityResult {
   skeleton: string;
 }
 
-// What the convention check found, counted by severity and listed per document.
+// What the convention check found, counted by severity and listed per document. A whole-catalog check that ran once for each Release also carries passes; the counts and files then cover every pass together.
 export interface LintResult {
   // The one entity that was checked, where the request named one.
   entity?: string;
   // The Release whose closure was checked, where the request named one.
   release?: string;
-  // How many documents were checked.
+  // How many documents were checked. Where the check ran once for each Release, the sum over the passes: a document two passes read is counted in each.
   checked: number;
   // How many findings there are in total.
   findings: number;
@@ -1995,6 +1995,28 @@ export interface LintResult {
   files: LintFileFindings[] | null;
   // Whether the check stopped rather than finishing with findings.
   halted: boolean;
+  // The whole-catalog check one pass at a time, present only where it ran once for each Release because the workspace names Releases under workspace.releases. Each pass says which Releases its findings were found for. Absent for a workspace that names none, which is checked once over its own directories, and for a check of one entity or of a Release's closure.
+  passes?: LintPass[] | null;
+}
+
+// One pass of a whole-catalog convention check in a workspace that gives its Releases catalog directories of their own: the Releases it was run for, the directories it read, and what it found there.
+export interface LintPass {
+  // The Releases the pass was run for, each as a path relative to the workspace root. Releases that read the same catalog directories share one pass.
+  releases: string[] | null;
+  // The catalog directories the pass read, in the order they are searched, each relative to the workspace root where it lies inside it. Empty where its Releases read no catalog directory, so the pass checked nothing and failed none of the others.
+  catalogDirs: string[] | null;
+  // How many documents the pass checked.
+  checked: number;
+  // How many findings the pass found.
+  findings: number;
+  // How many of them are errors.
+  errors: number;
+  // How many of them are warnings.
+  warnings: number;
+  // How many of them are informational.
+  infos: number;
+  // The pass's findings, per document.
+  files: LintFileFindings[] | null;
 }
 
 // What attaching a plugin wrote, where, and which version it pinned.
@@ -4304,11 +4326,29 @@ export function encodeLintResult(v: LintResult): string {
   parts.push(`${jstr("infos")}:${String(v.infos)}`);
   parts.push(`${jstr("files")}:${v.files === null ? "null" : `[${v.files!.map((e0) => encodeLintFileFindings(e0)).join(",")}]`}`);
   parts.push(`${jstr("halted")}:${String(v.halted)}`);
+  if (v.passes !== undefined && v.passes !== null && v.passes.length > 0) parts.push(`${jstr("passes")}:${`[${v.passes!.map((e0) => encodeLintPass(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeLintResult(data: string): LintResult {
   return JSON.parse(data) as LintResult;
+}
+
+export function encodeLintPass(v: LintPass): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("releases")}:${v.releases === null ? "null" : `[${v.releases!.map((e0) => jstr(e0)).join(",")}]`}`);
+  parts.push(`${jstr("catalogDirs")}:${v.catalogDirs === null ? "null" : `[${v.catalogDirs!.map((e0) => jstr(e0)).join(",")}]`}`);
+  parts.push(`${jstr("checked")}:${String(v.checked)}`);
+  parts.push(`${jstr("findings")}:${String(v.findings)}`);
+  parts.push(`${jstr("errors")}:${String(v.errors)}`);
+  parts.push(`${jstr("warnings")}:${String(v.warnings)}`);
+  parts.push(`${jstr("infos")}:${String(v.infos)}`);
+  parts.push(`${jstr("files")}:${v.files === null ? "null" : `[${v.files!.map((e0) => encodeLintFileFindings(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeLintPass(data: string): LintPass {
+  return JSON.parse(data) as LintPass;
 }
 
 export function encodePluginAddResult(v: PluginAddResult): string {
