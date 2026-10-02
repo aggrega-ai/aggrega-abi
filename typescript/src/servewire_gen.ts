@@ -584,6 +584,8 @@ export interface ResolveParams {
   // The document the cursor is in.
   uri?: string;
   position?: Position;
+  // The Release to answer in the terms of, as a path relative to the workspace root. The definition is then the document the reference resolves to through the catalog directories the workspace configuration gives that Release, in that order, so a name several variants in one workspace declare, one per Release, goes to that Release's variant; where those directories declare no such entity, the workspace's documents are searched, leaving out any under one of the workspace's catalog directories the Release does not read. Absent, the workspace's documents are searched first and the workspace's own catalog directories only where no document declares the name. A value that names no Release file is refused.
+  release?: string;
 }
 
 // Answers where the thing under the cursor is referred to.
@@ -593,6 +595,8 @@ export interface FindReferencesParams {
   // The document the cursor is in.
   uri?: string;
   position?: Position;
+  // The Release to answer in the terms of, as a path relative to the workspace root. A reference made in a document under one of the workspace's catalog directories that the Release does not read is then not reported, so variants a workspace keeps side by side, one per Release, are never reported as one another's references. Absent, every workspace document is searched. A value that names no Release file is refused.
+  release?: string;
 }
 
 // Answers which documents implement the thing under the cursor.
@@ -602,6 +606,8 @@ export interface FindImplementationsParams {
   // The document the cursor is in.
   uri?: string;
   position?: Position;
+  // The Release to answer in the terms of, as a path relative to the workspace root. A document under one of the workspace's catalog directories that the Release does not read is then not reported, so a variant another Release builds with is never listed among this Release's. Absent, every workspace document is searched. A value that names no Release file is refused.
+  release?: string;
 }
 
 // Answers with what to show about the thing under the cursor.
@@ -611,6 +617,8 @@ export interface HoverParams {
   // The document the cursor is in.
   uri?: string;
   position?: Position;
+  // The Release to answer in the terms of, as a path relative to the workspace root. The entity shown is then the one the reference resolves to through the catalog directories the workspace configuration gives that Release, in that order; where those directories declare no such entity, the workspace's documents are searched, leaving out any under one of the workspace's catalog directories the Release does not read. Absent, the workspace's documents are searched first and the workspace's own catalog directories only where no document declares the name. A value that names no Release file is refused.
+  release?: string;
 }
 
 // Answers with what may be written at the cursor.
@@ -621,6 +629,8 @@ export interface CompletionParams {
   uri?: string;
   position?: Position;
   context?: CompletionContext;
+  // The Release to answer in the terms of, as a path relative to the workspace root. The names offered are then those the workspace's documents declare, less the documents under one of the workspace's catalog directories that the Release does not read, together with the Components and Features the catalog directories the workspace configuration gives that Release declare. Absent, they are the workspace's documents and the Components and Features its own catalog directories declare. A value that names no Release file is refused.
+  release?: string;
 }
 
 // What caused the request, where the client tracks it.
@@ -2735,6 +2745,7 @@ export function encodeResolveParams(v: ResolveParams): string {
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2748,6 +2759,7 @@ export function encodeFindReferencesParams(v: FindReferencesParams): string {
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2761,6 +2773,7 @@ export function encodeFindImplementationsParams(v: FindImplementationsParams): s
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2774,6 +2787,7 @@ export function encodeHoverParams(v: HoverParams): string {
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2788,6 +2802,7 @@ export function encodeCompletionParams(v: CompletionParams): string {
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
   if (v.context !== undefined) parts.push(`${jstr("context")}:${encodeCompletionContext(v.context)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
 }
 
