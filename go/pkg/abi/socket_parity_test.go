@@ -307,6 +307,23 @@ func TestSocketParity_IRFeatureEntrySensitivePayloadLeaves(t *testing.T) {
 	roundTripBothGolden[abi.IRFeatureEntry](t, "IRFeatureEntrySensitivePayloadLeaves")
 }
 
+// TestSocketParity_IRSpecConnectionAttachment pins an attachment entry that
+// carries the connection it was written on, beside one of the node's own that
+// carries none. The field is omitted when absent, so every other vector carrying
+// an attachment entry has the same bytes whether the codec handles it or drops
+// it: this vector is the one where dropping it moves the bytes, and the entry
+// beside it is the one where emitting it unconditionally would.
+//
+// The two sit in one node's attachment bucket, which is why the vector is the
+// graph's spec rather than a single entry, and the edge the connection names is
+// carried with them. The connection's own keys also discriminate the two wire
+// forms' orders — socket before alias in the JSON, alias before socket in the
+// canonical CBOR, whose length head leads.
+func TestSocketParity_IRSpecConnectionAttachment(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.IRSpec](t, "IRSpecConnectionAttachment")
+}
+
 // TestSocketParity_IRNodeSensitivePayloadLeaves pins a node whose OWN per-leaf
 // marking is populated — the leaves a component's values and infra payload
 // carries that the component's own schema declares sensitive, which is a

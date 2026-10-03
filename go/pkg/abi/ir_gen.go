@@ -35,6 +35,14 @@ type FieldProvenance struct {
 	OverriddenAnnotation *FieldProvenance `json:"overridden_annotation,omitempty" yaml:"overridden_annotation,omitempty" cbor:"overridden_annotation,omitempty"`
 }
 
+// AttachmentConnection The connection an attachment belongs to, for an attachment written on a connection a component draws rather than on the component's own attachment block: the socket the connection is wired through and the alias it is written under. The pair names one of the graph's edges — the edge whose source is the node carrying the attachment and whose socket and alias are these — so a consumer joins the attachment to that edge, and through it to the target the attachment is presented to.
+type AttachmentConnection struct {
+	// Socket The socket the connection is wired through: the socket of the edge the attachment belongs to.
+	Socket string `json:"socket" yaml:"socket" cbor:"socket"`
+	// Alias The alias the connection is written under: the alias of the edge the attachment belongs to.
+	Alias string `json:"alias" yaml:"alias" cbor:"alias"`
+}
+
 // IRFeatureEntry One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature, an identity Feature — so no family gets a lossier projection than another. What a credential attachment's values carries is the author's choice: a by-reference credential carries a pointer into a secret store, a by-value one carries the material itself, and the compiler carries whichever was written verbatim without resolving either.
 type IRFeatureEntry struct {
 	// Type URI of the Catalog Feature this attachment requests.
@@ -45,7 +53,7 @@ type IRFeatureEntry struct {
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" cbor:"labels,omitempty"`
 	// CatalogAnnotations The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
 	CatalogAnnotations map[string]string `json:"catalog_annotations,omitempty" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
-	// Binding Names the host Component attachment slot this attachment fills, or "free" when it fills no declared slot. The pairing is by name — an attachment fills a slot when the Feature is attached under the slot's name — so the value is an exact key from the resolved Component's declared slot set, never anything read out of the name itself. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
+	// Binding Names the attachment slot this attachment fills, or "free" when it fills no declared slot. A slot is declared in one of two places, and where the attachment was written decides which: an attachment of the node's own attachment block fills a slot the host Component declares in its featuresSchema, and an attachment written on a connection fills a slot the connection's socket declares in that socket's featuresSchema on the host Component. The pairing is by name in both — an attachment fills a slot when the Feature is attached under the slot's name, on the component's block or on the connection — so the value is an exact key from the declared slot set, never anything read out of the attachment's key. A socket's slot set is closed, since an attachment written on a connection under a name its socket does not declare halts the build, so an attachment that carries a connection never reports free. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
 	Binding string `json:"binding,omitempty" yaml:"binding,omitempty" cbor:"binding,omitempty"`
 	// Values Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
 	Values json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
@@ -63,12 +71,14 @@ type IRFeatureEntry struct {
 	ValuesProvenance map[string]FieldProvenance `json:"values_provenance,omitempty" yaml:"values_provenance,omitempty" cbor:"values_provenance,omitempty"`
 	// InfraProvenance Per-leaf origin for the infra payload, keyed by dotted leaf path.
 	InfraProvenance map[string]FieldProvenance `json:"infra_provenance,omitempty" yaml:"infra_provenance,omitempty" cbor:"infra_provenance,omitempty"`
-	// Sensitive True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the host Component's attachment slot of the same name declares the material it carries sensitive. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
+	// Sensitive True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the slot the attachment fills declares the material it carries sensitive: the host Component's attachment slot of the same name, or, for an attachment written on a connection, the slot of that name the connection's socket declares. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
 	Sensitive bool `json:"sensitive,omitempty" yaml:"sensitive,omitempty" cbor:"sensitive,omitempty"`
 	// SensitiveInject The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
 	SensitiveInject json.RawMessage `json:"sensitive_inject,omitempty" yaml:"sensitive_inject,omitempty" cbor:"sensitive_inject,omitempty"`
 	// SensitivePayloadLeaves The leaves this attachment's values and infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one an author wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf left readable. An absent key states that this attachment names no leaf its Feature declares sensitive. It does not assert that the payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent learns what absence states above and nothing about whether anything reads the key. Leaves arrive in the order the payload holds them, the values pillar's before the infra pillar's — the same order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
 	SensitivePayloadLeaves []string `json:"sensitive_payload_leaves,omitempty" yaml:"sensitive_payload_leaves,omitempty" cbor:"sensitive_payload_leaves,omitempty"`
+	// Connection The connection this attachment belongs to: present on every attachment written on one of the node's connections, and absent on every attachment of the node's own attachment block. An attachment written on a connection is one of the node's attachments in every other respect — keyed by its qualified name, the connection's alias and the slot joined by a dot, and taking its binding and its sensitivity from the slot the connection's socket declares — so this field is what tells the two apart, and it carries the connection as data rather than leaving it to be read out of the key. A consumer joins it to the graph's edges by socket and alias: the edge whose source is the node carrying this attachment and whose socket and alias are these is the connection the attachment is presented on, and that edge's target is what it is presented to. An attachment of a connection a Feature attachment draws never carries one, because such a connection carries no attachments.
+	Connection *AttachmentConnection `json:"connection,omitempty" yaml:"connection,omitempty" cbor:"connection,omitempty"`
 }
 
 // IRBoundaryFeature A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -177,7 +187,7 @@ type IRSpec struct {
 	ValuesMapping map[string]json.RawMessage `json:"values_mapping" yaml:"values_mapping" cbor:"values_mapping"`
 	// InfraMapping The physical sizing payload injected from the Release, mapped by node ID.
 	InfraMapping map[string]json.RawMessage `json:"infra_mapping" yaml:"infra_mapping" cbor:"infra_mapping"`
-	// FeatureValuesMapping Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment.
+	// FeatureValuesMapping Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment. An attachment written on one of the node's connections is keyed by its qualified name, the connection's alias and the slot joined by a dot, and names its connection in its own connection field.
 	FeatureValuesMapping map[string]map[string]IRFeatureEntry `json:"feature_values_mapping" yaml:"feature_values_mapping" cbor:"feature_values_mapping"`
 	// BoundaryFeatures Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
 	BoundaryFeatures map[string]map[string]IRBoundaryFeature `json:"boundary_features,omitempty" yaml:"boundary_features,omitempty" cbor:"boundary_features,omitempty"`
@@ -405,6 +415,79 @@ func (t *FieldProvenance) UnmarshalJSONStrict(data []byte) error {
 	return t.UnmarshalJSON(data)
 }
 
+// MarshalJSON encodes AttachmentConnection in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t AttachmentConnection) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"socket\":")
+	writeJSONString(&buf, t.Socket)
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"alias\":")
+	writeJSONString(&buf, t.Alias)
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes AttachmentConnection with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *AttachmentConnection) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "socket":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Socket = s
+			}
+		case "alias":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Alias = s
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UnmarshalJSONStrict decodes AttachmentConnection exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *AttachmentConnection) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "socket", "alias"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
 // MarshalJSON encodes IRFeatureEntry in field-declaration order, omitting
 // empty non-required fields, dispatch-free.
 func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
@@ -623,6 +706,18 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 		}
 		buf.WriteByte(']')
 	}
+	if t.Connection != nil {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"connection\":")
+		if enc, err := t.Connection.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
+		}
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -812,6 +907,16 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
 			}
+		case "connection":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				v := new(AttachmentConnection)
+				if err := v.UnmarshalJSON(raw); err != nil {
+					return err
+				}
+				t.Connection = v
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -831,7 +936,7 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *IRFeatureEntry) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves", "connection"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -2656,6 +2761,77 @@ func (t *FieldProvenance) DecodeCBORStrict(data []byte) error {
 	return t.DecodeCBOR(data)
 }
 
+// EncodeCBOR encodes AttachmentConnection as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t AttachmentConnection) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends AttachmentConnection's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t AttachmentConnection) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "alias")
+	dst = appendCBORTextString(dst, t.Alias)
+	dst = appendCBORTextString(dst, "socket")
+	dst = appendCBORTextString(dst, t.Socket)
+	return dst, nil
+}
+
+// DecodeCBOR decodes AttachmentConnection from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *AttachmentConnection) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *AttachmentConnection) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "socket":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Socket = s
+			}
+		case "alias":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Alias = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// DecodeCBORStrict decodes AttachmentConnection exactly as DecodeCBOR does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the map's own keys and does not descend.
+func (t *AttachmentConnection) DecodeCBORStrict(data []byte) error {
+	if err := refuseUndeclaredCBORKeys(data, "socket", "alias"); err != nil {
+		return err
+	}
+	return t.DecodeCBOR(data)
+}
+
 // EncodeCBOR encodes IRFeatureEntry as canonical CBOR (RFC 8949 §4.2.1; floats per
 // CBOR CDE §4.2), dispatch-free.
 func (t IRFeatureEntry) EncodeCBOR() ([]byte, error) {
@@ -2686,6 +2862,9 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 		n++
 	}
 	if t.Sensitive != false {
+		n++
+	}
+	if t.Connection != nil {
 		n++
 	}
 	if t.AnnotationKey != "" {
@@ -2752,6 +2931,14 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if t.Sensitive != false {
 		dst = appendCBORTextString(dst, "sensitive")
 		dst = appendCBORBool(dst, t.Sensitive)
+	}
+	if t.Connection != nil {
+		dst = appendCBORTextString(dst, "connection")
+		if t.Connection == nil {
+			dst = append(dst, 0xf6)
+		} else if dst, err = t.Connection.appendCBOR(dst); err != nil {
+			return nil, err
+		}
 	}
 	if t.AnnotationKey != "" {
 		dst = appendCBORTextString(dst, "annotation_key")
@@ -3016,6 +3203,14 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 				}
 				t.SensitivePayloadLeaves = s
 			}
+		case "connection":
+			{
+				v := new(AttachmentConnection)
+				if err := v.decodeCBOR(dec); err != nil {
+					return err
+				}
+				t.Connection = v
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -3032,7 +3227,7 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *IRFeatureEntry) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves", "connection"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

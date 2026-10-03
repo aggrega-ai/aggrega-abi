@@ -197,6 +197,13 @@ cbor_vector!(ir_node_projection_sensitive_rendered_keys, aggrega_abi::IRNodeProj
 // every other vector's bytes are the same whether the codec handles the field or
 // drops it, and a regression there would move nothing and fail nowhere.
 cbor_vector!(ir_feature_entry_sensitive_payload_leaves, aggrega_abi::IRFeatureEntry, "IRFeatureEntrySensitivePayloadLeaves");
+// An attachment entry carrying the connection it was written on, beside one of the
+// node's own carrying none — the field is elided when absent, so every other vector
+// with an attachment entry has the same bytes whether the codec handles it or drops
+// it. The two share one node's bucket, so the vector is the graph's spec, together
+// with the edge the connection names. IRSpec is cbor_vector rather than cbor_case
+// because its trait binding is declared by the map-order vector further down.
+cbor_vector!(ir_spec_connection_attachment, aggrega_abi::IRSpec, "IRSpecConnectionAttachment");
 // The same marking at its other two units. A node's own values and infra are
 // governed by the node's Component, and a boundary attachment's infra by the
 // Feature it names, so neither is recoverable from the entry vector above.

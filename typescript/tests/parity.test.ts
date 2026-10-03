@@ -105,6 +105,12 @@ const vectors: Array<[string, string]> = [
   ["RenderNodeOutput", "RenderNodeOutput"],
   ["IRNodeProjectionSensitiveRenderedKeys", "IRNodeProjection"],
   ["IRFeatureEntrySensitivePayloadLeaves", "IRFeatureEntry"],
+  // An attachment entry carrying the connection it was written on, beside one of the
+  // node's own carrying none: the field is omitted when absent, so this is the vector
+  // where dropping it, or emitting it unconditionally, moves the bytes. The two share
+  // one node's bucket, so the vector is the graph's spec, with the edge the
+  // connection names.
+  ["IRSpecConnectionAttachment", "IRSpec"],
   ["IRNodeSensitivePayloadLeaves", "IRNode"],
   ["IRBoundaryFeatureSensitivePayloadLeaves", "IRBoundaryFeature"],
   ["AssembleBoundaryInput", "AssembleBoundaryInput"],

@@ -42,6 +42,14 @@ export interface FieldProvenance {
   overridden_annotation?: FieldProvenance;
 }
 
+// The connection an attachment belongs to, for an attachment written on a connection a component draws rather than on the component's own attachment block: the socket the connection is wired through and the alias it is written under. The pair names one of the graph's edges — the edge whose source is the node carrying the attachment and whose socket and alias are these — so a consumer joins the attachment to that edge, and through it to the target the attachment is presented to.
+export interface AttachmentConnection {
+  // The socket the connection is wired through: the socket of the edge the attachment belongs to.
+  socket: string;
+  // The alias the connection is written under: the alias of the edge the attachment belongs to.
+  alias: string;
+}
+
 // One resolved attachment for a node, carried in feature_values_mapping. Every attachment family shares this shape — an operational Feature, a credential Feature, an identity Feature — so no family gets a lossier projection than another. What a credential attachment's values carries is the author's choice: a by-reference credential carries a pointer into a secret store, a by-value one carries the material itself, and the compiler carries whichever was written verbatim without resolving either.
 export interface IRFeatureEntry {
   // URI of the Catalog Feature this attachment requests.
@@ -52,7 +60,7 @@ export interface IRFeatureEntry {
   labels?: Record<string, string>;
   // The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
   catalog_annotations?: Record<string, string>;
-  // Names the host Component attachment slot this attachment fills, or "free" when it fills no declared slot. The pairing is by name — an attachment fills a slot when the Feature is attached under the slot's name — so the value is an exact key from the resolved Component's declared slot set, never anything read out of the name itself. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
+  // Names the attachment slot this attachment fills, or "free" when it fills no declared slot. A slot is declared in one of two places, and where the attachment was written decides which: an attachment of the node's own attachment block fills a slot the host Component declares in its featuresSchema, and an attachment written on a connection fills a slot the connection's socket declares in that socket's featuresSchema on the host Component. The pairing is by name in both — an attachment fills a slot when the Feature is attached under the slot's name, on the component's block or on the connection — so the value is an exact key from the declared slot set, never anything read out of the attachment's key. A socket's slot set is closed, since an attachment written on a connection under a name its socket does not declare halts the build, so an attachment that carries a connection never reports free. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
   binding?: string;
   // Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
   values?: unknown;
@@ -70,12 +78,14 @@ export interface IRFeatureEntry {
   values_provenance?: Record<string, FieldProvenance>;
   // Per-leaf origin for the infra payload, keyed by dotted leaf path.
   infra_provenance?: Record<string, FieldProvenance>;
-  // True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the host Component's attachment slot of the same name declares the material it carries sensitive. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
+  // True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the slot the attachment fills declares the material it carries sensitive: the host Component's attachment slot of the same name, or, for an attachment written on a connection, the slot of that name the connection's socket declares. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
   sensitive?: boolean;
   // The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
   sensitive_inject?: unknown;
   // The leaves this attachment's values and infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one an author wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf left readable. An absent key states that this attachment names no leaf its Feature declares sensitive. It does not assert that the payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent learns what absence states above and nothing about whether anything reads the key. Leaves arrive in the order the payload holds them, the values pillar's before the infra pillar's — the same order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
   sensitive_payload_leaves?: string[];
+  // The connection this attachment belongs to: present on every attachment written on one of the node's connections, and absent on every attachment of the node's own attachment block. An attachment written on a connection is one of the node's attachments in every other respect — keyed by its qualified name, the connection's alias and the slot joined by a dot, and taking its binding and its sensitivity from the slot the connection's socket declares — so this field is what tells the two apart, and it carries the connection as data rather than leaving it to be read out of the key. A consumer joins it to the graph's edges by socket and alias: the edge whose source is the node carrying this attachment and whose socket and alias are these is the connection the attachment is presented on, and that edge's target is what it is presented to. An attachment of a connection a Feature attachment draws never carries one, because such a connection carries no attachments.
+  connection?: AttachmentConnection;
 }
 
 // A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -184,7 +194,7 @@ export interface IRSpec {
   values_mapping: Record<string, unknown>;
   // The physical sizing payload injected from the Release, mapped by node ID.
   infra_mapping: Record<string, unknown>;
-  // Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment.
+  // Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment. An attachment written on one of the node's connections is keyed by its qualified name, the connection's alias and the slot joined by a dot, and names its connection in its own connection field.
   feature_values_mapping: Record<string, Record<string, IRFeatureEntry>>;
   // Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
   boundary_features?: Record<string, Record<string, IRBoundaryFeature>>;
@@ -224,6 +234,17 @@ export function decodeFieldProvenance(data: string): FieldProvenance {
   return JSON.parse(data) as FieldProvenance;
 }
 
+export function encodeAttachmentConnection(v: AttachmentConnection): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("socket")}:${jstr(v.socket)}`);
+  parts.push(`${jstr("alias")}:${jstr(v.alias)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeAttachmentConnection(data: string): AttachmentConnection {
+  return JSON.parse(data) as AttachmentConnection;
+}
+
 export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   const parts: string[] = [];
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
@@ -242,6 +263,7 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   if (v.sensitive !== undefined && v.sensitive !== false) parts.push(`${jstr("sensitive")}:${String(v.sensitive)}`);
   if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) parts.push(`${jstr("sensitive_inject")}:${encodeOpaque(v.sensitive_inject)}`);
   if (v.sensitive_payload_leaves !== undefined && v.sensitive_payload_leaves.length > 0) parts.push(`${jstr("sensitive_payload_leaves")}:${`[${v.sensitive_payload_leaves!.map((e0) => jstr(e0)).join(",")}]`}`);
+  if (v.connection !== undefined && v.connection !== null) parts.push(`${jstr("connection")}:${encodeAttachmentConnection(v.connection)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -473,6 +495,40 @@ export function decodeCBORFieldProvenanceFrom(dec: CborDec): FieldProvenance {
   return o as FieldProvenance;
 }
 
+export function encodeCBORAttachmentConnection(v: AttachmentConnection): Uint8Array {
+  const out: number[] = [];
+  appendCBORAttachmentConnection(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORAttachmentConnection(out: number[], v: AttachmentConnection): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "alias");
+  writeText(out, v.alias);
+  writeText(out, "socket");
+  writeText(out, v.socket);
+}
+
+export function decodeCBORAttachmentConnection(data: Uint8Array): AttachmentConnection {
+  const dec = new CborDec(data);
+  return decodeCBORAttachmentConnectionFrom(dec);
+}
+
+export function decodeCBORAttachmentConnectionFrom(dec: CborDec): AttachmentConnection {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "socket": o["socket"] = dec.readText(); break;
+      case "alias": o["alias"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as AttachmentConnection;
+}
+
 export function encodeCBORIRFeatureEntry(v: IRFeatureEntry): Uint8Array {
   const out: number[] = [];
   appendCBORIRFeatureEntry(out, v);
@@ -488,6 +544,7 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.values !== undefined && v.values !== null) n++;
   if (v.binding !== undefined && v.binding !== "") n++;
   if (v.sensitive !== undefined && v.sensitive !== false) n++;
+  if (v.connection !== undefined && v.connection !== null) n++;
   if (v.annotation_key !== undefined && v.annotation_key !== "") n++;
   if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) n++;
   if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) n++;
@@ -533,6 +590,10 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.sensitive !== undefined && v.sensitive !== false) {
     writeText(out, "sensitive");
     writeBool(out, v.sensitive);
+  }
+  if (v.connection !== undefined && v.connection !== null) {
+    writeText(out, "connection");
+    appendCBORAttachmentConnection(out, v.connection);
   }
   if (v.annotation_key !== undefined && v.annotation_key !== "") {
     writeText(out, "annotation_key");
@@ -623,6 +684,7 @@ export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
       case "sensitive": o["sensitive"] = dec.readBool(); break;
       case "sensitive_inject": o["sensitive_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "sensitive_payload_leaves": o["sensitive_payload_leaves"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "connection": o["connection"] = decodeCBORAttachmentConnectionFrom(dec); break;
       default: dec.skip();
     }
   }
