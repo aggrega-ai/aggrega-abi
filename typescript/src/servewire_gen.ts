@@ -1881,12 +1881,14 @@ export interface AttachmentContainerResult {
   container: string[] | null;
 }
 
-// The Releases the workspace holds.
+// The Releases the workspace holds, and the linked directories outside it that were not searched for them.
 export interface ReleaseCandidatesResult {
   // Each Release document.
   releases: string[] | null;
   // The lockfile of each Release listed, keyed by the Release exactly as it is listed. Each is the file a pull writes for that Release and a build reads, so a client reads where it lives rather than working it out. Empty when the workspace holds no Release.
   lockfiles: Record<string, string>;
+  // Each link under the workspace root that leads to a directory outside it, named relative to the root where the link itself sits, in the order the workspace is searched. No directory outside the root is searched, so a Release reached only through one of these links is not in releases, and a client offering Releases can say why. Not named: a link to a directory inside the root, which is searched, or left out, where it actually sits; a link wherever a directory would be left out, whether by where it sits or by its name; and a link that cannot be resolved, because it leads nowhere or round a loop. Empty when the workspace holds none.
+  unreadLinkedDirs: string[];
 }
 
 // Which Release a client should act on by default. A workspace pointing at no Release is an ordinary state rather than a failure, so it is reported here with an account of how the choice was attempted rather than raised as an error.
@@ -4215,6 +4217,7 @@ export function encodeReleaseCandidatesResult(v: ReleaseCandidatesResult): strin
   const parts: string[] = [];
   parts.push(`${jstr("releases")}:${v.releases === null ? "null" : `[${v.releases!.map((e0) => jstr(e0)).join(",")}]`}`);
   parts.push(`${jstr("lockfiles")}:${`{${Object.keys(v.lockfiles!).sort().map((k0) => `${jstr(k0)}:${jstr(v.lockfiles![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("unreadLinkedDirs")}:${`[${v.unreadLinkedDirs!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
