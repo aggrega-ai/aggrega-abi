@@ -956,15 +956,15 @@ export interface CacheProvenance {
   sharedBy?: number;
 }
 
-// One thing a reclamation removed.
+// One thing a reclamation removed — or, in a list of what it left in place, one thing it would have removed.
 export interface CacheRemoval {
-  // Which cache it was removed from.
+  // Which cache it belongs to.
   class: string;
-  // What was removed.
+  // What it is.
   label: string;
-  // Whether the cache it came from belongs to this workspace or is shared across the machine.
+  // Whether that cache belongs to this workspace or is shared across the machine.
   reach: string;
-  // How many bytes it occupied.
+  // How many bytes it occupies, or occupied before it was removed.
   size: number;
   // The same size written the way a person reads one.
   sizeText: string;
@@ -996,6 +996,12 @@ export interface CacheCleared {
   size: number;
   // The same size written the way a person reads one.
   sizeText: string;
+  // How many files the clearing left in this cache because another process had them open. Only Windows refuses to remove an open file, so everywhere else this is zero. A later clearing removes them once that process has finished with them.
+  heldOpenFiles: number;
+  // How many bytes those files occupy. They are not counted in size, which is what the clearing reclaimed.
+  heldOpenBytes: number;
+  // The same figure written the way a person reads one.
+  heldOpenBytesText: string;
 }
 
 // Which configuration document was written and how far it reaches. A request names one workspace, so an answer that said nothing would be read as being about that workspace — and for a machine-wide write that reading is wrong.
@@ -1620,6 +1626,8 @@ export interface CacheStatusResult {
 export interface CachePruneResult {
   // What was removed.
   removed: CacheRemoval[] | null;
+  // What the prune would have removed but left in place because another process had it open. Only Windows refuses to remove an open file, so everywhere else this is empty. These entries are counted as neither removed nor kept, none of their bytes count as reclaimed, and a later prune reclaims them; an entry that is a directory may already have lost the files in it that were not open.
+  heldOpen: CacheRemoval[] | null;
   // How many entries were kept.
   retainedCount: number;
   // How many bytes were reclaimed.
@@ -1643,6 +1651,8 @@ export interface CacheEvictResult {
   withinCapBefore: boolean;
   // What was removed.
   removed: CacheRemoval[] | null;
+  // What the reclaiming would have removed but left in place because another process had it open; it went on to the next-oldest entry instead. Only Windows refuses to remove an open file, so everywhere else this is empty. These entries still count toward the bytes that remain, and a later reclaiming can remove them.
+  heldOpen: CacheRemoval[] | null;
   // How many bytes were held before.
   totalBefore: number;
   // The same figure written the way a person reads one.
@@ -3244,6 +3254,9 @@ export function encodeCacheCleared(v: CacheCleared): string {
   parts.push(`${jstr("reach")}:${jstr(v.reach)}`);
   parts.push(`${jstr("size")}:${String(v.size)}`);
   parts.push(`${jstr("sizeText")}:${jstr(v.sizeText)}`);
+  parts.push(`${jstr("heldOpenFiles")}:${String(v.heldOpenFiles)}`);
+  parts.push(`${jstr("heldOpenBytes")}:${String(v.heldOpenBytes)}`);
+  parts.push(`${jstr("heldOpenBytesText")}:${jstr(v.heldOpenBytesText)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -3924,6 +3937,7 @@ export function decodeCacheStatusResult(data: string): CacheStatusResult {
 export function encodeCachePruneResult(v: CachePruneResult): string {
   const parts: string[] = [];
   parts.push(`${jstr("removed")}:${v.removed === null ? "null" : `[${v.removed!.map((e0) => encodeCacheRemoval(e0)).join(",")}]`}`);
+  parts.push(`${jstr("heldOpen")}:${v.heldOpen === null ? "null" : `[${v.heldOpen!.map((e0) => encodeCacheRemoval(e0)).join(",")}]`}`);
   parts.push(`${jstr("retainedCount")}:${String(v.retainedCount)}`);
   parts.push(`${jstr("reclaimedBytes")}:${String(v.reclaimedBytes)}`);
   parts.push(`${jstr("reclaimedBytesText")}:${jstr(v.reclaimedBytesText)}`);
@@ -3943,6 +3957,7 @@ export function encodeCacheEvictResult(v: CacheEvictResult): string {
   const parts: string[] = [];
   parts.push(`${jstr("withinCapBefore")}:${String(v.withinCapBefore)}`);
   parts.push(`${jstr("removed")}:${v.removed === null ? "null" : `[${v.removed!.map((e0) => encodeCacheRemoval(e0)).join(",")}]`}`);
+  parts.push(`${jstr("heldOpen")}:${v.heldOpen === null ? "null" : `[${v.heldOpen!.map((e0) => encodeCacheRemoval(e0)).join(",")}]`}`);
   parts.push(`${jstr("totalBefore")}:${String(v.totalBefore)}`);
   parts.push(`${jstr("totalBeforeText")}:${jstr(v.totalBeforeText)}`);
   parts.push(`${jstr("reclaimedBytes")}:${String(v.reclaimedBytes)}`);
