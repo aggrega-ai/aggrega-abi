@@ -1899,7 +1899,7 @@ export interface AttachmentContainerResult {
   container: string[] | null;
 }
 
-// The Releases the workspace holds, and the linked directories outside it that were not searched for them.
+// The Releases the workspace holds, and the links leading out of it, to directories and to files, that were not read for them.
 export interface ReleaseCandidatesResult {
   // Each Release document.
   releases: string[] | null;
@@ -1907,6 +1907,8 @@ export interface ReleaseCandidatesResult {
   lockfiles: Record<string, string>;
   // Each link under the workspace root that leads to a directory outside it, named relative to the root where the link itself sits, in the order the workspace is searched. No directory outside the root is searched, so a Release reached only through one of these links is not in releases, and a client offering Releases can say why. Not named: a link to a directory inside the root, which is searched, or left out, where it actually sits; a link wherever a directory would be left out, whether by where it sits or by its name; and a link that cannot be resolved, because it leads nowhere or round a loop. Empty when the workspace holds none.
   unreadLinkedDirs: string[];
+  // Each link under the workspace root that is named like a YAML file, its own name ending in .yaml or .yml, and leads to a file outside the root, named relative to the root where the link itself sits, in the order the workspace is searched. Such a file is not read, so a Release reached only through one of these links is not in releases, and a client offering Releases can say why. Whether a file is a Release is not known without reading it, so each such link is named whatever the file holds. Not named: a link to a file the workspace configuration names as a Release, as build.authoring_release or as a key of workspace.releases, which is read and listed in releases at the link's own place; a link to a file inside the root, which is read; a link inside a directory the search leaves out; and a link that leads to no file, whether to a directory, which unreadLinkedDirs names where it leads out of the root, or nowhere, or round a loop. Empty when the workspace holds none.
+  unreadLinkedFiles: string[];
 }
 
 // Which Release a client should act on by default. A workspace pointing at no Release is an ordinary state rather than a failure, so it is reported here with an account of how the choice was attempted rather than raised as an error.
@@ -4245,6 +4247,7 @@ export function encodeReleaseCandidatesResult(v: ReleaseCandidatesResult): strin
   parts.push(`${jstr("releases")}:${v.releases === null ? "null" : `[${v.releases!.map((e0) => jstr(e0)).join(",")}]`}`);
   parts.push(`${jstr("lockfiles")}:${`{${Object.keys(v.lockfiles!).sort().map((k0) => `${jstr(k0)}:${jstr(v.lockfiles![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("unreadLinkedDirs")}:${`[${v.unreadLinkedDirs!.map((e0) => jstr(e0)).join(",")}]`}`);
+  parts.push(`${jstr("unreadLinkedFiles")}:${`[${v.unreadLinkedFiles!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
