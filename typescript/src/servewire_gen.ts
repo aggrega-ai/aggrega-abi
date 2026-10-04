@@ -329,6 +329,8 @@ export interface IrGraphParams {
   workDoneToken?: ProgressToken;
   // The Release to resolve, as a path relative to the workspace root. An absolute path is refused.
   release?: string;
+  // Whether to answer with the values an author declared sensitive in the clear. Absent or false, each of them is withheld from the graph and a marker naming why stands in its place, as the command line's graph output withholds them; true answers with the graph as the Release compiles to it, those values included.
+  unredacted?: boolean;
 }
 
 // Compiles a Release and writes the rendered artifacts into the workspace.
@@ -1458,7 +1460,7 @@ export interface DiagnosticsResult {
 
 // The resolved graph a Release compiles to.
 export interface IrGraphResult {
-  // The graph document, carried through as the compiler emitted it. Its own shape is the graph's published contract and is not restated here.
+  // The graph document. The values an author declared sensitive are withheld from it unless the request asked for them with unredacted; everything else is carried through as the compiler emitted it. Its own shape is the graph's published contract and is not restated here.
   graph: unknown;
 }
 
@@ -2497,6 +2499,7 @@ export function encodeIrGraphParams(v: IrGraphParams): string {
   if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
+  if (v.unredacted !== undefined && v.unredacted !== false) parts.push(`${jstr("unredacted")}:${String(v.unredacted)}`);
   return `{${parts.join(",")}}`;
 }
 
