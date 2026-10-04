@@ -201,6 +201,8 @@ export interface ErrorData {
   release?: string;
   // The lockfile a lockfile-scoped condition is about: the path that was looked for and not found, or could not be read.
   lockfile?: string;
+  // Whether the refusal is a registry the request named that could not be reached: its name did not resolve, a connection to it was refused or could not be opened, or a secure connection to it could not be established. It is read from the failure itself rather than from the message, and it is set only where the failure shows the registry was never reached. A refused index refresh naming one registry carries it; a registry that answered, whatever it answered, leaves it absent.
+  unreachable?: boolean;
 }
 
 // One finding about one document: where it is, how serious it is, what it says, and the quotable code that names the condition it reports.
@@ -1155,12 +1157,14 @@ export interface Registry {
   trust: RegistryTrust;
 }
 
-// What reading a registry's advertised trust policy did. The outcomes are kept apart because they mean different things: the advertised policy was taken, the registry advertised nothing — which is not a failure — the built-in baseline was pinned in its place, or no read was attempted.
+// What reading a registry's advertised trust policy did. The outcomes are kept apart because they mean different things: the advertised policy was taken, the registry advertised nothing — which is not a failure — the built-in baseline was pinned in its place, or no read was attempted. Where nothing was advertised, whether the registry could be reached at all is stated beside it.
 export interface TrustFetchOutcome {
   // Whether the advertised policy was taken.
   pinned: boolean;
-  // Whether the registry was asked and advertised no policy, in which case the operation proceeds on what the request stated. A registry the offline posture kept from being asked is never reported this way.
+  // Whether the registry was asked and advertised no policy, in which case the operation proceeds on what the request stated. A registry the offline posture kept from being asked is never reported this way. A registry that could not be reached is reported this way too, since no policy came back from it, and carries unreachable beside it; read unreachable to tell the two apart.
   notAdvertised?: boolean;
+  // Whether the registry could not be reached when its advertised policy was asked for: its name did not resolve, a connection to it was refused or could not be opened, or a secure connection to it could not be established. It is read from the failure itself rather than from reason, it stands beside notAdvertised, and it is set only where the failure shows the registry was never reached; a registry that answered — with no policy, or with a failure — leaves it absent.
+  unreachable?: boolean;
   // Whether the built-in baseline was pinned because no advertised policy was taken, which only the official hub carries. It stands beside notAdvertised where the hub was asked and advertised nothing, and alone where the offline posture kept the hub from being asked.
   baseline?: boolean;
   // Whether no read was attempted, because a stated policy overrode it or the request asked for none.
@@ -1209,6 +1213,8 @@ export interface HostUpdate {
   deprecations: DeprecationNote[] | null;
   // What failed for this host, so a walk over several reports which of them failed without the caller correlating anything.
   error?: string;
+  // Whether this registry could not be reached: its name did not resolve, a connection to it was refused or could not be opened, or a secure connection to it could not be established. It is read from the failure itself rather than from error, it is set only beside error, and only where the failure shows the registry was never reached; a registry that answered, whatever it answered, leaves it absent.
+  unreachable?: boolean;
 }
 
 // One version the index holds for a reference: the manifest digest its tag resolved to when the index was built; where the trust policy the index was built under verified the version's own signature, the signer it verified as; and, where anything records it, when the version was published, with the source that says so. The signer is absent for a version with no signature, for one none of whose signatures verified, and where that policy pins neither a public key nor a trusted identity or switches signature verification off. None of those is a basis for naming a signer, and its absence says nothing more. The publication date is absent where the publication stated none and no keyless signature that policy verified records one.
@@ -1714,7 +1720,7 @@ export interface RegistryUpdateResult {
   indexRoot: string;
   // Whether any registry is configured at all.
   registriesConfigured: boolean;
-  // Whether any registry was actually contacted, which distinguishes 'nothing changed' from 'nothing was tried'.
+  // Always true on this answer: refreshing the indexes goes out to the registries themselves, where listing them and searching answer from configuration and from a local index. Whether a given registry was in fact reached is stated on its own entry in hosts, by unreachable.
   reachedRegistries: boolean;
 }
 
@@ -2329,6 +2335,7 @@ export function encodeErrorData(v: ErrorData): string {
   if (v.end_column !== undefined && v.end_column !== 0) parts.push(`${jstr("end_column")}:${String(v.end_column)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   if (v.lockfile !== undefined && v.lockfile !== "") parts.push(`${jstr("lockfile")}:${jstr(v.lockfile)}`);
+  if (v.unreachable !== undefined && v.unreachable !== false) parts.push(`${jstr("unreachable")}:${String(v.unreachable)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -3426,6 +3433,7 @@ export function encodeTrustFetchOutcome(v: TrustFetchOutcome): string {
   const parts: string[] = [];
   parts.push(`${jstr("pinned")}:${String(v.pinned)}`);
   if (v.notAdvertised !== undefined && v.notAdvertised !== false) parts.push(`${jstr("notAdvertised")}:${String(v.notAdvertised)}`);
+  if (v.unreachable !== undefined && v.unreachable !== false) parts.push(`${jstr("unreachable")}:${String(v.unreachable)}`);
   if (v.baseline !== undefined && v.baseline !== false) parts.push(`${jstr("baseline")}:${String(v.baseline)}`);
   if (v.skipped !== undefined && v.skipped !== false) parts.push(`${jstr("skipped")}:${String(v.skipped)}`);
   if (v.identities !== undefined && v.identities !== 0) parts.push(`${jstr("identities")}:${String(v.identities)}`);
@@ -3471,6 +3479,7 @@ export function encodeHostUpdate(v: HostUpdate): string {
   parts.push(`${jstr("skipped")}:${v.skipped === null ? "null" : `[${v.skipped!.map((e0) => encodeSkippedRepo(e0)).join(",")}]`}`);
   parts.push(`${jstr("deprecations")}:${v.deprecations === null ? "null" : `[${v.deprecations!.map((e0) => encodeDeprecationNote(e0)).join(",")}]`}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
+  if (v.unreachable !== undefined && v.unreachable !== false) parts.push(`${jstr("unreachable")}:${String(v.unreachable)}`);
   return `{${parts.join(",")}}`;
 }
 
