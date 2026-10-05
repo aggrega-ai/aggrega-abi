@@ -32,7 +32,7 @@ pub struct RenderNodeInput {
     pub artifacts_projection: Option<Box<ArtifactsProjection>>,
 }
 
-/// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
+/// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys and over the values as a whole, outbound uses edges, boundary path, sync wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRNodeProjection {
     /// The node's absolute id within the topology graph.
@@ -48,9 +48,12 @@ pub struct IRNodeProjection {
     /// The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub features: BTreeMap<String, Box<RawValue>>,
-    /// Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
+    /// Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here — whether such a payload was produced from a value declared sensitive is carried instead by sensitive_values, and by an artifact entry's own sensitive_content. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub sensitive_rendered_keys: BTreeMap<String, String>,
+    /// True when the values this payload carries were produced by a template that reads a value an author declared sensitive, or a value traced to one: a Recipe's or a FeatureRecipe's valuesMapping, a single template whose output keys and values are its own invention, so no key of that output can be traced back to the datum it came from and the whole map is marked instead. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from a value's content or a key's name. A guest composing text a person reads, a refusal or a warning, keeps every value of the node's values out of that text when this is true, and keeps out the value under any key sensitive_rendered_keys names whether or not it is: the two compose, one naming the keys whose identity is recovered exactly and this one covering the map where none can be. Absent when no such template read such a value, which includes values that are the declared leaves themselves, marked per key in sensitive_rendered_keys instead, and absent on a payload carrying no values. Absence never states that no value is sensitive.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub sensitive_values: bool,
     /// Declared and deliberately withheld: the host never populates this, so the map is absent from every render payload. An outbound edge is consumed before dispatch — the edge's published values are rehydrated into the node's own inject pipe, which the Recipe has already evaluated into the values and workload the guest receives — and a guest assembling a boundary receives the edge list on its own input instead. Were it populated it would key the node's outbound uses edges by socket alias, each carrying that socket's ordered target node ids in author order.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub uses: BTreeMap<String, Vec<String>>,
@@ -250,6 +253,9 @@ pub struct FetchExternalInputResponse {
 pub struct WorkloadProjection {
     /// The host-evaluated, post-validation Workload the guest synthesizes; opaque at this schema layer so the socket schema does not rebind the Workload entity contract.
     pub workload: Box<RawValue>,
+    /// True when the template that produced workload reads a value an author declared sensitive, or a value traced to one. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the content of any field. A rendered workload's fields carry no link back to the data its template read, so this marks the whole document: a guest composing text a person reads, a refusal or a warning, keeps every value the workload carries out of that text when this is true, while the document's shape — its keys and where a value sits — stays readable. The attachment entries the node projection's sensitive_rendered_keys names are marked there whether or not this is set. Absent when the template reads no such value; absence never states that no field is sensitive.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub sensitive_workload: bool,
     /// Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced. Whether an attachment handles declared-sensitive material is not repeated here: it travels on the node projection's matching feature entry, which a guest reads by the same instance name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub attachment_provides: BTreeMap<String, BTreeMap<String, String>>,
@@ -262,7 +268,7 @@ pub struct ArtifactsProjection {
     pub entries: Vec<ArtifactProjectionEntry>,
 }
 
-/// One pre-evaluated artifact entry the host hands a Provider guest to place: its host-resolved output name, its origin, the already-template-evaluated content bytes, and the build-provenance label and annotation key sets the host computed for the node. The guest decides how to place the provenance (splicing it into a manifest's metadata, prepending it as a comment, or emitting a companion file) and where the file lands.
+/// One pre-evaluated artifact entry the host hands a Provider guest to place: its host-resolved output name, its origin, the already-template-evaluated content bytes, whether the template those bytes came from reads a value declared sensitive, and the build-provenance label and annotation key sets the host computed for the node. The guest decides how to place the provenance (splicing it into a manifest's metadata, prepending it as a comment, or emitting a companion file) and where the file lands.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ArtifactProjectionEntry {
     /// The host-resolved output name for the entry: the author-declared map key, with a file supplied by a library bundle nested under that key. The guest places the entry at this name or under a provider-specific sub-path derived from it.
@@ -271,6 +277,9 @@ pub struct ArtifactProjectionEntry {
     pub origin: String,
     /// The already-template-evaluated content bytes the host produced from the entry's inline content or imported file, evaluated against the render context using the guest's declared artifact-template delimiter pair. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the guest decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
     pub content: String,
+    /// True when the template this entry's content was evaluated from reads a value an author declared sensitive, or a value traced to one. It is read from the template's own references against the declarations, with the delimiter pair the content was evaluated with — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the content itself. The content is that template's output, so nothing in it can be traced back to the datum it came from: a guest composing text a person reads, a refusal or a warning, keeps every part of the content out of that text when this is true, a parser's own message about the content included. It is set per entry, so one entry's template reading such a value says nothing about another's. Absent when the template reads no such value; absence never states that the content is not sensitive.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub sensitive_content: bool,
     /// The Kubernetes-label-safe build-provenance key set the host computed for the node, keyed by label name. A guest that stamps provenance into a manifest's metadata.labels splices these; a guest whose output is not Kubernetes YAML ignores them.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub labels: BTreeMap<String, String>,
@@ -699,6 +708,7 @@ impl IRNodeProjection {
         if !self.boundary_path.is_empty() { n += 1; }
         if !self.output_labels.is_empty() { n += 1; }
         if !self.recipe_version.is_empty() { n += 1; }
+        if self.sensitive_values { n += 1; }
         if !self.derived_name_basis.is_empty() { n += 1; }
         if !self.label_component_id.is_empty() { n += 1; }
         if !self.sensitive_rendered_keys.is_empty() { n += 1; }
@@ -789,6 +799,10 @@ impl IRNodeProjection {
         }
         crate::cbor_gen::write_text(out, "resolved_recipe");
         crate::cbor_gen::write_text(out, &self.resolved_recipe);
+        if self.sensitive_values {
+            crate::cbor_gen::write_text(out, "sensitive_values");
+            crate::cbor_gen::write_bool(out, self.sensitive_values);
+        }
         if !self.derived_name_basis.is_empty() {
             crate::cbor_gen::write_text(out, "derived_name_basis");
             crate::cbor_gen::write_text(out, &self.derived_name_basis);
@@ -828,6 +842,7 @@ impl IRNodeProjection {
         let mut f_values: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
         let mut f_features: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
         let mut f_sensitive_rendered_keys: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_sensitive_values: bool = false;
         let mut f_uses: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut f_boundary_path: String = String::new();
         let mut f_sync_wave: i64 = 0;
@@ -847,6 +862,7 @@ impl IRNodeProjection {
                 "values" => f_values = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
                 "features" => f_features = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
                 "sensitive_rendered_keys" => f_sensitive_rendered_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "sensitive_values" => f_sensitive_values = dec.read_bool()?,
                 "uses" => f_uses = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
                 "boundary_path" => f_boundary_path = dec.read_text()?,
                 "sync_wave" => f_sync_wave = dec.read_int()?,
@@ -866,6 +882,7 @@ impl IRNodeProjection {
             values: f_values,
             features: f_features,
             sensitive_rendered_keys: f_sensitive_rendered_keys,
+            sensitive_values: f_sensitive_values,
             uses: f_uses,
             boundary_path: f_boundary_path,
             sync_wave: f_sync_wave,
@@ -1656,10 +1673,15 @@ impl WorkloadProjection {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
+        if self.sensitive_workload { n += 1; }
         if !self.attachment_provides.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "workload");
         crate::cbor_gen::write_bytes(out, self.workload.get().as_bytes());
+        if self.sensitive_workload {
+            crate::cbor_gen::write_text(out, "sensitive_workload");
+            crate::cbor_gen::write_bool(out, self.sensitive_workload);
+        }
         if !self.attachment_provides.is_empty() {
             crate::cbor_gen::write_text(out, "attachment_provides");
             {
@@ -1696,18 +1718,21 @@ impl WorkloadProjection {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_workload: Option<Box<RawValue>> = None;
+        let mut f_sensitive_workload: bool = false;
         let mut f_attachment_provides: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "workload" => f_workload = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "sensitive_workload" => f_sensitive_workload = dec.read_bool()?,
                 "attachment_provides" => f_attachment_provides = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             workload: f_workload.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field workload".to_string()))?,
+            sensitive_workload: f_sensitive_workload,
             attachment_provides: f_attachment_provides,
         })
     }
@@ -1772,6 +1797,7 @@ impl ArtifactProjectionEntry {
         let mut n: u64 = 3;
         if !self.labels.is_empty() { n += 1; }
         if !self.annotations.is_empty() { n += 1; }
+        if self.sensitive_content { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "name");
         crate::cbor_gen::write_text(out, &self.name);
@@ -1807,6 +1833,10 @@ impl ArtifactProjectionEntry {
                 }
             }
         }
+        if self.sensitive_content {
+            crate::cbor_gen::write_text(out, "sensitive_content");
+            crate::cbor_gen::write_bool(out, self.sensitive_content);
+        }
         Ok(())
     }
 
@@ -1821,6 +1851,7 @@ impl ArtifactProjectionEntry {
         let mut f_name: Option<String> = None;
         let mut f_origin: Option<String> = None;
         let mut f_content: Option<String> = None;
+        let mut f_sensitive_content: bool = false;
         let mut f_labels: BTreeMap<String, String> = BTreeMap::new();
         let mut f_annotations: BTreeMap<String, String> = BTreeMap::new();
         let n = dec.read_map_header()?;
@@ -1830,6 +1861,7 @@ impl ArtifactProjectionEntry {
                 "name" => f_name = Some(dec.read_text()?),
                 "origin" => f_origin = Some(dec.read_text()?),
                 "content" => f_content = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
+                "sensitive_content" => f_sensitive_content = dec.read_bool()?,
                 "labels" => f_labels = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "annotations" => f_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 _ => dec.skip()?,
@@ -1839,6 +1871,7 @@ impl ArtifactProjectionEntry {
             name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
             origin: f_origin.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field origin".to_string()))?,
             content: f_content.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field content".to_string()))?,
+            sensitive_content: f_sensitive_content,
             labels: f_labels,
             annotations: f_annotations,
         })

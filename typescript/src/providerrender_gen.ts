@@ -37,7 +37,7 @@ export interface RenderNodeInput {
   artifacts_projection?: ArtifactsProjection;
 }
 
-// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys, outbound uses edges, boundary path, deployment wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
+// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys and over the values as a whole, outbound uses edges, boundary path, sync wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
 export interface IRNodeProjection {
   // The node's absolute id within the topology graph.
   id: string;
@@ -49,8 +49,10 @@ export interface IRNodeProjection {
   values?: Record<string, unknown>;
   // The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
   features?: Record<string, unknown>;
-  // Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
+  // Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here — whether such a payload was produced from a value declared sensitive is carried instead by sensitive_values, and by an artifact entry's own sensitive_content. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
   sensitive_rendered_keys?: Record<string, string>;
+  // True when the values this payload carries were produced by a template that reads a value an author declared sensitive, or a value traced to one: a Recipe's or a FeatureRecipe's valuesMapping, a single template whose output keys and values are its own invention, so no key of that output can be traced back to the datum it came from and the whole map is marked instead. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from a value's content or a key's name. A guest composing text a person reads, a refusal or a warning, keeps every value of the node's values out of that text when this is true, and keeps out the value under any key sensitive_rendered_keys names whether or not it is: the two compose, one naming the keys whose identity is recovered exactly and this one covering the map where none can be. Absent when no such template read such a value, which includes values that are the declared leaves themselves, marked per key in sensitive_rendered_keys instead, and absent on a payload carrying no values. Absence never states that no value is sensitive.
+  sensitive_values?: boolean;
   // Declared and deliberately withheld: the host never populates this, so the map is absent from every render payload. An outbound edge is consumed before dispatch — the edge's published values are rehydrated into the node's own inject pipe, which the Recipe has already evaluated into the values and workload the guest receives — and a guest assembling a boundary receives the edge list on its own input instead. Were it populated it would key the node's outbound uses edges by socket alias, each carrying that socket's ordered target node ids in author order.
   uses?: Record<string, string[]>;
   // The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
@@ -203,6 +205,8 @@ export interface FetchExternalInputResponse {
 export interface WorkloadProjection {
   // The host-evaluated, post-validation Workload the guest synthesizes; opaque at this schema layer so the socket schema does not rebind the Workload entity contract.
   workload: unknown;
+  // True when the template that produced workload reads a value an author declared sensitive, or a value traced to one. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the content of any field. A rendered workload's fields carry no link back to the data its template read, so this marks the whole document: a guest composing text a person reads, a refusal or a warning, keeps every value the workload carries out of that text when this is true, while the document's shape — its keys and where a value sits — stays readable. The attachment entries the node projection's sensitive_rendered_keys names are marked there whether or not this is set. Absent when the template reads no such value; absence never states that no field is sensitive.
+  sensitive_workload?: boolean;
   // Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced. Whether an attachment handles declared-sensitive material is not repeated here: it travels on the node projection's matching feature entry, which a guest reads by the same instance name.
   attachment_provides?: Record<string, Record<string, string>>;
 }
@@ -213,7 +217,7 @@ export interface ArtifactsProjection {
   entries: ArtifactProjectionEntry[];
 }
 
-// One pre-evaluated artifact entry the host hands a Provider guest to place: its host-resolved output name, its origin, the already-template-evaluated content bytes, and the build-provenance label and annotation key sets the host computed for the node. The guest decides how to place the provenance (splicing it into a manifest's metadata, prepending it as a comment, or emitting a companion file) and where the file lands.
+// One pre-evaluated artifact entry the host hands a Provider guest to place: its host-resolved output name, its origin, the already-template-evaluated content bytes, whether the template those bytes came from reads a value declared sensitive, and the build-provenance label and annotation key sets the host computed for the node. The guest decides how to place the provenance (splicing it into a manifest's metadata, prepending it as a comment, or emitting a companion file) and where the file lands.
 export interface ArtifactProjectionEntry {
   // The host-resolved output name for the entry: the author-declared map key, with a file supplied by a library bundle nested under that key. The guest places the entry at this name or under a provider-specific sub-path derived from it.
   name: string;
@@ -221,6 +225,8 @@ export interface ArtifactProjectionEntry {
   origin: string;
   // The already-template-evaluated content bytes the host produced from the entry's inline content or imported file, evaluated against the render context using the guest's declared artifact-template delimiter pair. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the guest decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
   content: string;
+  // True when the template this entry's content was evaluated from reads a value an author declared sensitive, or a value traced to one. It is read from the template's own references against the declarations, with the delimiter pair the content was evaluated with — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the content itself. The content is that template's output, so nothing in it can be traced back to the datum it came from: a guest composing text a person reads, a refusal or a warning, keeps every part of the content out of that text when this is true, a parser's own message about the content included. It is set per entry, so one entry's template reading such a value says nothing about another's. Absent when the template reads no such value; absence never states that the content is not sensitive.
+  sensitive_content?: boolean;
   // The Kubernetes-label-safe build-provenance key set the host computed for the node, keyed by label name. A guest that stamps provenance into a manifest's metadata.labels splices these; a guest whose output is not Kubernetes YAML ignores them.
   labels?: Record<string, string>;
   // The build-provenance key set the host computed for the node that a Kubernetes label cannot represent, keyed by annotation name. A guest that stamps provenance into a manifest's metadata.annotations splices these; a guest whose output is not Kubernetes YAML ignores them.
@@ -507,6 +513,7 @@ export function encodeIRNodeProjection(v: IRNodeProjection): string {
   if (v.values !== undefined && Object.keys(v.values).length > 0) parts.push(`${jstr("values")}:${`{${Object.keys(v.values!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values![k0])}`).join(",")}}`}`);
   if (v.features !== undefined && Object.keys(v.features).length > 0) parts.push(`${jstr("features")}:${`{${Object.keys(v.features!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.features![k0])}`).join(",")}}`}`);
   if (v.sensitive_rendered_keys !== undefined && Object.keys(v.sensitive_rendered_keys).length > 0) parts.push(`${jstr("sensitive_rendered_keys")}:${`{${Object.keys(v.sensitive_rendered_keys!).sort().map((k0) => `${jstr(k0)}:${jstr(v.sensitive_rendered_keys![k0])}`).join(",")}}`}`);
+  if (v.sensitive_values !== undefined && v.sensitive_values !== false) parts.push(`${jstr("sensitive_values")}:${String(v.sensitive_values)}`);
   if (v.uses !== undefined && Object.keys(v.uses).length > 0) parts.push(`${jstr("uses")}:${`{${Object.keys(v.uses!).sort().map((k0) => `${jstr(k0)}:${`[${v.uses![k0]!.map((e1) => jstr(e1)).join(",")}]`}`).join(",")}}`}`);
   if (v.boundary_path !== undefined && v.boundary_path !== "") parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
@@ -681,6 +688,7 @@ export function decodeFetchExternalInputResponse(data: string): FetchExternalInp
 export function encodeWorkloadProjection(v: WorkloadProjection): string {
   const parts: string[] = [];
   parts.push(`${jstr("workload")}:${encodeOpaque(v.workload)}`);
+  if (v.sensitive_workload !== undefined && v.sensitive_workload !== false) parts.push(`${jstr("sensitive_workload")}:${String(v.sensitive_workload)}`);
   if (v.attachment_provides !== undefined && Object.keys(v.attachment_provides).length > 0) parts.push(`${jstr("attachment_provides")}:${`{${Object.keys(v.attachment_provides!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.attachment_provides![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.attachment_provides![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
@@ -704,6 +712,7 @@ export function encodeArtifactProjectionEntry(v: ArtifactProjectionEntry): strin
   parts.push(`${jstr("name")}:${jstr(v.name)}`);
   parts.push(`${jstr("origin")}:${jstr(v.origin)}`);
   parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  if (v.sensitive_content !== undefined && v.sensitive_content !== false) parts.push(`${jstr("sensitive_content")}:${String(v.sensitive_content)}`);
   if (v.labels !== undefined && Object.keys(v.labels).length > 0) parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) parts.push(`${jstr("annotations")}:${`{${Object.keys(v.annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.annotations![k0])}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
@@ -1072,6 +1081,7 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
   if (v.boundary_path !== undefined && v.boundary_path !== "") n++;
   if (v.output_labels !== undefined && Object.keys(v.output_labels).length > 0) n++;
   if (v.recipe_version !== undefined && v.recipe_version !== "") n++;
+  if (v.sensitive_values !== undefined && v.sensitive_values !== false) n++;
   if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") n++;
   if (v.label_component_id !== undefined && v.label_component_id !== "") n++;
   if (v.sensitive_rendered_keys !== undefined && Object.keys(v.sensitive_rendered_keys).length > 0) n++;
@@ -1154,6 +1164,10 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
   }
   writeText(out, "resolved_recipe");
   writeText(out, v.resolved_recipe);
+  if (v.sensitive_values !== undefined && v.sensitive_values !== false) {
+    writeText(out, "sensitive_values");
+    writeBool(out, v.sensitive_values);
+  }
   if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") {
     writeText(out, "derived_name_basis");
     writeText(out, v.derived_name_basis);
@@ -1193,6 +1207,7 @@ export function decodeCBORIRNodeProjectionFrom(dec: CborDec): IRNodeProjection {
       case "values": o["values"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       case "features": o["features"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       case "sensitive_rendered_keys": o["sensitive_rendered_keys"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "sensitive_values": o["sensitive_values"] = dec.readBool(); break;
       case "uses": o["uses"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); } return m; })(); break;
       case "boundary_path": o["boundary_path"] = dec.readText(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;
@@ -1813,10 +1828,15 @@ export function encodeCBORWorkloadProjection(v: WorkloadProjection): Uint8Array 
 
 export function appendCBORWorkloadProjection(out: number[], v: WorkloadProjection): void {
   let n = 1;
+  if (v.sensitive_workload !== undefined && v.sensitive_workload !== false) n++;
   if (v.attachment_provides !== undefined && Object.keys(v.attachment_provides).length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "workload");
   writeBytes(out, utf8Encode(JSON.stringify(v.workload)));
+  if (v.sensitive_workload !== undefined && v.sensitive_workload !== false) {
+    writeText(out, "sensitive_workload");
+    writeBool(out, v.sensitive_workload);
+  }
   if (v.attachment_provides !== undefined && Object.keys(v.attachment_provides).length > 0) {
     writeText(out, "attachment_provides");
     {
@@ -1851,6 +1871,7 @@ export function decodeCBORWorkloadProjectionFrom(dec: CborDec): WorkloadProjecti
     const k = dec.readText();
     switch (k) {
       case "workload": o["workload"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "sensitive_workload": o["sensitive_workload"] = dec.readBool(); break;
       case "attachment_provides": o["attachment_provides"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); } return m; })(); break;
       default: dec.skip();
     }
@@ -1905,6 +1926,7 @@ export function appendCBORArtifactProjectionEntry(out: number[], v: ArtifactProj
   let n = 3;
   if (v.labels !== undefined && Object.keys(v.labels).length > 0) n++;
   if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) n++;
+  if (v.sensitive_content !== undefined && v.sensitive_content !== false) n++;
   writeHead(out, 5, n);
   writeText(out, "name");
   writeText(out, v.name);
@@ -1936,6 +1958,10 @@ export function appendCBORArtifactProjectionEntry(out: number[], v: ArtifactProj
       }
     }
   }
+  if (v.sensitive_content !== undefined && v.sensitive_content !== false) {
+    writeText(out, "sensitive_content");
+    writeBool(out, v.sensitive_content);
+  }
 }
 
 export function decodeCBORArtifactProjectionEntry(data: Uint8Array): ArtifactProjectionEntry {
@@ -1952,6 +1978,7 @@ export function decodeCBORArtifactProjectionEntryFrom(dec: CborDec): ArtifactPro
       case "name": o["name"] = dec.readText(); break;
       case "origin": o["origin"] = dec.readText(); break;
       case "content": o["content"] = b64encode(dec.readBytes()); break;
+      case "sensitive_content": o["sensitive_content"] = dec.readBool(); break;
       case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       default: dec.skip();
