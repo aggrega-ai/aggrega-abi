@@ -276,6 +276,17 @@ func TestSocketParity_RenderNodeOutput(t *testing.T) {
 	roundTripBothGolden[abi.RenderNodeOutput](t, "RenderNodeOutput")
 }
 
+// TestSocketParity_RenderNodeOutputRenderFacts pins a render output whose fact
+// list is POPULATED. The field is omitted when empty, so every other vector on this
+// socket carries the same bytes whether the codec handles it or drops it; this one
+// does not. Its facts are listed out of name order and one value is an object whose
+// keys are out of key order, so a codec that sorted the list, or re-serialised a
+// value instead of carrying its bytes, fails the byte-compare.
+func TestSocketParity_RenderNodeOutputRenderFacts(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderNodeOutput](t, "RenderNodeOutputRenderFacts")
+}
+
 // TestSocketParity_IRNodeProjectionSensitiveRenderedKeys pins a node projection
 // whose per-key sensitivity marking is POPULATED. The field is omitted from the
 // payload when it is empty, so every other vector on this socket carries the same

@@ -184,6 +184,13 @@ cbor_case!(policy_input, aggrega_abi::PolicyInput, "PolicyInput");
 cbor_case!(policy_output, aggrega_abi::PolicyOutput, "PolicyOutput");
 cbor_case!(render_node_input, aggrega_abi::RenderNodeInput, "RenderNodeInput");
 cbor_case!(render_node_output, aggrega_abi::RenderNodeOutput, "RenderNodeOutput");
+// A second vector for RenderNodeOutput, so cbor_vector rather than cbor_case: the
+// trait binding for this type is declared by the vector above. This one carries a
+// POPULATED fact list, which no other vector on this socket does — the field is
+// elided when empty, so every other vector's bytes are the same whether the codec
+// handles it or drops it. Its facts are listed out of name order and its object
+// value's keys out of key order, so a codec that sorted either would not match.
+cbor_vector!(render_node_output_render_facts, aggrega_abi::RenderNodeOutput, "RenderNodeOutputRenderFacts");
 // A second vector for IRNodeProjection, so cbor_vector rather than cbor_case: the
 // trait binding for this type is declared once with the map-order probe below.
 // This vector carries a POPULATED per-key sensitivity marking, which no other

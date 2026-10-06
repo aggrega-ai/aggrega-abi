@@ -102,7 +102,7 @@ pub struct NodeProvenance {
     pub provider_version: String,
 }
 
-/// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
+/// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, the facts it reports about what it emitted, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderNodeOutput {
     /// The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
@@ -110,6 +110,9 @@ pub struct RenderNodeOutput {
     /// The names the guest derived while rendering this node, keyed by the key space it derived them into, each space carrying its names in derivation order. A guest that derives the name its output addresses a resource by has put that name inside the file bytes the host writes verbatim, where the host cannot see it; declaring it here is how the guest asks the host to confirm no two derivations landed on one name. The host compares declared names for equality within one declared space and does nothing else — it does not parse a name, does not learn what a space or a name means, and never derives one itself. Two contributors to the same assembled output that declare the same name in the same space halt the build, and the halt names the space, the name, and both contributors. Both the space names and the names within them are the guest's own vocabulary: a guest wanting uniqueness across a narrower or wider scope than one assembled output expresses that scope in the space name it declares. Preserves declaration order so the payload is byte-identical across runs of identical input. Absent when the guest derives no names it wants checked, which leaves the check inert for that guest.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub derived_keys: BTreeMap<String, Vec<String>>,
+    /// Facts the guest reports about what it emitted for this node, in the order the guest lists them. Each fact pairs a name with a value, and both are the guest's own vocabulary: which facts a provider reports, what each name means and what shape each value takes are part of that provider's documented contract, not of this socket's. The host carries the list verbatim and in order — it reads no name, parses no value and never derives a fact itself — so a provider can report something only its own format knowledge can see, such as a property of the documents it wrote, without the host learning that format. Reporting facts never changes what is written: the files the host writes are the files the guest returned, whether or not facts accompany them. The guest lists its facts in a fixed order so the payload is byte-identical across runs of identical input. Absent when the guest reports nothing, which is a complete answer rather than a missing one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub render_facts: Vec<RenderFact>,
     /// Diagnostics the guest raised while rendering. Each element is the shared Wasm-plugin diagnostic shape.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
@@ -151,6 +154,15 @@ pub struct RenderedFile {
     /// The format the guest declares the emitted file was rendered in, so the host can route the file to a matching parser. Absent when the guest declares no format, in which case the host infers the format from the file extension.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub format: String,
+}
+
+/// One fact a Provider guest reports about what it emitted for a node: a name and a value, both defined and documented by the provider. The host carries the fact exactly as the guest wrote it and reads neither half.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenderFact {
+    /// The fact's name, from the provider's own documented vocabulary.
+    pub name: String,
+    /// The fact's value: any JSON value — an object, an array, a string, a number, a boolean — in the shape the provider documents for that name. It is carried as the JSON document the guest wrote, byte for byte, so the order of an object's keys and of an array's items is the guest's own.
+    pub value: Box<RawValue>,
 }
 
 /// One file of a pre-packaged source projection: its chart-root-relative path and its raw bytes, exactly as the host read them from the local source at compile time.
@@ -314,7 +326,7 @@ pub struct AssembleBoundaryInput {
     pub aggregate_name: String,
 }
 
-/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its deployment wave, the values the compiler resolved for it where those are the compiler's to supply, and the render output the render_node export produced for it.
+/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its sync wave, the values the compiler resolved for it where those are the compiler's to supply, and the files the render_node export produced for it — carried in the render output's shape, with every member of that shape other than its files left absent.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderedNode {
     /// The node's absolute id within the topology graph. A contributor that is not one of the graph's nodes — a Feature attached at a boundary rather than at a component — carries the compiler's own dispatch identity for it here instead, which is the same identity the render_node call for that contributor carried; it distinguishes one contributor from another and is not a name any target accepts. What such a contributor derives names from inside the assembled artifact is a separate carry, derived_name_basis.
@@ -985,6 +997,7 @@ impl RenderNodeOutput {
         if !self.error.is_empty() { n += 1; }
         if !self.diagnostics.is_empty() { n += 1; }
         if !self.derived_keys.is_empty() { n += 1; }
+        if !self.render_facts.is_empty() { n += 1; }
         if !self.condition_code.is_empty() { n += 1; }
         if !self.condition_short_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -1030,6 +1043,16 @@ impl RenderNodeOutput {
                 }
             }
         }
+        if !self.render_facts.is_empty() {
+            crate::cbor_gen::write_text(out, "render_facts");
+            {
+                let c = &self.render_facts;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
         if !self.condition_code.is_empty() {
             crate::cbor_gen::write_text(out, "condition_code");
             crate::cbor_gen::write_text(out, &self.condition_code);
@@ -1051,6 +1074,7 @@ impl RenderNodeOutput {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_files: Option<Vec<RenderedFile>> = None;
         let mut f_derived_keys: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut f_render_facts: Vec<RenderFact> = Vec::new();
         let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
         let mut f_error: String = String::new();
         let mut f_condition_code: String = String::new();
@@ -1061,6 +1085,7 @@ impl RenderNodeOutput {
             match k.as_str() {
                 "files" => f_files = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv }),
                 "derived_keys" => f_derived_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
+                "render_facts" => f_render_facts = { let sn = dec.read_array_header()?; let mut sv: Vec<RenderFact> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderFact::decode_cbor_from(dec)?); } sv },
                 "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
                 "error" => f_error = dec.read_text()?,
                 "condition_code" => f_condition_code = dec.read_text()?,
@@ -1071,6 +1096,7 @@ impl RenderNodeOutput {
         Ok(Self {
             files: f_files.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field files".to_string()))?,
             derived_keys: f_derived_keys,
+            render_facts: f_render_facts,
             diagnostics: f_diagnostics,
             error: f_error,
             condition_code: f_condition_code,
@@ -1201,6 +1227,51 @@ impl RenderedFile {
             path: f_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field path".to_string()))?,
             content: f_content.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field content".to_string()))?,
             format: f_format,
+        })
+    }
+}
+
+impl RenderFact {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 2;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "name");
+        crate::cbor_gen::write_text(out, &self.name);
+        crate::cbor_gen::write_text(out, "value");
+        crate::cbor_gen::write_bytes(out, self.value.get().as_bytes());
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_name: Option<String> = None;
+        let mut f_value: Option<Box<RawValue>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "name" => f_name = Some(dec.read_text()?),
+                "value" => f_value = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
+            value: f_value.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field value".to_string()))?,
         })
     }
 }

@@ -103,6 +103,12 @@ const vectors: Array<[string, string]> = [
   ["PolicyOutput", "PolicyOutput"],
   ["RenderNodeInput", "RenderNodeInput"],
   ["RenderNodeOutput", "RenderNodeOutput"],
+  // A render output carrying a POPULATED fact list: the field is omitted when
+  // empty, so this is the vector where dropping it moves the bytes. Its facts are
+  // listed out of name order and its object value's keys out of key order; this
+  // package holds each value PARSED and re-serialises it, so the vector pins that
+  // the re-serialisation keeps the guest's own order rather than sorting it.
+  ["RenderNodeOutputRenderFacts", "RenderNodeOutput"],
   ["IRNodeProjectionSensitiveRenderedKeys", "IRNodeProjection"],
   ["IRFeatureEntrySensitivePayloadLeaves", "IRFeatureEntry"],
   // An attachment entry carrying the connection it was written on, beside one of the
