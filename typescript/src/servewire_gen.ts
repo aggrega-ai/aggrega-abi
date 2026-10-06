@@ -82,6 +82,7 @@ export type RequestMethod =
   | "aggrega/resolveDependencies"
   | "aggrega/scaffoldEntity"
   | "aggrega/search"
+  | "aggrega/setActiveRelease"
   | "aggrega/signArtifacts"
   | "aggrega/validate";
 
@@ -686,6 +687,14 @@ export interface AttachmentContainerParams {
   // The graph node the attachment is for.
   graphNode?: string;
   // The Release whose graph the node belongs to, as a path relative to the workspace root.
+  release?: string;
+}
+
+// Records a Release as the workspace's default by writing its active-Release marker, `.aggrega/active-release`: the choice `aggrega/activeRelease` reports reads the marker after the configuration's authoring Release. The marker is written inside the workspace and nowhere else: where the `.aggrega` directory or the marker is a link leading out of the workspace, whether or not the place it leads to exists yet, the write is refused naming the link and nothing is written. The answer is the one `aggrega/activeRelease` gives once the marker is written, so it names a different Release where the configuration's authoring Release outranks the marker.
+export interface SetActiveReleaseParams {
+  workspaceRoot?: WorkspaceRootSubject;
+  workDoneToken?: ProgressToken;
+  // The Release to record, as a path relative to the workspace root. An absolute path, and one climbing out of the workspace, are refused; so is one leading out of it through a link, unless the workspace configuration names that Release.
   release?: string;
 }
 
@@ -2923,6 +2932,18 @@ export function encodeAttachmentContainerParams(v: AttachmentContainerParams): s
 
 export function decodeAttachmentContainerParams(data: string): AttachmentContainerParams {
   return JSON.parse(data) as AttachmentContainerParams;
+}
+
+export function encodeSetActiveReleaseParams(v: SetActiveReleaseParams): string {
+  const parts: string[] = [];
+  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSetActiveReleaseParams(data: string): SetActiveReleaseParams {
+  return JSON.parse(data) as SetActiveReleaseParams;
 }
 
 export function encodeEditDocumentParams(v: EditDocumentParams): string {
