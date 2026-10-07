@@ -662,7 +662,7 @@ export interface AttachCandidatesParams {
   release?: string;
   // Labels to judge against directly, in place of reading them from an entity or a graph node.
   labels?: Record<string, string>;
-  // One connection the graph node's component draws, to answer for as well as for the node: the answer then also carries slots, each slot the connection's socket declares with the Features that may fill it, or noSlotReason where no slot may be filled. It is sent only with graphNode and release, because a connection exists only on a compiled graph; sent with node or labels it is refused. The candidates beside it keep their meaning, the Features that may attach to the node itself. Its document is accepted and does not change this answer: the slots are the socket's and the candidates the Features', the same whichever document an attachment is written in.
+  // One connection drawn by the component of the node graphNode names, to answer for as well as for that node: the answer then also carries slots, each slot the connection's socket declares with the Features that may fill it, or noSlotReason where no slot may be filled. It is sent only with graphNode and release, because a connection exists only on a compiled graph; sent with node or labels it is refused. The candidates beside it keep their meaning, the Features that may attach to the node itself. Its document is accepted and does not change this answer: the slots are the socket's and the candidates the Features', the same whichever document an attachment is written in.
   connection?: ConnectionCoordinate;
 }
 
