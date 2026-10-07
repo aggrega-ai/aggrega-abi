@@ -650,7 +650,7 @@ export interface CompletionContext {
   triggerCharacter?: string;
 }
 
-// Answers which Features may be attached to an entity, judged against that entity's labels.
+// Answers which Features may be attached to an entity, judged against that entity's labels, and, for one connection a graph node's component draws, which may fill each slot the connection's socket declares.
 export interface AttachCandidatesParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
@@ -662,6 +662,8 @@ export interface AttachCandidatesParams {
   release?: string;
   // Labels to judge against directly, in place of reading them from an entity or a graph node.
   labels?: Record<string, string>;
+  // One connection the graph node's component draws, to answer for as well as for the node: the answer then also carries slots, each slot the connection's socket declares with the Features that may fill it, or noSlotReason where no slot may be filled. It is sent only with graphNode and release, because a connection exists only on a compiled graph; sent with node or labels it is refused. The candidates beside it keep their meaning, the Features that may attach to the node itself. Its document is accepted and does not change this answer: the slots are the socket's and the candidates the Features', the same whichever document an attachment is written in.
+  connection?: ConnectionCoordinate;
 }
 
 // Answers which entities a socket on an entity may be wired to.
@@ -684,7 +686,7 @@ export interface InsertionPointParams {
   container?: string[];
 }
 
-// Answers which document, and where in it, an attachment on a graph node belongs.
+// Answers which document, and where in it, an attachment on a graph node, or on one connection its component draws, belongs.
 export interface AttachmentContainerParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
@@ -692,6 +694,18 @@ export interface AttachmentContainerParams {
   graphNode?: string;
   // The Release whose graph the node belongs to, as a path relative to the workspace root.
   release?: string;
+  // One connection the graph node's component draws, when the attachment is for that connection rather than for the node: the answer then names the connection's own features container in the document its document field names, a field required here. In the Aggregate, that is the connection's entry in the document the node was authored in, refused for a connection the Release drew, which the Aggregate holds no entry for. In the Release, it is the per-edge entry under the Release's own entry for the node, whether or not the Release writes one for that connection yet, refused where the Release writes no entry for the node. A connection a Feature drew is refused in either document, because an attachment is written only on a connection a component or the Release draws.
+  connection?: ConnectionCoordinate;
+}
+
+// One connection a graph node's component draws, addressed by the socket it is wired through and the alias it carries in that socket, and the document an attachment on it is written in. A connection carries attachments filling the slots its socket declares, and either the Aggregate or the Release may write them.
+export interface ConnectionCoordinate {
+  // The dependency socket the connection is wired through.
+  socket: string;
+  // The name the connection carries within its socket.
+  alias: string;
+  // The document an attachment on the connection is written in. The set is closed, and a value outside it is refused.
+  document?: string;
 }
 
 // Records a Release as the workspace's default by writing a marker in the `.aggrega` directory: the choice `aggrega/activeRelease` reports reads that marker after the configuration's authoring Release. The marker is written inside the workspace and nowhere else: where the `.aggrega` directory or the marker is a link leading out of the workspace, whether or not the place it leads to exists yet, the write is refused naming the link and nothing is written. The answer is the one `aggrega/activeRelease` gives once the marker is written, so it names a different Release where the configuration's authoring Release outranks the marker.
@@ -1087,6 +1101,24 @@ export interface SocketCandidacy {
   required: boolean;
   // The entities that may be wired into it.
   targets: WorkspaceEntityRef[] | null;
+}
+
+// One slot a connection's socket declares, as the consuming Component declares it on the socket, and the Features that may fill it on that connection.
+export interface SlotCandidacy {
+  // The slot's name, which is the key an attachment filling it is written under in the connection's features.
+  slot: string;
+  // The label selector a Feature filling the slot must satisfy with its own labels. Empty where the slot declares none, which admits any Feature.
+  selector: string;
+  // Whether every connection wired through the socket must fill the slot for the build to proceed.
+  required: boolean;
+  // The delivery mechanisms the slot permits for what fills it, in the order the Component declares them. Empty where it declares none.
+  inject: string[];
+  // Whether the slot declares that what fills it handles secret material. It marks the attachment filling it and refuses nothing.
+  sensitive: boolean;
+  // What the Component says the slot is for. Empty where it says nothing.
+  description: string;
+  // Each Feature that may fill the slot on this connection: one whose declared applicability the graph node's labels satisfy, which every attachment the node carries is held to, and whose own labels satisfy the slot's selector. A Feature whose applicability or whose labels cannot be read against the selector is not offered, because a build refuses rather than admits it.
+  candidates: SourcedEntityRef[];
 }
 
 // One entity the workspace index holds.
@@ -1861,7 +1893,7 @@ export interface CatalogIndexResult {
   unreadLinkedFiles: string[];
 }
 
-// Which Features may be attached to the entity, and the labels they were judged against.
+// Which Features may be attached to the entity, and the labels they were judged against; and, for a connection the request named, the slots its socket declares with the Features that may fill each.
 export interface AttachCandidatesResult {
   // The entity the candidates were judged for.
   node: string;
@@ -1871,6 +1903,10 @@ export interface AttachCandidatesResult {
   labelSource: string;
   // Each Feature that may be attached.
   candidates: SourcedEntityRef[] | null;
+  // Present only when the request named a connection: each slot the connection's socket declares, in the order the Component declares them, with the Features that may fill it. Empty when no slot may be filled on the connection, and noSlotReason then says why — which a client reads rather than taking an empty list for slots no Feature matched.
+  slots?: SlotCandidacy[];
+  // Present only when the request named a connection and no slot may be filled on it: why nothing may attach there. Absent wherever the socket declares a slot. The set is closed.
+  noSlotReason?: string;
 }
 
 // Which entities each socket on the entity may be wired to.
@@ -1906,7 +1942,7 @@ export interface InsertionPointResult {
   entryShape: string;
 }
 
-// Which document, and where in it, an attachment on the graph node belongs.
+// Which document, and where in it, an attachment on the graph node, or on the connection the request named, belongs.
 export interface AttachmentContainerResult {
   // The graph node the attachment is for.
   node: string;
@@ -2894,6 +2930,7 @@ export function encodeAttachCandidatesParams(v: AttachCandidatesParams): string 
   if (v.graphNode !== undefined && v.graphNode !== "") parts.push(`${jstr("graphNode")}:${jstr(v.graphNode)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   if (v.labels !== undefined && Object.keys(v.labels).length > 0) parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
+  if (v.connection !== undefined) parts.push(`${jstr("connection")}:${encodeConnectionCoordinate(v.connection)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2933,11 +2970,24 @@ export function encodeAttachmentContainerParams(v: AttachmentContainerParams): s
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.graphNode !== undefined && v.graphNode !== "") parts.push(`${jstr("graphNode")}:${jstr(v.graphNode)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
+  if (v.connection !== undefined) parts.push(`${jstr("connection")}:${encodeConnectionCoordinate(v.connection)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeAttachmentContainerParams(data: string): AttachmentContainerParams {
   return JSON.parse(data) as AttachmentContainerParams;
+}
+
+export function encodeConnectionCoordinate(v: ConnectionCoordinate): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("socket")}:${jstr(v.socket)}`);
+  parts.push(`${jstr("alias")}:${jstr(v.alias)}`);
+  if (v.document !== undefined && v.document !== "") parts.push(`${jstr("document")}:${jstr(v.document)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeConnectionCoordinate(data: string): ConnectionCoordinate {
+  return JSON.parse(data) as ConnectionCoordinate;
 }
 
 export function encodeSetActiveReleaseParams(v: SetActiveReleaseParams): string {
@@ -3380,6 +3430,22 @@ export function encodeSocketCandidacy(v: SocketCandidacy): string {
 
 export function decodeSocketCandidacy(data: string): SocketCandidacy {
   return JSON.parse(data) as SocketCandidacy;
+}
+
+export function encodeSlotCandidacy(v: SlotCandidacy): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("slot")}:${jstr(v.slot)}`);
+  parts.push(`${jstr("selector")}:${jstr(v.selector)}`);
+  parts.push(`${jstr("required")}:${String(v.required)}`);
+  parts.push(`${jstr("inject")}:${`[${v.inject!.map((e0) => jstr(e0)).join(",")}]`}`);
+  parts.push(`${jstr("sensitive")}:${String(v.sensitive)}`);
+  parts.push(`${jstr("description")}:${jstr(v.description)}`);
+  parts.push(`${jstr("candidates")}:${`[${v.candidates!.map((e0) => encodeSourcedEntityRef(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSlotCandidacy(data: string): SlotCandidacy {
+  return JSON.parse(data) as SlotCandidacy;
 }
 
 export function encodeCatalogEntity(v: CatalogEntity): string {
@@ -4225,6 +4291,8 @@ export function encodeAttachCandidatesResult(v: AttachCandidatesResult): string 
   parts.push(`${jstr("nodeLabels")}:${v.nodeLabels === null ? "null" : `{${Object.keys(v.nodeLabels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.nodeLabels![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("labelSource")}:${jstr(v.labelSource)}`);
   parts.push(`${jstr("candidates")}:${v.candidates === null ? "null" : `[${v.candidates!.map((e0) => encodeSourcedEntityRef(e0)).join(",")}]`}`);
+  if (v.slots !== undefined && v.slots.length > 0) parts.push(`${jstr("slots")}:${`[${v.slots!.map((e0) => encodeSlotCandidacy(e0)).join(",")}]`}`);
+  if (v.noSlotReason !== undefined && v.noSlotReason !== "") parts.push(`${jstr("noSlotReason")}:${jstr(v.noSlotReason)}`);
   return `{${parts.join(",")}}`;
 }
 
