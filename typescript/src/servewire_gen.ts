@@ -47,6 +47,7 @@ export type RequestMethod =
   | "aggrega/completion"
   | "aggrega/configCapture"
   | "aggrega/configInit"
+  | "aggrega/connectionAtPosition"
   | "aggrega/connectionCandidates"
   | "aggrega/deprecateArtifact"
   | "aggrega/diagnostics"
@@ -696,6 +697,17 @@ export interface AttachmentContainerParams {
   release?: string;
   // One connection the graph node's component draws, when the attachment is for that connection rather than for the node: the answer then names the connection's own features container in the document its document field names, a field required here. In the Aggregate, that is the connection's entry in the document the node was authored in, refused for a connection the Release drew, which the Aggregate holds no entry for. In the Release, it is the per-edge entry under the Release's own entry for the node, whether or not the Release writes one for that connection yet, refused where the Release writes no entry for the node. A connection a Feature drew is refused in either document, because an attachment is written only on a connection a component or the Release draws.
   connection?: ConnectionCoordinate;
+}
+
+// Answers which connection's entry a position in an Aggregate or a Release falls inside: the graph node and the connection, in the terms the candidacy and container requests take them, or why no connection is written there. The entries are the ones an attachment is written in — the entry a component draws a connection with, under the connection's alias, in the document the component was authored in, and every per-edge entry the Release writes — each where the compiled graph records it, so whether a key is a connection is never read from what it is called.
+export interface ConnectionAtPositionParams {
+  workspaceRoot?: WorkspaceRootSubject;
+  workDoneToken?: ProgressToken;
+  // The document the position is in: the Release, or a document the Release's graph records components as authored in — its Aggregate, or the document of a module that Aggregate imports. It is read from what the session holds for it first, and from disk otherwise.
+  file?: string;
+  position?: Position;
+  // The Release whose compiled graph records the connections, as a path relative to the workspace root. It is required for a position in the Aggregate too, because a graph node and a connection exist only on a compiled graph.
+  release?: string;
 }
 
 // One connection a graph node's component draws, addressed by the socket it is wired through and the alias it carries in that socket, and the document an attachment on it is written in. A connection carries attachments filling the slots its socket declares, and either the Aggregate or the Release may write them.
@@ -1952,6 +1964,16 @@ export interface AttachmentContainerResult {
   container: string[] | null;
 }
 
+// The connection whose entry the position falls inside, or why none is reported. Exactly one half is present: graphNode and connection together, or noConnectionReason alone. A position anywhere inside an entry — on its alias, its target or its attachments — is inside that entry, the innermost one where entries nest; a position on a socket's own key, above the entries written under it, is inside none.
+export interface ConnectionAtPositionResult {
+  // The graph node whose component draws the connection, by the id the compiled graph keys it under — the value the candidacy and container requests take as graphNode.
+  graphNode?: string;
+  // The connection, by its socket and its alias, with document naming the document the position was read in — the value the candidacy and container requests take as connection.
+  connection?: ConnectionCoordinate;
+  // Present only where no connection is reported: why. The set is closed.
+  noConnectionReason?: string;
+}
+
 // The Releases the workspace holds, and the links leading out of it, to directories and to files, that were not read for them.
 export interface ReleaseCandidatesResult {
   // Each Release document.
@@ -2978,6 +3000,20 @@ export function encodeAttachmentContainerParams(v: AttachmentContainerParams): s
 
 export function decodeAttachmentContainerParams(data: string): AttachmentContainerParams {
   return JSON.parse(data) as AttachmentContainerParams;
+}
+
+export function encodeConnectionAtPositionParams(v: ConnectionAtPositionParams): string {
+  const parts: string[] = [];
+  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
+  if (v.file !== undefined && v.file !== "") parts.push(`${jstr("file")}:${jstr(v.file)}`);
+  if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
+  if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeConnectionAtPositionParams(data: string): ConnectionAtPositionParams {
+  return JSON.parse(data) as ConnectionAtPositionParams;
 }
 
 export function encodeConnectionCoordinate(v: ConnectionCoordinate): string {
@@ -4343,6 +4379,18 @@ export function encodeAttachmentContainerResult(v: AttachmentContainerResult): s
 
 export function decodeAttachmentContainerResult(data: string): AttachmentContainerResult {
   return JSON.parse(data) as AttachmentContainerResult;
+}
+
+export function encodeConnectionAtPositionResult(v: ConnectionAtPositionResult): string {
+  const parts: string[] = [];
+  if (v.graphNode !== undefined && v.graphNode !== "") parts.push(`${jstr("graphNode")}:${jstr(v.graphNode)}`);
+  if (v.connection !== undefined) parts.push(`${jstr("connection")}:${encodeConnectionCoordinate(v.connection)}`);
+  if (v.noConnectionReason !== undefined && v.noConnectionReason !== "") parts.push(`${jstr("noConnectionReason")}:${jstr(v.noConnectionReason)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeConnectionAtPositionResult(data: string): ConnectionAtPositionResult {
+  return JSON.parse(data) as ConnectionAtPositionResult;
 }
 
 export function encodeReleaseCandidatesResult(v: ReleaseCandidatesResult): string {
