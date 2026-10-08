@@ -11,9 +11,10 @@ package abi
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
 )
 
-// LinterInput The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. policies carries the per-workspace publishing-discipline configuration the rule consults.
+// LinterInput The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. release and components carry the rest of a Release for a rule that reads one whole — proposed is then the Aggregate the Release deploys, release that Release, and components the Component each of the Aggregate's component instances is an instance of; both are omitted on every other input. policies carries the per-workspace publishing-discipline configuration the rule consults.
 type LinterInput struct {
 	// RuleID The rule the plugin should dispatch to, named by its rule id — the same kebab-case identifier the resulting finding carries in rule_id, so a suppressed or reported rule is named the same way on every surface. The recognised set is whatever the shipped plugin dispatches, and it expands as further rules ship; a rule id the plugin does not recognise produces an 'unknown_rule' finding rather than a silent pass.
 	RuleID string `json:"rule_id" yaml:"rule_id" cbor:"rule_id"`
@@ -25,6 +26,10 @@ type LinterInput struct {
 	Previous json.RawMessage `json:"previous,omitempty" yaml:"previous,omitempty" cbor:"previous,omitempty"`
 	// ImplementedComponent Parsed structure of the Component a linted Recipe names in spec.implements, resolved by the host. It is a related entity of a DIFFERENT kind from the one being linted, which is what distinguishes it from previous: previous carries another version of the same entity, while this carries the Component whose declared output contract the Recipe realizes. The host resolves it through the same catalog lookup a build uses, keyed on the Component's name, so all three pin forms spec.implements accepts (unversioned, exact, major-compatible range) reach the same entry. Omitted when the linted entity is not a Recipe, when it names no Component, or when no Component of that name is reachable in the workspace's catalog directories. An absent value means the comparison is unavailable, not that the contract is empty: a rule that reads this field emits no finding when it is absent.
 	ImplementedComponent json.RawMessage `json:"implemented_component,omitempty" yaml:"implemented_component,omitempty" cbor:"implemented_component,omitempty"`
+	// Release Parsed structure of the Release a release-scoped lint names, with its extends chain folded in, so a child Release carries what it inherits from its base. The host converts it from YAML to JSON as it does proposed. Its spec.parameters block is removed before it is handed over: a parameter's value can be the credential itself, no rule reads the block, and so no parameter value reaches a linter plugin through this field. Present only on the input of a rule that reads a whole Release, where proposed is the Aggregate this Release deploys, as its author wrote it; omitted on every other input.
+	Release json.RawMessage `json:"release,omitempty" yaml:"release,omitempty" cbor:"release,omitempty"`
+	// Components The Component each component instance of the Aggregate is an instance of, keyed by the instance name the Aggregate gives it, which is the same key the Aggregate's and the Release's own components maps use. Each value is the Component the instance's type resolves to, with any extends chain folded in, converted to JSON as implemented_component is. An instance whose Component is not reachable in the workspace's catalog directories is absent, and a rule reads that absence as unavailable rather than as a Component declaring nothing. Present only beside release, on the input of a rule that reads a whole Release; omitted on every other input.
+	Components map[string]json.RawMessage `json:"components,omitempty" yaml:"components,omitempty" cbor:"components,omitempty"`
 	// SourcePath Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
 	SourcePath string `json:"source_path,omitempty" yaml:"source_path,omitempty" cbor:"source_path,omitempty"`
 	// Policies The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
@@ -55,6 +60,8 @@ type Policies struct {
 	AllowCategoryMismatches bool `json:"allow_category_mismatches,omitempty" yaml:"allow_category_mismatches,omitempty" cbor:"allow_category_mismatches,omitempty"`
 	// AllowUndeclaredRecipeProvides When true, suppress the provides-declared-by-component rule's findings. That rule reports each key a Recipe publishes in spec.provides that the Component named by its spec.implements does not declare in the provides pillar of its spec.schema. Publishing beyond the declared contract is accepted at build time, so the finding is advisory; a workspace whose Recipes deliberately publish keys their Component does not declare opts out here. Default false.
 	AllowUndeclaredRecipeProvides bool `json:"allow_undeclared_recipe_provides,omitempty" yaml:"allow_undeclared_recipe_provides,omitempty" cbor:"allow_undeclared_recipe_provides,omitempty"`
+	// AllowConnectionCredentialMismatches When true, suppress the connection-credential-matches-target-key rule's findings. That rule reads a whole Release and compares, for each connection whose target declares the key it requires of its callers, the credential the connection presents with the key the target holds: it reports two ends naming different secrets, and a key declared at one end only. Agreement between the two ends is a catalog convention rather than something a build checks, so the finding is advisory; a workspace whose two ends deliberately differ opts out here. Default false.
+	AllowConnectionCredentialMismatches bool `json:"allow_connection_credential_mismatches,omitempty" yaml:"allow_connection_credential_mismatches,omitempty" cbor:"allow_connection_credential_mismatches,omitempty"`
 }
 
 // MarshalJSON encodes LinterInput in field-declaration order, omitting
@@ -96,6 +103,39 @@ func (t LinterInput) MarshalJSON() ([]byte, error) {
 		first = false
 		buf.WriteString("\"implemented_component\":")
 		buf.Write(t.ImplementedComponent)
+	}
+	if len(t.Release) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"release\":")
+		buf.Write(t.Release)
+	}
+	if len(t.Components) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"components\":")
+		{
+			keys := make([]string, 0, len(t.Components))
+			for k := range t.Components {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			buf.WriteByte('{')
+			for i, k := range keys {
+				if i > 0 {
+					buf.WriteByte(',')
+				}
+				writeJSONString(&buf, k)
+				buf.WriteByte(':')
+				mv := t.Components[k]
+				buf.Write(mv)
+			}
+			buf.WriteByte('}')
+		}
 	}
 	if t.SourcePath != "" {
 		if !first {
@@ -163,6 +203,33 @@ func (t *LinterInput) UnmarshalJSON(data []byte) error {
 			} else {
 				t.ImplementedComponent = raw
 			}
+		case "release":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				t.Release = raw
+			}
+		case "components":
+			t.Components = make(map[string]json.RawMessage)
+			if err := expectDelim(dec, '{'); err != nil {
+				return err
+			}
+			for dec.More() {
+				mk, err := readKey(dec)
+				if err != nil {
+					return err
+				}
+				var mv json.RawMessage
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					mv = raw
+				}
+				t.Components[mk] = mv
+			}
+			if err := expectDelim(dec, '}'); err != nil {
+				return err
+			}
 		case "source_path":
 			if s, err := readString(dec); err != nil {
 				return err
@@ -196,7 +263,7 @@ func (t *LinterInput) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *LinterInput) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "rule_id", "entity_kind", "proposed", "previous", "implemented_component", "source_path", "policies"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "rule_id", "entity_kind", "proposed", "previous", "implemented_component", "release", "components", "source_path", "policies"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -392,6 +459,18 @@ func (t Policies) MarshalJSON() ([]byte, error) {
 			buf.WriteString("false")
 		}
 	}
+	if t.AllowConnectionCredentialMismatches != false {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"allow_connection_credential_mismatches\":")
+		if t.AllowConnectionCredentialMismatches {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -452,6 +531,12 @@ func (t *Policies) UnmarshalJSON(data []byte) error {
 			} else {
 				t.AllowUndeclaredRecipeProvides = v
 			}
+		case "allow_connection_credential_mismatches":
+			if v, err := readBool(dec); err != nil {
+				return err
+			} else {
+				t.AllowConnectionCredentialMismatches = v
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -471,7 +556,7 @@ func (t *Policies) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *Policies) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "allow_dynamic_refs", "allow_id_overrides", "allow_direct_x_aggrega_extensions", "allow_aggrega_ai_prefix", "allow_nonstandard_names", "allow_category_mismatches", "allow_undeclared_recipe_provides"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "allow_dynamic_refs", "allow_id_overrides", "allow_direct_x_aggrega_extensions", "allow_aggrega_ai_prefix", "allow_nonstandard_names", "allow_category_mismatches", "allow_undeclared_recipe_provides", "allow_connection_credential_mismatches"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -488,7 +573,13 @@ func (t LinterInput) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t LinterInput) appendCBOR(dst []byte) ([]byte, error) {
 	n := 4
+	if len(t.Release) != 0 {
+		n++
+	}
 	if len(t.Previous) != 0 {
+		n++
+	}
+	if len(t.Components) != 0 {
 		n++
 	}
 	if t.SourcePath != "" {
@@ -499,6 +590,10 @@ func (t LinterInput) appendCBOR(dst []byte) ([]byte, error) {
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
 	var err error
+	if len(t.Release) != 0 {
+		dst = appendCBORTextString(dst, "release")
+		dst = appendCBORByteString(dst, t.Release)
+	}
 	dst = appendCBORTextString(dst, "rule_id")
 	dst = appendCBORTextString(dst, t.RuleID)
 	dst = appendCBORTextString(dst, "policies")
@@ -511,6 +606,22 @@ func (t LinterInput) appendCBOR(dst []byte) ([]byte, error) {
 	}
 	dst = appendCBORTextString(dst, "proposed")
 	dst = appendCBORByteString(dst, t.Proposed)
+	if len(t.Components) != 0 {
+		dst = appendCBORTextString(dst, "components")
+		{
+			keys := make([]string, 0, len(t.Components))
+			for k := range t.Components {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.Components[k]
+				dst = appendCBORByteString(dst, mv)
+			}
+		}
+	}
 	dst = appendCBORTextString(dst, "entity_kind")
 	dst = appendCBORTextString(dst, t.EntityKind)
 	if t.SourcePath != "" {
@@ -572,6 +683,34 @@ func (t *LinterInput) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.ImplementedComponent = json.RawMessage(v)
 			}
+		case "release":
+			if v, err := dec.readByteString(); err != nil {
+				return err
+			} else {
+				t.Release = json.RawMessage(v)
+			}
+		case "components":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]json.RawMessage, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv json.RawMessage
+					if v, err := dec.readByteString(); err != nil {
+						return err
+					} else {
+						mv = json.RawMessage(v)
+					}
+					m[mk] = mv
+				}
+				t.Components = m
+			}
 		case "source_path":
 			if s, err := dec.readTextString(); err != nil {
 				return err
@@ -598,7 +737,7 @@ func (t *LinterInput) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *LinterInput) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "rule_id", "entity_kind", "proposed", "previous", "implemented_component", "source_path", "policies"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "rule_id", "entity_kind", "proposed", "previous", "implemented_component", "release", "components", "source_path", "policies"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)
@@ -729,6 +868,9 @@ func (t Policies) appendCBOR(dst []byte) ([]byte, error) {
 	if t.AllowDirectXAggregaExtensions != false {
 		n++
 	}
+	if t.AllowConnectionCredentialMismatches != false {
+		n++
+	}
 	dst = appendCBORHead(dst, 5, uint64(n))
 	if t.AllowDynamicRefs != false {
 		dst = appendCBORTextString(dst, "allow_dynamic_refs")
@@ -757,6 +899,10 @@ func (t Policies) appendCBOR(dst []byte) ([]byte, error) {
 	if t.AllowDirectXAggregaExtensions != false {
 		dst = appendCBORTextString(dst, "allow_direct_x_aggrega_extensions")
 		dst = appendCBORBool(dst, t.AllowDirectXAggregaExtensions)
+	}
+	if t.AllowConnectionCredentialMismatches != false {
+		dst = appendCBORTextString(dst, "allow_connection_credential_mismatches")
+		dst = appendCBORBool(dst, t.AllowConnectionCredentialMismatches)
 	}
 	return dst, nil
 }
@@ -821,6 +967,12 @@ func (t *Policies) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.AllowUndeclaredRecipeProvides = v
 			}
+		case "allow_connection_credential_mismatches":
+			if v, err := dec.readBool(); err != nil {
+				return err
+			} else {
+				t.AllowConnectionCredentialMismatches = v
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -837,7 +989,7 @@ func (t *Policies) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *Policies) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "allow_dynamic_refs", "allow_id_overrides", "allow_direct_x_aggrega_extensions", "allow_aggrega_ai_prefix", "allow_nonstandard_names", "allow_category_mismatches", "allow_undeclared_recipe_provides"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "allow_dynamic_refs", "allow_id_overrides", "allow_direct_x_aggrega_extensions", "allow_aggrega_ai_prefix", "allow_nonstandard_names", "allow_category_mismatches", "allow_undeclared_recipe_provides", "allow_connection_credential_mismatches"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

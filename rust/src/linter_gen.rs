@@ -8,13 +8,14 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
+use std::collections::BTreeMap;
 use crate::Diagnostic;
 
 fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
 }
 
-/// The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. policies carries the per-workspace publishing-discipline configuration the rule consults.
+/// The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. release and components carry the rest of a Release for a rule that reads one whole — proposed is then the Aggregate the Release deploys, release that Release, and components the Component each of the Aggregate's component instances is an instance of; both are omitted on every other input. policies carries the per-workspace publishing-discipline configuration the rule consults.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinterInput {
     /// The rule the plugin should dispatch to, named by its rule id — the same kebab-case identifier the resulting finding carries in rule_id, so a suppressed or reported rule is named the same way on every surface. The recognised set is whatever the shipped plugin dispatches, and it expands as further rules ship; a rule id the plugin does not recognise produces an 'unknown_rule' finding rather than a silent pass.
@@ -29,6 +30,12 @@ pub struct LinterInput {
     /// Parsed structure of the Component a linted Recipe names in spec.implements, resolved by the host. It is a related entity of a DIFFERENT kind from the one being linted, which is what distinguishes it from previous: previous carries another version of the same entity, while this carries the Component whose declared output contract the Recipe realizes. The host resolves it through the same catalog lookup a build uses, keyed on the Component's name, so all three pin forms spec.implements accepts (unversioned, exact, major-compatible range) reach the same entry. Omitted when the linted entity is not a Recipe, when it names no Component, or when no Component of that name is reachable in the workspace's catalog directories. An absent value means the comparison is unavailable, not that the contract is empty: a rule that reads this field emits no finding when it is absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implemented_component: Option<Box<RawValue>>,
+    /// Parsed structure of the Release a release-scoped lint names, with its extends chain folded in, so a child Release carries what it inherits from its base. The host converts it from YAML to JSON as it does proposed. Its spec.parameters block is removed before it is handed over: a parameter's value can be the credential itself, no rule reads the block, and so no parameter value reaches a linter plugin through this field. Present only on the input of a rule that reads a whole Release, where proposed is the Aggregate this Release deploys, as its author wrote it; omitted on every other input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<Box<RawValue>>,
+    /// The Component each component instance of the Aggregate is an instance of, keyed by the instance name the Aggregate gives it, which is the same key the Aggregate's and the Release's own components maps use. Each value is the Component the instance's type resolves to, with any extends chain folded in, converted to JSON as implemented_component is. An instance whose Component is not reachable in the workspace's catalog directories is absent, and a rule reads that absence as unavailable rather than as a Component declaring nothing. Present only beside release, on the input of a rule that reads a whole Release; omitted on every other input.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub components: BTreeMap<String, Box<RawValue>>,
     /// Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_path: String,
@@ -71,6 +78,9 @@ pub struct Policies {
     /// When true, suppress the provides-declared-by-component rule's findings. That rule reports each key a Recipe publishes in spec.provides that the Component named by its spec.implements does not declare in the provides pillar of its spec.schema. Publishing beyond the declared contract is accepted at build time, so the finding is advisory; a workspace whose Recipes deliberately publish keys their Component does not declare opts out here. Default false.
     #[serde(default, skip_serializing_if = "is_default")]
     pub allow_undeclared_recipe_provides: bool,
+    /// When true, suppress the connection-credential-matches-target-key rule's findings. That rule reads a whole Release and compares, for each connection whose target declares the key it requires of its callers, the credential the connection presents with the key the target holds: it reports two ends naming different secrets, and a key declared at one end only. Agreement between the two ends is a catalog convention rather than something a build checks, so the finding is advisory; a workspace whose two ends deliberately differ opts out here. Default false.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub allow_connection_credential_mismatches: bool,
 }
 
 
@@ -85,10 +95,16 @@ impl LinterInput {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 4;
+        if self.release.is_some() { n += 1; }
         if self.previous.is_some() { n += 1; }
+        if !self.components.is_empty() { n += 1; }
         if !self.source_path.is_empty() { n += 1; }
         if self.implemented_component.is_some() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
+        if let Some(ref x) = self.release {
+            crate::cbor_gen::write_text(out, "release");
+            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
+        }
         crate::cbor_gen::write_text(out, "rule_id");
         crate::cbor_gen::write_text(out, &self.rule_id);
         crate::cbor_gen::write_text(out, "policies");
@@ -99,6 +115,20 @@ impl LinterInput {
         }
         crate::cbor_gen::write_text(out, "proposed");
         crate::cbor_gen::write_bytes(out, self.proposed.get().as_bytes());
+        if !self.components.is_empty() {
+            crate::cbor_gen::write_text(out, "components");
+            {
+                let c = &self.components;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
+            }
+        }
         crate::cbor_gen::write_text(out, "entity_kind");
         crate::cbor_gen::write_text(out, &self.entity_kind);
         if !self.source_path.is_empty() {
@@ -125,6 +155,8 @@ impl LinterInput {
         let mut f_proposed: Option<Box<RawValue>> = None;
         let mut f_previous: Option<Box<RawValue>> = None;
         let mut f_implemented_component: Option<Box<RawValue>> = None;
+        let mut f_release: Option<Box<RawValue>> = None;
+        let mut f_components: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
         let mut f_source_path: String = String::new();
         let mut f_policies: Policies = Policies::default();
         let n = dec.read_map_header()?;
@@ -136,6 +168,8 @@ impl LinterInput {
                 "proposed" => f_proposed = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "previous" => f_previous = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "implemented_component" => f_implemented_component = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "release" => f_release = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "components" => f_components = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
                 "source_path" => f_source_path = dec.read_text()?,
                 "policies" => f_policies = Policies::decode_cbor_from(dec)?,
                 _ => dec.skip()?,
@@ -147,6 +181,8 @@ impl LinterInput {
             proposed: f_proposed.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field proposed".to_string()))?,
             previous: f_previous,
             implemented_component: f_implemented_component,
+            release: f_release,
+            components: f_components,
             source_path: f_source_path,
             policies: f_policies,
         })
@@ -225,6 +261,7 @@ impl Policies {
         if self.allow_category_mismatches { n += 1; }
         if self.allow_undeclared_recipe_provides { n += 1; }
         if self.allow_direct_x_aggrega_extensions { n += 1; }
+        if self.allow_connection_credential_mismatches { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if self.allow_dynamic_refs {
             crate::cbor_gen::write_text(out, "allow_dynamic_refs");
@@ -254,6 +291,10 @@ impl Policies {
             crate::cbor_gen::write_text(out, "allow_direct_x_aggrega_extensions");
             crate::cbor_gen::write_bool(out, self.allow_direct_x_aggrega_extensions);
         }
+        if self.allow_connection_credential_mismatches {
+            crate::cbor_gen::write_text(out, "allow_connection_credential_mismatches");
+            crate::cbor_gen::write_bool(out, self.allow_connection_credential_mismatches);
+        }
         Ok(())
     }
 
@@ -272,6 +313,7 @@ impl Policies {
         let mut f_allow_nonstandard_names: bool = false;
         let mut f_allow_category_mismatches: bool = false;
         let mut f_allow_undeclared_recipe_provides: bool = false;
+        let mut f_allow_connection_credential_mismatches: bool = false;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -283,6 +325,7 @@ impl Policies {
                 "allow_nonstandard_names" => f_allow_nonstandard_names = dec.read_bool()?,
                 "allow_category_mismatches" => f_allow_category_mismatches = dec.read_bool()?,
                 "allow_undeclared_recipe_provides" => f_allow_undeclared_recipe_provides = dec.read_bool()?,
+                "allow_connection_credential_mismatches" => f_allow_connection_credential_mismatches = dec.read_bool()?,
                 _ => dec.skip()?,
             }
         }
@@ -294,6 +337,7 @@ impl Policies {
             allow_nonstandard_names: f_allow_nonstandard_names,
             allow_category_mismatches: f_allow_category_mismatches,
             allow_undeclared_recipe_provides: f_allow_undeclared_recipe_provides,
+            allow_connection_credential_mismatches: f_allow_connection_credential_mismatches,
         })
     }
 }

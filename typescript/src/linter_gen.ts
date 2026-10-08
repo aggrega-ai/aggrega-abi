@@ -24,7 +24,7 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. policies carries the per-workspace publishing-discipline configuration the rule consults.
+// The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. release and components carry the rest of a Release for a rule that reads one whole — proposed is then the Aggregate the Release deploys, release that Release, and components the Component each of the Aggregate's component instances is an instance of; both are omitted on every other input. policies carries the per-workspace publishing-discipline configuration the rule consults.
 export interface LinterInput {
   // The rule the plugin should dispatch to, named by its rule id — the same kebab-case identifier the resulting finding carries in rule_id, so a suppressed or reported rule is named the same way on every surface. The recognised set is whatever the shipped plugin dispatches, and it expands as further rules ship; a rule id the plugin does not recognise produces an 'unknown_rule' finding rather than a silent pass.
   rule_id: string;
@@ -36,6 +36,10 @@ export interface LinterInput {
   previous?: unknown;
   // Parsed structure of the Component a linted Recipe names in spec.implements, resolved by the host. It is a related entity of a DIFFERENT kind from the one being linted, which is what distinguishes it from previous: previous carries another version of the same entity, while this carries the Component whose declared output contract the Recipe realizes. The host resolves it through the same catalog lookup a build uses, keyed on the Component's name, so all three pin forms spec.implements accepts (unversioned, exact, major-compatible range) reach the same entry. Omitted when the linted entity is not a Recipe, when it names no Component, or when no Component of that name is reachable in the workspace's catalog directories. An absent value means the comparison is unavailable, not that the contract is empty: a rule that reads this field emits no finding when it is absent.
   implemented_component?: unknown;
+  // Parsed structure of the Release a release-scoped lint names, with its extends chain folded in, so a child Release carries what it inherits from its base. The host converts it from YAML to JSON as it does proposed. Its spec.parameters block is removed before it is handed over: a parameter's value can be the credential itself, no rule reads the block, and so no parameter value reaches a linter plugin through this field. Present only on the input of a rule that reads a whole Release, where proposed is the Aggregate this Release deploys, as its author wrote it; omitted on every other input.
+  release?: unknown;
+  // The Component each component instance of the Aggregate is an instance of, keyed by the instance name the Aggregate gives it, which is the same key the Aggregate's and the Release's own components maps use. Each value is the Component the instance's type resolves to, with any extends chain folded in, converted to JSON as implemented_component is. An instance whose Component is not reachable in the workspace's catalog directories is absent, and a rule reads that absence as unavailable rather than as a Component declaring nothing. Present only beside release, on the input of a rule that reads a whole Release; omitted on every other input.
+  components?: Record<string, unknown>;
   // Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
   source_path?: string;
   // The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
@@ -66,6 +70,8 @@ export interface Policies {
   allow_category_mismatches?: boolean;
   // When true, suppress the provides-declared-by-component rule's findings. That rule reports each key a Recipe publishes in spec.provides that the Component named by its spec.implements does not declare in the provides pillar of its spec.schema. Publishing beyond the declared contract is accepted at build time, so the finding is advisory; a workspace whose Recipes deliberately publish keys their Component does not declare opts out here. Default false.
   allow_undeclared_recipe_provides?: boolean;
+  // When true, suppress the connection-credential-matches-target-key rule's findings. That rule reads a whole Release and compares, for each connection whose target declares the key it requires of its callers, the credential the connection presents with the key the target holds: it reports two ends naming different secrets, and a key declared at one end only. Agreement between the two ends is a catalog convention rather than something a build checks, so the finding is advisory; a workspace whose two ends deliberately differ opts out here. Default false.
+  allow_connection_credential_mismatches?: boolean;
 }
 
 export function encodeLinterInput(v: LinterInput): string {
@@ -75,6 +81,8 @@ export function encodeLinterInput(v: LinterInput): string {
   parts.push(`${jstr("proposed")}:${encodeOpaque(v.proposed)}`);
   if (v.previous !== undefined && v.previous !== null) parts.push(`${jstr("previous")}:${encodeOpaque(v.previous)}`);
   if (v.implemented_component !== undefined && v.implemented_component !== null) parts.push(`${jstr("implemented_component")}:${encodeOpaque(v.implemented_component)}`);
+  if (v.release !== undefined && v.release !== null) parts.push(`${jstr("release")}:${encodeOpaque(v.release)}`);
+  if (v.components !== undefined && Object.keys(v.components).length > 0) parts.push(`${jstr("components")}:${`{${Object.keys(v.components!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.components![k0])}`).join(",")}}`}`);
   if (v.source_path !== undefined && v.source_path !== "") parts.push(`${jstr("source_path")}:${jstr(v.source_path)}`);
   if (v.policies !== undefined) parts.push(`${jstr("policies")}:${encodePolicies(v.policies)}`);
   return `{${parts.join(",")}}`;
@@ -104,6 +112,7 @@ export function encodePolicies(v: Policies): string {
   if (v.allow_nonstandard_names !== undefined && v.allow_nonstandard_names !== false) parts.push(`${jstr("allow_nonstandard_names")}:${String(v.allow_nonstandard_names)}`);
   if (v.allow_category_mismatches !== undefined && v.allow_category_mismatches !== false) parts.push(`${jstr("allow_category_mismatches")}:${String(v.allow_category_mismatches)}`);
   if (v.allow_undeclared_recipe_provides !== undefined && v.allow_undeclared_recipe_provides !== false) parts.push(`${jstr("allow_undeclared_recipe_provides")}:${String(v.allow_undeclared_recipe_provides)}`);
+  if (v.allow_connection_credential_mismatches !== undefined && v.allow_connection_credential_mismatches !== false) parts.push(`${jstr("allow_connection_credential_mismatches")}:${String(v.allow_connection_credential_mismatches)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -119,11 +128,17 @@ export function encodeCBORLinterInput(v: LinterInput): Uint8Array {
 
 export function appendCBORLinterInput(out: number[], v: LinterInput): void {
   let n = 3;
+  if (v.release !== undefined && v.release !== null) n++;
   if (v.policies !== undefined) n++;
   if (v.previous !== undefined && v.previous !== null) n++;
+  if (v.components !== undefined && Object.keys(v.components).length > 0) n++;
   if (v.source_path !== undefined && v.source_path !== "") n++;
   if (v.implemented_component !== undefined && v.implemented_component !== null) n++;
   writeHead(out, 5, n);
+  if (v.release !== undefined && v.release !== null) {
+    writeText(out, "release");
+    writeBytes(out, utf8Encode(JSON.stringify(v.release)));
+  }
   writeText(out, "rule_id");
   writeText(out, v.rule_id);
   if (v.policies !== undefined) {
@@ -136,6 +151,18 @@ export function appendCBORLinterInput(out: number[], v: LinterInput): void {
   }
   writeText(out, "proposed");
   writeBytes(out, utf8Encode(JSON.stringify(v.proposed)));
+  if (v.components !== undefined && Object.keys(v.components).length > 0) {
+    writeText(out, "components");
+    {
+      const m0 = v.components;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+      }
+    }
+  }
   writeText(out, "entity_kind");
   writeText(out, v.entity_kind);
   if (v.source_path !== undefined && v.source_path !== "") {
@@ -164,6 +191,8 @@ export function decodeCBORLinterInputFrom(dec: CborDec): LinterInput {
       case "proposed": o["proposed"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "previous": o["previous"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "implemented_component": o["implemented_component"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "release": o["release"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "components": o["components"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
       case "source_path": o["source_path"] = dec.readText(); break;
       case "policies": o["policies"] = decodeCBORPoliciesFrom(dec); break;
       default: dec.skip();
@@ -230,6 +259,7 @@ export function appendCBORPolicies(out: number[], v: Policies): void {
   if (v.allow_category_mismatches !== undefined && v.allow_category_mismatches !== false) n++;
   if (v.allow_undeclared_recipe_provides !== undefined && v.allow_undeclared_recipe_provides !== false) n++;
   if (v.allow_direct_x_aggrega_extensions !== undefined && v.allow_direct_x_aggrega_extensions !== false) n++;
+  if (v.allow_connection_credential_mismatches !== undefined && v.allow_connection_credential_mismatches !== false) n++;
   writeHead(out, 5, n);
   if (v.allow_dynamic_refs !== undefined && v.allow_dynamic_refs !== false) {
     writeText(out, "allow_dynamic_refs");
@@ -259,6 +289,10 @@ export function appendCBORPolicies(out: number[], v: Policies): void {
     writeText(out, "allow_direct_x_aggrega_extensions");
     writeBool(out, v.allow_direct_x_aggrega_extensions);
   }
+  if (v.allow_connection_credential_mismatches !== undefined && v.allow_connection_credential_mismatches !== false) {
+    writeText(out, "allow_connection_credential_mismatches");
+    writeBool(out, v.allow_connection_credential_mismatches);
+  }
 }
 
 export function decodeCBORPolicies(data: Uint8Array): Policies {
@@ -279,6 +313,7 @@ export function decodeCBORPoliciesFrom(dec: CborDec): Policies {
       case "allow_nonstandard_names": o["allow_nonstandard_names"] = dec.readBool(); break;
       case "allow_category_mismatches": o["allow_category_mismatches"] = dec.readBool(); break;
       case "allow_undeclared_recipe_provides": o["allow_undeclared_recipe_provides"] = dec.readBool(); break;
+      case "allow_connection_credential_mismatches": o["allow_connection_credential_mismatches"] = dec.readBool(); break;
       default: dec.skip();
     }
   }
