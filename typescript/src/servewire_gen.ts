@@ -2008,6 +2008,8 @@ export interface ConfigInitResult {
   trust: TrustFetchOutcome;
   // Whether the document was written, as against handed back for the caller to place.
   written: boolean;
+  // Present and true when the document was already there, so the registry entry was merged into it rather than a new document created. Only a request sending force proceeds over an existing document, so it is absent from every answer to one that did not.
+  existed?: boolean;
   // The document's text, for a request that asked to be shown it rather than have it written.
   content?: string;
 }
@@ -4401,6 +4403,7 @@ export function encodeConfigInitResult(v: ConfigInitResult): string {
   parts.push(`${jstr("scope")}:${encodeConfigWriteScope(v.scope)}`);
   parts.push(`${jstr("trust")}:${encodeTrustFetchOutcome(v.trust)}`);
   parts.push(`${jstr("written")}:${String(v.written)}`);
+  if (v.existed !== undefined && v.existed !== false) parts.push(`${jstr("existed")}:${String(v.existed)}`);
   if (v.content !== undefined && v.content !== "") parts.push(`${jstr("content")}:${jstr(v.content)}`);
   return `{${parts.join(",")}}`;
 }
