@@ -179,6 +179,14 @@ cbor_case!(mutator_input, aggrega_abi::MutatorInput, "MutatorInput");
 cbor_case!(mutator_output, aggrega_abi::MutatorOutput, "MutatorOutput");
 cbor_case!(linter_input, aggrega_abi::LinterInput, "LinterInput");
 cbor_case!(linter_output, aggrega_abi::LinterOutput, "LinterOutput");
+// A second vector for LinterInput, so cbor_vector rather than cbor_case: the trait
+// binding for this type is declared by the vector above. This one carries the
+// input of a rule that reads a whole Release, with the Release and the Component
+// map POPULATED — both are elided when empty, so the vector above carries the same
+// bytes whether the codec handles them or drops them. The two instance names sort
+// differently in the two wire forms ("agent" first in the JSON, "db" first in the
+// canonical CBOR), and each opaque document keeps its keys out of key order.
+cbor_vector!(linter_input_release, aggrega_abi::LinterInput, "LinterInputRelease");
 cbor_case!(ir_graph, aggrega_abi::IRGraph, "IRGraph");
 cbor_case!(policy_input, aggrega_abi::PolicyInput, "PolicyInput");
 cbor_case!(policy_output, aggrega_abi::PolicyOutput, "PolicyOutput");

@@ -97,6 +97,14 @@ const vectors: Array<[string, string]> = [
   ["MutatorInput", "MutatorInput"],
   ["MutatorOutput", "MutatorOutput"],
   ["LinterInput", "LinterInput"],
+  // The input of a rule that reads a whole Release, with the Release and the
+  // Component map POPULATED: both are omitted when empty, so this is the vector
+  // where dropping either moves the bytes. The two instance names sort
+  // differently in the two wire forms ("agent" first in the JSON, "db" first in
+  // the canonical CBOR), and each document keeps its keys out of key order; this
+  // package holds each document PARSED and re-serialises it, so the vector pins
+  // that the re-serialisation keeps the order it was given.
+  ["LinterInputRelease", "LinterInput"],
   ["LinterOutput", "LinterOutput"],
   ["IRGraph", "IRGraph"],
   ["PolicyInput", "PolicyInput"],

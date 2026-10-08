@@ -141,6 +141,20 @@ func TestSocketParity_LinterOutput(t *testing.T) {
 	roundTripBothGolden[abi.LinterOutput](t, "LinterOutput")
 }
 
+// TestSocketParity_LinterInputRelease pins the input of a rule that reads a whole
+// Release, with both of its fields POPULATED: the Release and the Component map.
+// Both are omitted when empty, so the vector above carries the same bytes whether
+// a codec handles them or drops them; this one does not. The Release and each
+// Component cross as opaque documents with their keys out of key order, so a codec
+// that re-serialised one instead of carrying it would not match. The map's two
+// instance names sort differently in the two wire forms — "agent" first in the
+// JSON, "db" first in the canonical CBOR, whose length head leads — so a codec
+// applying either rule to the other wire fails the byte-compare.
+func TestSocketParity_LinterInputRelease(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.LinterInput](t, "LinterInputRelease")
+}
+
 func TestSocketParity_IRGraph(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.IRGraph](t, "IRGraph")
