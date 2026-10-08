@@ -79,6 +79,8 @@ type IRFeatureEntry struct {
 	SensitivePayloadLeaves []string `json:"sensitive_payload_leaves,omitempty" yaml:"sensitive_payload_leaves,omitempty" cbor:"sensitive_payload_leaves,omitempty"`
 	// Connection The connection this attachment belongs to: present on every attachment written on one of the node's connections, and absent on every attachment of the node's own attachment block. An attachment written on a connection is one of the node's attachments in every other respect — keyed by its qualified name, the connection's alias and the slot joined by a dot, and taking its binding and its sensitivity from the slot the connection's socket declares — so this field is what tells the two apart, and it carries the connection as data rather than leaving it to be read out of the key. A consumer joins it to the graph's edges by socket and alias: the edge whose source is the node carrying this attachment and whose socket and alias are these is the connection the attachment is presented on, and that edge's target is what it is presented to. An attachment of a connection a Feature attachment draws never carries one, because such a connection carries no attachments.
 	Connection *AttachmentConnection `json:"connection,omitempty" yaml:"connection,omitempty" cbor:"connection,omitempty"`
+	// Realization The FeatureRecipe that realizes this attachment, as <name>:<version>: the one the Manifest binds to it — by the attachment's own name where the Manifest's name tier maps that name, otherwise by its Feature type — which is the one a build of the same documents renders it with. For an attachment written on a connection the name the name tier is read by is its qualified name, the connection's alias and the slot joined by a dot. The value is the pair aggrega inspect prints as the attachment's realization and, where a target stamps provenance on what it renders, the aggrega.ai/recipe-uri value on the documents that FeatureRecipe renders, so a consumer joins an attachment to what it renders without translating between forms. It names the FeatureRecipe by name and version and not by capability. The field records which FeatureRecipe the Manifest binds, read from the Manifest and the catalog when the graph is built: nothing is fetched to produce it, and the FeatureRecipe is rendered only when the build renders. Absent when the Manifest binds the attachment to no FeatureRecipe the catalog holds.
+	Realization string `json:"realization,omitempty" yaml:"realization,omitempty" cbor:"realization,omitempty"`
 }
 
 // IRBoundaryFeature A boundary-level Feature attachment projected into the IR: the Feature type URI plus the boundary infra a boundary-scope FeatureRecipe renders and resolves its source against. Boundary-level attachments carry no values payload.
@@ -89,6 +91,8 @@ type IRBoundaryFeature struct {
 	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 	// SensitivePayloadLeaves The leaves this boundary attachment's infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies. Only infra.<path> coordinates appear here, because a boundary-level attachment carries no values payload. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one a boundary wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. An absent key states that this attachment names no leaf its Feature declares sensitive, which includes the case where the attached Feature resolves to no schema this reader could read. It does not assert that the infra payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all. A consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the payload holds them, which is the same order the infra payload itself carries and what keeps the graph byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
 	SensitivePayloadLeaves []string `json:"sensitive_payload_leaves,omitempty" yaml:"sensitive_payload_leaves,omitempty" cbor:"sensitive_payload_leaves,omitempty"`
+	// Realization The FeatureRecipe that realizes this boundary attachment, as <name>:<version>: the one the Manifest binds to it — by the attachment's own name where the Manifest's name tier maps that name, otherwise by its Feature type — which is the one a build of the same documents renders it with. It is the same field, read the same way, as an attachment entry's realization under feature_values_mapping. Absent when the Manifest binds the attachment to no FeatureRecipe the catalog holds.
+	Realization string `json:"realization,omitempty" yaml:"realization,omitempty" cbor:"realization,omitempty"`
 }
 
 // CatalogMetadata The Enterprise Metadata Suite explicitly extracted from the Catalog entity, exposing lifecycle and ownership data to Wasm linters.
@@ -718,6 +722,14 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 			buf.Write(enc)
 		}
 	}
+	if t.Realization != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"realization\":")
+		writeJSONString(&buf, t.Realization)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -917,6 +929,12 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 				}
 				t.Connection = v
 			}
+		case "realization":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Realization = s
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -936,7 +954,7 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *IRFeatureEntry) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves", "connection"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves", "connection", "realization"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -977,6 +995,14 @@ func (t IRBoundaryFeature) MarshalJSON() ([]byte, error) {
 			writeJSONString(&buf, ev)
 		}
 		buf.WriteByte(']')
+	}
+	if t.Realization != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"realization\":")
+		writeJSONString(&buf, t.Realization)
 	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
@@ -1025,6 +1051,12 @@ func (t *IRBoundaryFeature) UnmarshalJSON(data []byte) error {
 			if err := expectDelim(dec, ']'); err != nil {
 				return err
 			}
+		case "realization":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Realization = s
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -1044,7 +1076,7 @@ func (t *IRBoundaryFeature) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *IRBoundaryFeature) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "type", "infra", "sensitive_payload_leaves"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "type", "infra", "sensitive_payload_leaves", "realization"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -2867,6 +2899,9 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if t.Connection != nil {
 		n++
 	}
+	if t.Realization != "" {
+		n++
+	}
 	if t.AnnotationKey != "" {
 		n++
 	}
@@ -2939,6 +2974,10 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 		} else if dst, err = t.Connection.appendCBOR(dst); err != nil {
 			return nil, err
 		}
+	}
+	if t.Realization != "" {
+		dst = appendCBORTextString(dst, "realization")
+		dst = appendCBORTextString(dst, t.Realization)
 	}
 	if t.AnnotationKey != "" {
 		dst = appendCBORTextString(dst, "annotation_key")
@@ -3211,6 +3250,12 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 				}
 				t.Connection = v
 			}
+		case "realization":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Realization = s
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -3227,7 +3272,7 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *IRFeatureEntry) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves", "connection"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "type", "resolved_version", "labels", "catalog_annotations", "binding", "values", "infra", "inject", "origin", "annotation_key", "annotation_source", "values_provenance", "infra_provenance", "sensitive", "sensitive_inject", "sensitive_payload_leaves", "connection", "realization"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)
@@ -3247,6 +3292,9 @@ func (t IRBoundaryFeature) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Infra) != 0 {
 		n++
 	}
+	if t.Realization != "" {
+		n++
+	}
 	if len(t.SensitivePayloadLeaves) != 0 {
 		n++
 	}
@@ -3256,6 +3304,10 @@ func (t IRBoundaryFeature) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Infra) != 0 {
 		dst = appendCBORTextString(dst, "infra")
 		dst = appendCBORByteString(dst, t.Infra)
+	}
+	if t.Realization != "" {
+		dst = appendCBORTextString(dst, "realization")
+		dst = appendCBORTextString(dst, t.Realization)
 	}
 	if len(t.SensitivePayloadLeaves) != 0 {
 		dst = appendCBORTextString(dst, "sensitive_payload_leaves")
@@ -3316,6 +3368,12 @@ func (t *IRBoundaryFeature) decodeCBOR(dec *cborDec) error {
 				}
 				t.SensitivePayloadLeaves = s
 			}
+		case "realization":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Realization = s
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -3332,7 +3390,7 @@ func (t *IRBoundaryFeature) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *IRBoundaryFeature) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "type", "infra", "sensitive_payload_leaves"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "type", "infra", "sensitive_payload_leaves", "realization"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

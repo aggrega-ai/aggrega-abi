@@ -211,6 +211,11 @@ cbor_vector!(ir_feature_entry_sensitive_payload_leaves, aggrega_abi::IRFeatureEn
 // with the edge the connection names. IRSpec is cbor_vector rather than cbor_case
 // because its trait binding is declared by the map-order vector further down.
 cbor_vector!(ir_spec_connection_attachment, aggrega_abi::IRSpec, "IRSpecConnectionAttachment");
+// The realization an attachment carries, on a node's entries and on a Release
+// boundary's — the field is elided when absent, so this is the vector where dropping
+// it moves the bytes, and the one entry carrying none is where emitting it
+// unconditionally would. IRSpec is cbor_vector for the reason given above.
+cbor_vector!(ir_spec_attachment_realization, aggrega_abi::IRSpec, "IRSpecAttachmentRealization");
 // The same marking at its other two units. A node's own values and infra are
 // governed by the node's Component, and a boundary attachment's infra by the
 // Feature it names, so neither is recoverable from the entry vector above.

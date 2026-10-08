@@ -336,6 +336,23 @@ func TestSocketParity_IRSpecConnectionAttachment(t *testing.T) {
 	roundTripBothGolden[abi.IRSpec](t, "IRSpecConnectionAttachment")
 }
 
+// TestSocketParity_IRSpecAttachmentRealization pins the realization an
+// attachment entry carries — the FeatureRecipe the Manifest binds to it — on both
+// shapes that carry one: a node's attachment entry and a Release boundary's. The
+// field is omitted when absent, so every other vector carrying either shape has
+// the same bytes whether a codec handles it or drops it; this is the vector where
+// dropping it moves the bytes.
+//
+// One node carries three entries: one of its own block, one written on a
+// connection, each naming a different realization, and one naming none, which
+// is the entry where emitting the field unconditionally would move the bytes. A
+// second node and the boundary carry the same boundary-level attachment, as a
+// graph carries it in both places.
+func TestSocketParity_IRSpecAttachmentRealization(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.IRSpec](t, "IRSpecAttachmentRealization")
+}
+
 // TestSocketParity_IRNodeSensitivePayloadLeaves pins a node whose OWN per-leaf
 // marking is populated — the leaves a component's values and infra payload
 // carries that the component's own schema declares sensitive, which is a

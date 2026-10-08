@@ -117,6 +117,11 @@ const vectors: Array<[string, string]> = [
   // one node's bucket, so the vector is the graph's spec, with the edge the
   // connection names.
   ["IRSpecConnectionAttachment", "IRSpec"],
+  // The realization an attachment carries, on a node's entries and on a Release
+  // boundary's: the field is omitted when absent, so this is the vector where
+  // dropping it moves the bytes, and the one entry carrying none is where emitting
+  // it unconditionally would.
+  ["IRSpecAttachmentRealization", "IRSpec"],
   ["IRNodeSensitivePayloadLeaves", "IRNode"],
   ["IRBoundaryFeatureSensitivePayloadLeaves", "IRBoundaryFeature"],
   ["AssembleBoundaryInput", "AssembleBoundaryInput"],
