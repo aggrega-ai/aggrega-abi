@@ -1816,7 +1816,7 @@ export interface PublishEntityResult {
   pluginSize?: number;
   // The same size written the way a person reads one.
   pluginSizeText?: string;
-  // The digest of what was published.
+  // The digest of what was published. On a dry run, the digest a publication of the same content would land, computed from the content alone: the one `aggrega push --dry-run` prints.
   digest: string;
   // Whether this publication attached a signature: the one it made before publishing, or, on a version already published, one the version lacked.
   signed: boolean;
