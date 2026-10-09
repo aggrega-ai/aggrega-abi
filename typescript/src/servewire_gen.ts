@@ -1818,9 +1818,9 @@ export interface PublishEntityResult {
   pluginSizeText?: string;
   // The digest of what was published.
   digest: string;
-  // Whether what was published carries a signature.
+  // Whether this publication attached a signature: the one it made before publishing, or, on a version already published, one the version lacked.
   signed: boolean;
-  // Whether the same bytes were already there, so nothing new was landed.
+  // Whether the same bytes were already there, so no content was uploaded. Only what that publication still lacked was attached beside it: its publication date and, where this publication signs, its signature; signed says whether a signature was.
   alreadyPublished: boolean;
   // Whether this reports what publishing would have landed rather than what it did.
   dryRun: boolean;
@@ -1844,7 +1844,7 @@ export interface PublishArtifactResult {
   sizeText: string;
   // The digest of what was published.
   digest: string;
-  // Whether the same bytes were already there, so nothing new was landed.
+  // Whether the same bytes were already there, so no content was uploaded. A publication date was attached beside it only where the artifact lacked one.
   alreadyPublished: boolean;
   // Whether this reports what publishing would have landed rather than what it did.
   dryRun: boolean;
