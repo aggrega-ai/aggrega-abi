@@ -347,7 +347,7 @@ export interface BuildParams {
   workDoneToken?: ProgressToken;
   // The Release to build, as a path relative to the workspace root. An absolute path is refused.
   release?: string;
-  // The directory the output directory is created inside, as a path relative to the workspace root. The artifacts land in the output directory beneath it, the same way they do beneath the directory a build is run in — so this names the output directory's parent and never the output directory itself. Absent, or empty, writes where a build run at the workspace root writes. An absolute path, or one that climbs out of the workspace, is refused.
+  // The directory the output directory is created inside, as a path relative to the workspace root. The artifacts land in the output directory beneath it, laid out as they are beneath the workspace root when nothing is named — so this names the output directory's parent and never the output directory itself. Absent, or empty, writes the output directory beneath the workspace root, as `aggrega build` does wherever it is run from. An absolute path, or one that climbs out of the workspace, is refused.
   outputParent?: string;
   // Whether to resolve the Release's dependencies first. Asking for it reaches the configured registries and writes the lockfile; unasked, the build reaches no registry.
   autoPull?: boolean;
