@@ -139,7 +139,7 @@ export interface RenderFact {
   value: unknown;
 }
 
-// One entry naming rendered units a Provider guest leaves out of a node's output, its fields already resolved to plain strings. The socket attaches no meaning to them: each provider documents what kind, name and namespace select in its own format, and matches them itself.
+// One entry naming rendered units a Provider guest leaves out of a node's output, its fields already resolved to plain strings and marked where any of them was produced from a value declared sensitive. The socket attaches no meaning to them: each provider documents what kind, name and namespace select in its own format, and matches them itself.
 export interface OmitEntry {
   // The kind of rendered unit the entry names, in the provider's own vocabulary.
   kind: string;
@@ -147,6 +147,8 @@ export interface OmitEntry {
   name: string;
   // The namespace the named unit sits in, for a provider whose format places units in one. Absent when the author wrote none; what an entry with no namespace matches is the provider's own contract.
   namespace?: string;
+  // True when the template that produced any of the entry's kind, name or namespace reads a value an author declared sensitive, or a value traced to one. It is read from each field's template against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the resolved strings. The mark covers the whole entry rather than naming the field, so a guest treats a marked entry as it treats every other marked value on its input: it still matches and counts the entry by its fields, which is what the entry is for, and keeps every field of it out of any text a person reads — a refusal, a warning or a log line. Absent when no field's template reads such a value; absence never states that no field is sensitive.
+  sensitive?: boolean;
 }
 
 // One file of a pre-packaged source projection: its chart-root-relative path and its raw bytes, exactly as the host read them from the local source at compile time.
@@ -629,6 +631,7 @@ export function encodeOmitEntry(v: OmitEntry): string {
   parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
   parts.push(`${jstr("name")}:${jstr(v.name)}`);
   if (v.namespace !== undefined && v.namespace !== "") parts.push(`${jstr("namespace")}:${jstr(v.namespace)}`);
+  if (v.sensitive !== undefined && v.sensitive !== false) parts.push(`${jstr("sensitive")}:${String(v.sensitive)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -1598,6 +1601,7 @@ export function encodeCBOROmitEntry(v: OmitEntry): Uint8Array {
 export function appendCBOROmitEntry(out: number[], v: OmitEntry): void {
   let n = 2;
   if (v.namespace !== undefined && v.namespace !== "") n++;
+  if (v.sensitive !== undefined && v.sensitive !== false) n++;
   writeHead(out, 5, n);
   writeText(out, "kind");
   writeText(out, v.kind);
@@ -1606,6 +1610,10 @@ export function appendCBOROmitEntry(out: number[], v: OmitEntry): void {
   if (v.namespace !== undefined && v.namespace !== "") {
     writeText(out, "namespace");
     writeText(out, v.namespace);
+  }
+  if (v.sensitive !== undefined && v.sensitive !== false) {
+    writeText(out, "sensitive");
+    writeBool(out, v.sensitive);
   }
 }
 
@@ -1623,6 +1631,7 @@ export function decodeCBOROmitEntryFrom(dec: CborDec): OmitEntry {
       case "kind": o["kind"] = dec.readText(); break;
       case "name": o["name"] = dec.readText(); break;
       case "namespace": o["namespace"] = dec.readText(); break;
+      case "sensitive": o["sensitive"] = dec.readBool(); break;
       default: dec.skip();
     }
   }

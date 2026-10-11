@@ -171,7 +171,7 @@ pub struct RenderFact {
     pub value: Box<RawValue>,
 }
 
-/// One entry naming rendered units a Provider guest leaves out of a node's output, its fields already resolved to plain strings. The socket attaches no meaning to them: each provider documents what kind, name and namespace select in its own format, and matches them itself.
+/// One entry naming rendered units a Provider guest leaves out of a node's output, its fields already resolved to plain strings and marked where any of them was produced from a value declared sensitive. The socket attaches no meaning to them: each provider documents what kind, name and namespace select in its own format, and matches them itself.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OmitEntry {
     /// The kind of rendered unit the entry names, in the provider's own vocabulary.
@@ -181,6 +181,9 @@ pub struct OmitEntry {
     /// The namespace the named unit sits in, for a provider whose format places units in one. Absent when the author wrote none; what an entry with no namespace matches is the provider's own contract.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub namespace: String,
+    /// True when the template that produced any of the entry's kind, name or namespace reads a value an author declared sensitive, or a value traced to one. It is read from each field's template against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the resolved strings. The mark covers the whole entry rather than naming the field, so a guest treats a marked entry as it treats every other marked value on its input: it still matches and counts the entry by its fields, which is what the entry is for, and keeps every field of it out of any text a person reads — a refusal, a warning or a log line. Absent when no field's template reads such a value; absence never states that no field is sensitive.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub sensitive: bool,
 }
 
 /// One file of a pre-packaged source projection: its chart-root-relative path and its raw bytes, exactly as the host read them from the local source at compile time.
@@ -1337,6 +1340,7 @@ impl OmitEntry {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
         if !self.namespace.is_empty() { n += 1; }
+        if self.sensitive { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "kind");
         crate::cbor_gen::write_text(out, &self.kind);
@@ -1345,6 +1349,10 @@ impl OmitEntry {
         if !self.namespace.is_empty() {
             crate::cbor_gen::write_text(out, "namespace");
             crate::cbor_gen::write_text(out, &self.namespace);
+        }
+        if self.sensitive {
+            crate::cbor_gen::write_text(out, "sensitive");
+            crate::cbor_gen::write_bool(out, self.sensitive);
         }
         Ok(())
     }
@@ -1360,6 +1368,7 @@ impl OmitEntry {
         let mut f_kind: Option<String> = None;
         let mut f_name: Option<String> = None;
         let mut f_namespace: String = String::new();
+        let mut f_sensitive: bool = false;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -1367,6 +1376,7 @@ impl OmitEntry {
                 "kind" => f_kind = Some(dec.read_text()?),
                 "name" => f_name = Some(dec.read_text()?),
                 "namespace" => f_namespace = dec.read_text()?,
+                "sensitive" => f_sensitive = dec.read_bool()?,
                 _ => dec.skip()?,
             }
         }
@@ -1374,6 +1384,7 @@ impl OmitEntry {
             kind: f_kind.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field kind".to_string()))?,
             name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
             namespace: f_namespace,
+            sensitive: f_sensitive,
         })
     }
 }

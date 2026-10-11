@@ -314,6 +314,16 @@ func TestSocketParity_RenderNodeInputOmits(t *testing.T) {
 	roundTripBothGolden[abi.RenderNodeInput](t, "RenderNodeInputOmits")
 }
 
+// TestSocketParity_RenderNodeInputOmitsSensitive pins an omit entry's sensitivity
+// mark. The mark is omitted when false, so every other vector carrying omit entries
+// has the same bytes whether the codec handles it or drops it; this one does not.
+// The marked entry comes first and the unmarked one after it, so a codec that
+// dropped a true mark, wrote a false one, or sorted the list fails the byte-compare.
+func TestSocketParity_RenderNodeInputOmitsSensitive(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderNodeInput](t, "RenderNodeInputOmitsSensitive")
+}
+
 // TestSocketParity_RenderNodeOutputOmitted pins a render output whose per-entry
 // counts are POPULATED, for the same reason as the input above. The counts are a
 // non-zero one followed by a zero: a codec that dropped a zero count, or sorted

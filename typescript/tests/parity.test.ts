@@ -124,6 +124,10 @@ const vectors: Array<[string, string]> = [
   // and a codec that sorted a list, or dropped a zero count, fails them.
   ["RenderNodeInputOmits", "RenderNodeInput"],
   ["RenderNodeOutputOmitted", "RenderNodeOutput"],
+  // A source render input whose first omit entry carries the sensitivity mark and
+  // whose second does not. The mark is omitted when false, so this is the vector
+  // where dropping a true mark, or writing a false one, moves the bytes.
+  ["RenderNodeInputOmitsSensitive", "RenderNodeInput"],
   ["IRNodeProjectionSensitiveRenderedKeys", "IRNodeProjection"],
   ["IRFeatureEntrySensitivePayloadLeaves", "IRFeatureEntry"],
   // An attachment entry carrying the connection it was written on, beside one of the
