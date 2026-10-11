@@ -24,7 +24,7 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, and the pre-evaluated inputs the node's bound Recipe declares — an acquired-source listing, a workload, an artifact set — each present only when that Recipe declares it.
+// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, the pre-evaluated inputs the node's bound Recipe declares — an acquired-source listing, a workload, an artifact set — each present only when that Recipe declares it, and the entries naming rendered units the guest leaves out of a source render.
 export interface RenderNodeInput {
   node: IRNodeProjection;
   // The render-time context the host hands the guest. The guest reads it to resolve parameters, annotations, and boundary metadata; the schema does not interpret its internal shape (an opaque passthrough), so the provider socket schema does not rebind the cross-boundary render-context shape. The render context's own contract is the render-context wire shape; a guest that reads it consults that contract.
@@ -35,6 +35,8 @@ export interface RenderNodeInput {
   workload_projection?: WorkloadProjection;
   // The pre-evaluated artifact set the host hands the guest to place into the node's output, present when the bound Recipe declares artifacts. The host has already read each entry's source, evaluated it as a Go template against the render context, and computed the build-provenance key sets; the guest decides the output format, the provenance placement, the on-disk path, and the final bytes. Absent when the node declares no artifacts.
   artifacts_projection?: ArtifactsProjection;
+  // The entries naming rendered units the guest leaves out of this node's output, in the order the author declared them. Each entry arrives resolved, its fields plain strings, and an entry that does not apply to this build is not carried. What an entry's kind, name and namespace select is this provider's own documented contract, not this socket's: the guest matches every entry against what it rendered in its own format's terms, leaves each unit an entry matches out of everything it returns — its files, the names it declares in derived_keys and the facts it reports in render_facts — and reports in the output's omitted how many units each entry matched. The entries accompany a source listing and no other input: a render of a synthesized workload or of an artifact set never carries them. Absent when there are no entries, and a guest handed none renders exactly as it would if the field did not exist.
+  omits?: OmitEntry[];
 }
 
 // The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys and over the values as a whole, outbound uses edges, boundary path, sync wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
@@ -87,7 +89,7 @@ export interface NodeProvenance {
   provider_version?: string;
 }
 
-// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, the facts it reports about what it emitted, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
+// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, the facts it reports about what it emitted, how many rendered units each omit entry it was handed matched, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
 export interface RenderNodeOutput {
   // The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
   files: RenderedFile[];
@@ -95,6 +97,8 @@ export interface RenderNodeOutput {
   derived_keys?: Record<string, string[]>;
   // Facts the guest reports about what it emitted for this node, in the order the guest lists them. Each fact pairs a name with a value, and both are the guest's own vocabulary: which facts a provider reports, what each name means and what its entries hold are part of that provider's documented contract, not of this socket's. Every fact's value is a list, even when it holds one entry: the host refuses a fact whose value is anything else, naming the provider and the fact, and halts the build. That is the one thing the host learns about a value. It keys facts by name and hands each list to the templates that read it, joining the lists of one name reported by more than one render of the same node in the order those renders ran, and it never learns what a name or an entry means or derives a fact itself — so a provider can report something only its own format knowledge can see, such as a property of the documents it wrote, without the host learning that format. Reporting facts never changes what is written: the files the host writes are the files the guest returned, whether or not facts accompany them. The guest lists its facts in a fixed order so the payload is byte-identical across runs of identical input. Absent when the guest reports nothing, which is a complete answer rather than a missing one.
   render_facts?: RenderFact[];
+  // How many rendered units each entry of the input's omits matched: one count per entry the guest was handed, in the same order, each the number of units that entry matched whether or not another entry also matched them. A count of zero is a complete answer — the entry matched nothing the guest rendered. The counts are all the socket carries back about what was left out: the units themselves are simply absent from what the guest returned. Absent when the guest was handed no entries.
+  omitted?: number[];
   // Diagnostics the guest raised while rendering. Each element is the shared Wasm-plugin diagnostic shape.
   diagnostics?: Diagnostic[];
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
@@ -133,6 +137,16 @@ export interface RenderFact {
   name: string;
   // The fact's value: a JSON array — always a list, even with one entry or none — whose entries are any JSON values in the shape the provider documents for that name. A list is what lets one name be reported by more than one render of a node: the host joins the lists into one. It is carried as the JSON document the guest wrote, byte for byte, so the order of the list's entries and of each object's keys is the guest's own.
   value: unknown;
+}
+
+// One entry naming rendered units a Provider guest leaves out of a node's output, its fields already resolved to plain strings. The socket attaches no meaning to them: each provider documents what kind, name and namespace select in its own format, and matches them itself.
+export interface OmitEntry {
+  // The kind of rendered unit the entry names, in the provider's own vocabulary.
+  kind: string;
+  // The name of the rendered unit the entry names, in the provider's own vocabulary.
+  name: string;
+  // The namespace the named unit sits in, for a provider whose format places units in one. Absent when the author wrote none; what an entry with no namespace matches is the provider's own contract.
+  namespace?: string;
 }
 
 // One file of a pre-packaged source projection: its chart-root-relative path and its raw bytes, exactly as the host read them from the local source at compile time.
@@ -510,6 +524,7 @@ export function encodeRenderNodeInput(v: RenderNodeInput): string {
   if (v.source_listing !== undefined && v.source_listing !== null) parts.push(`${jstr("source_listing")}:${encodeSourceListing(v.source_listing)}`);
   if (v.workload_projection !== undefined && v.workload_projection !== null) parts.push(`${jstr("workload_projection")}:${encodeWorkloadProjection(v.workload_projection)}`);
   if (v.artifacts_projection !== undefined && v.artifacts_projection !== null) parts.push(`${jstr("artifacts_projection")}:${encodeArtifactsProjection(v.artifacts_projection)}`);
+  if (v.omits !== undefined && v.omits.length > 0) parts.push(`${jstr("omits")}:${`[${v.omits!.map((e0) => encodeOmitEntry(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -561,6 +576,7 @@ export function encodeRenderNodeOutput(v: RenderNodeOutput): string {
   parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => encodeRenderedFile(e0)).join(",")}]`}`);
   if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) parts.push(`${jstr("derived_keys")}:${`{${Object.keys(v.derived_keys!).sort().map((k0) => `${jstr(k0)}:${`[${v.derived_keys![k0]!.map((e1) => jstr(e1)).join(",")}]`}`).join(",")}}`}`);
   if (v.render_facts !== undefined && v.render_facts.length > 0) parts.push(`${jstr("render_facts")}:${`[${v.render_facts!.map((e0) => encodeRenderFact(e0)).join(",")}]`}`);
+  if (v.omitted !== undefined && v.omitted.length > 0) parts.push(`${jstr("omitted")}:${`[${v.omitted!.map((e0) => String(e0)).join(",")}]`}`);
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   if (v.condition_code !== undefined && v.condition_code !== "") parts.push(`${jstr("condition_code")}:${jstr(v.condition_code)}`);
@@ -606,6 +622,18 @@ export function encodeRenderFact(v: RenderFact): string {
 
 export function decodeRenderFact(data: string): RenderFact {
   return JSON.parse(data) as RenderFact;
+}
+
+export function encodeOmitEntry(v: OmitEntry): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  if (v.namespace !== undefined && v.namespace !== "") parts.push(`${jstr("namespace")}:${jstr(v.namespace)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeOmitEntry(data: string): OmitEntry {
+  return JSON.parse(data) as OmitEntry;
 }
 
 export function encodeSourceFile(v: SourceFile): string {
@@ -1046,12 +1074,23 @@ export function encodeCBORRenderNodeInput(v: RenderNodeInput): Uint8Array {
 
 export function appendCBORRenderNodeInput(out: number[], v: RenderNodeInput): void {
   let n = 2;
+  if (v.omits !== undefined && v.omits.length > 0) n++;
   if (v.source_listing !== undefined && v.source_listing !== null) n++;
   if (v.workload_projection !== undefined && v.workload_projection !== null) n++;
   if (v.artifacts_projection !== undefined && v.artifacts_projection !== null) n++;
   writeHead(out, 5, n);
   writeText(out, "node");
   appendCBORIRNodeProjection(out, v.node);
+  if (v.omits !== undefined && v.omits.length > 0) {
+    writeText(out, "omits");
+    {
+      const a0 = v.omits;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBOROmitEntry(out, ee0);
+      }
+    }
+  }
   writeText(out, "context");
   writeBytes(out, utf8Encode(JSON.stringify(v.context)));
   if (v.source_listing !== undefined && v.source_listing !== null) {
@@ -1084,6 +1123,7 @@ export function decodeCBORRenderNodeInputFrom(dec: CborDec): RenderNodeInput {
       case "source_listing": o["source_listing"] = decodeCBORSourceListingFrom(dec); break;
       case "workload_projection": o["workload_projection"] = decodeCBORWorkloadProjectionFrom(dec); break;
       case "artifacts_projection": o["artifacts_projection"] = decodeCBORArtifactsProjectionFrom(dec); break;
+      case "omits": o["omits"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBOROmitEntryFrom(dec)); } return a; })(); break;
       default: dec.skip();
     }
   }
@@ -1315,6 +1355,7 @@ export function encodeCBORRenderNodeOutput(v: RenderNodeOutput): Uint8Array {
 export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): void {
   let n = 1;
   if (v.error !== undefined && v.error !== "") n++;
+  if (v.omitted !== undefined && v.omitted.length > 0) n++;
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
   if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) n++;
   if (v.render_facts !== undefined && v.render_facts.length > 0) n++;
@@ -1331,6 +1372,16 @@ export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): 
     writeHead(out, 4, a0.length);
     for (const ee0 of a0) {
       appendCBORRenderedFile(out, ee0);
+    }
+  }
+  if (v.omitted !== undefined && v.omitted.length > 0) {
+    writeText(out, "omitted");
+    {
+      const a0 = v.omitted;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeInt(out, ee0);
+      }
     }
   }
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) {
@@ -1395,6 +1446,7 @@ export function decodeCBORRenderNodeOutputFrom(dec: CborDec): RenderNodeOutput {
       case "files": o["files"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORRenderedFileFrom(dec)); } return a; })(); break;
       case "derived_keys": o["derived_keys"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); } return m; })(); break;
       case "render_facts": o["render_facts"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORRenderFactFrom(dec)); } return a; })(); break;
+      case "omitted": o["omitted"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readInt()); } return a; })(); break;
       case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
       case "error": o["error"] = dec.readText(); break;
       case "condition_code": o["condition_code"] = dec.readText(); break;
@@ -1535,6 +1587,46 @@ export function decodeCBORRenderFactFrom(dec: CborDec): RenderFact {
     }
   }
   return o as RenderFact;
+}
+
+export function encodeCBOROmitEntry(v: OmitEntry): Uint8Array {
+  const out: number[] = [];
+  appendCBOROmitEntry(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBOROmitEntry(out: number[], v: OmitEntry): void {
+  let n = 2;
+  if (v.namespace !== undefined && v.namespace !== "") n++;
+  writeHead(out, 5, n);
+  writeText(out, "kind");
+  writeText(out, v.kind);
+  writeText(out, "name");
+  writeText(out, v.name);
+  if (v.namespace !== undefined && v.namespace !== "") {
+    writeText(out, "namespace");
+    writeText(out, v.namespace);
+  }
+}
+
+export function decodeCBOROmitEntry(data: Uint8Array): OmitEntry {
+  const dec = new CborDec(data);
+  return decodeCBOROmitEntryFrom(dec);
+}
+
+export function decodeCBOROmitEntryFrom(dec: CborDec): OmitEntry {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "kind": o["kind"] = dec.readText(); break;
+      case "name": o["name"] = dec.readText(); break;
+      case "namespace": o["namespace"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as OmitEntry;
 }
 
 export function encodeCBORSourceFile(v: SourceFile): Uint8Array {

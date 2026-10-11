@@ -199,6 +199,14 @@ cbor_case!(render_node_output, aggrega_abi::RenderNodeOutput, "RenderNodeOutput"
 // handles it or drops it. Its facts are listed out of name order and its object
 // value's keys out of key order, so a codec that sorted either would not match.
 cbor_vector!(render_node_output_render_facts, aggrega_abi::RenderNodeOutput, "RenderNodeOutputRenderFacts");
+// Second vectors for RenderNodeInput and RenderNodeOutput, so cbor_vector for the
+// reason given above. The input carries POPULATED omit entries — one with a
+// namespace and one without, listed out of kind and name order — and the output
+// carries one count per entry, a non-zero count before a zero. Both lists are
+// elided when empty, so every other vector on this socket has the same bytes
+// whether the codec handles them or drops them.
+cbor_vector!(render_node_input_omits, aggrega_abi::RenderNodeInput, "RenderNodeInputOmits");
+cbor_vector!(render_node_output_omitted, aggrega_abi::RenderNodeOutput, "RenderNodeOutputOmitted");
 // A second vector for IRNodeProjection, so cbor_vector rather than cbor_case: the
 // trait binding for this type is declared once with the map-order probe below.
 // This vector carries a POPULATED per-key sensitivity marking, which no other
@@ -392,6 +400,7 @@ fn plugin_descriptor_variants() {
     for name in [
         "PluginDescriptorCLI",
         "PluginDescriptorProvider",
+        "PluginDescriptorProviderOmits",
         "PluginDescriptorMinimal",
         "PluginDescriptorMoo",
     ] {

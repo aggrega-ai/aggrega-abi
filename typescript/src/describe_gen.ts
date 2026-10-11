@@ -120,6 +120,8 @@ export interface ProviderContract {
   reusable_instance?: boolean;
   // Whether the plugin wires cross-boundary uses edges — edges whose consuming and consumed ends assemble into different dispatch groups — by producing provider-native cross-reference wiring through its link_publish and link_resolve exports. A plugin declares it true only when it exports both. Absent (false) is the safe default: the plugin wires no cross-boundary edges.
   cross_boundary_linking?: boolean;
+  // Whether the plugin honours the omit entries a render_node input carries: it leaves every rendered unit an entry matches out of everything it returns, and reports one count per entry it was handed in the output's omitted. A plugin declares it true only when it does both. Absent (false) is the safe default: the plugin makes no claim to leave anything out.
+  omits?: boolean;
   // The directory the plugin's target places each contributor's own sub-directory under, for a plugin that nests a dispatch group's per-node output. The host joins this segment, the contributor's authoring-level name, and each file's own path. Read only when boundary_assembly is nest. Absent, the host places each contributor's sub-directory directly at the dispatch position, with no enclosing directory. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the host composes the contributor's name into it and a path fragment would place a contributor's files somewhere other than beneath the dispatch position.
   nest_segment?: string;
   // The files this plugin's ecosystem never ships beside a source it renders, declared as ignore rules. The host reads the declaration when an author pins a Recipe or FeatureRecipe whose capability this plugin serves for them: it composes these rules with the author's own ignore file, records the composed rules in the entity lock beside the entity, and from then on every publication of the entity, every comparison of its local source and every render of it applies the recorded rules rather than asking a plugin again. So a Recipe published for a capability carries the files its publisher's rules kept, and a plugin renders it when it speaks the same ABI version, its contract matches its entity's claim, and it needs no file outside that set. A plugin that needs a file the set left out must fail its build loudly and name the file; the host's part is to refuse a pack or a read of a file the set does not hold, naming it. Absent declares no ignore rules, and a source the plugin renders then keeps every file the author's own rules keep.
@@ -245,6 +247,7 @@ export function encodeProviderContract(v: ProviderContract): string {
   if (v.assembly_name_annotation !== undefined && v.assembly_name_annotation !== null) parts.push(`${jstr("assembly_name_annotation")}:${encodeAssemblyNameAnnotation(v.assembly_name_annotation)}`);
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) parts.push(`${jstr("reusable_instance")}:${String(v.reusable_instance)}`);
   if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) parts.push(`${jstr("cross_boundary_linking")}:${String(v.cross_boundary_linking)}`);
+  if (v.omits !== undefined && v.omits !== false) parts.push(`${jstr("omits")}:${String(v.omits)}`);
   if (v.nest_segment !== undefined && v.nest_segment !== "") parts.push(`${jstr("nest_segment")}:${jstr(v.nest_segment)}`);
   if (v.source_ignore !== undefined && v.source_ignore !== null) parts.push(`${jstr("source_ignore")}:${encodeSourceIgnore(v.source_ignore)}`);
   return `{${parts.join(",")}}`;
@@ -651,6 +654,7 @@ export function encodeCBORProviderContract(v: ProviderContract): Uint8Array {
 
 export function appendCBORProviderContract(out: number[], v: ProviderContract): void {
   let n = 2;
+  if (v.omits !== undefined && v.omits !== false) n++;
   if (v.nest_segment !== undefined && v.nest_segment !== "") n++;
   if (v.source_ignore !== undefined && v.source_ignore !== null) n++;
   if (v.reusable_instance !== undefined && v.reusable_instance !== false) n++;
@@ -658,6 +662,10 @@ export function appendCBORProviderContract(out: number[], v: ProviderContract): 
   if (v.cross_boundary_linking !== undefined && v.cross_boundary_linking !== false) n++;
   if (v.assembly_name_annotation !== undefined && v.assembly_name_annotation !== null) n++;
   writeHead(out, 5, n);
+  if (v.omits !== undefined && v.omits !== false) {
+    writeText(out, "omits");
+    writeBool(out, v.omits);
+  }
   writeText(out, "input_kinds");
   appendCBORInputKinds(out, v.input_kinds);
   if (v.nest_segment !== undefined && v.nest_segment !== "") {
@@ -705,6 +713,7 @@ export function decodeCBORProviderContractFrom(dec: CborDec): ProviderContract {
       case "assembly_name_annotation": o["assembly_name_annotation"] = decodeCBORAssemblyNameAnnotationFrom(dec); break;
       case "reusable_instance": o["reusable_instance"] = dec.readBool(); break;
       case "cross_boundary_linking": o["cross_boundary_linking"] = dec.readBool(); break;
+      case "omits": o["omits"] = dec.readBool(); break;
       case "nest_segment": o["nest_segment"] = dec.readText(); break;
       case "source_ignore": o["source_ignore"] = decodeCBORSourceIgnoreFrom(dec); break;
       default: dec.skip();

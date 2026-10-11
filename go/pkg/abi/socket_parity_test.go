@@ -302,6 +302,27 @@ func TestSocketParity_RenderNodeOutputRenderFacts(t *testing.T) {
 	roundTripBothGolden[abi.RenderNodeOutput](t, "RenderNodeOutputRenderFacts")
 }
 
+// TestSocketParity_RenderNodeInputOmits pins a source render input whose omit
+// entries are POPULATED. The list is omitted when empty, so every other vector on
+// this socket carries the same bytes whether the codec handles it or drops it; this
+// one does not. One entry carries a namespace and the other does not, which pins
+// the optional member's omission inside an entry, and the two are listed out of
+// kind order and out of name order, so a codec that sorted the list fails the
+// byte-compare.
+func TestSocketParity_RenderNodeInputOmits(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderNodeInput](t, "RenderNodeInputOmits")
+}
+
+// TestSocketParity_RenderNodeOutputOmitted pins a render output whose per-entry
+// counts are POPULATED, for the same reason as the input above. The counts are a
+// non-zero one followed by a zero: a codec that dropped a zero count, or sorted
+// the list, fails the byte-compare.
+func TestSocketParity_RenderNodeOutputOmitted(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderNodeOutput](t, "RenderNodeOutputOmitted")
+}
+
 // TestSocketParity_IRNodeProjectionSensitiveRenderedKeys pins a node projection
 // whose per-key sensitivity marking is POPULATED. The field is omitted from the
 // payload when it is empty, so every other vector on this socket carries the same
@@ -441,6 +462,17 @@ func TestSocketParity_PluginDescriptorCLI(t *testing.T) {
 func TestSocketParity_PluginDescriptorProvider(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorProvider")
+}
+
+// TestSocketParity_PluginDescriptorProviderOmits pins a provider contract that
+// claims to honour omit entries. The claim is omitted when false, so every other
+// descriptor vector carries the same bytes whether the codec handles it or drops
+// it; this one does not. It sits beside the reuse claim, so the JSON wire pins its
+// declared position after that claim while the canonical CBOR, whose length head
+// leads, places it first.
+func TestSocketParity_PluginDescriptorProviderOmits(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorProviderOmits")
 }
 
 // PluginDescriptorMinimal is a descriptor that declares none of the optional

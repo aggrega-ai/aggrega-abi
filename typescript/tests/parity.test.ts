@@ -117,6 +117,13 @@ const vectors: Array<[string, string]> = [
   // package holds each value PARSED and re-serialises it, so the vector pins that
   // the re-serialisation keeps the guest's own order rather than sorting it.
   ["RenderNodeOutputRenderFacts", "RenderNodeOutput"],
+  // A source render input carrying POPULATED omit entries, one with a namespace
+  // and one without, listed out of kind and name order, and the output carrying
+  // one count per entry, a non-zero count before a zero. Both lists are omitted
+  // when empty, so these are the vectors where dropping either moves the bytes,
+  // and a codec that sorted a list, or dropped a zero count, fails them.
+  ["RenderNodeInputOmits", "RenderNodeInput"],
+  ["RenderNodeOutputOmitted", "RenderNodeOutput"],
   ["IRNodeProjectionSensitiveRenderedKeys", "IRNodeProjection"],
   ["IRFeatureEntrySensitivePayloadLeaves", "IRFeatureEntry"],
   // An attachment entry carrying the connection it was written on, beside one of the
@@ -140,6 +147,9 @@ const vectors: Array<[string, string]> = [
   ["LinkResolveOutput", "LinkResolveOutput"],
   ["PluginDescriptorCLI", "PluginDescriptor"],
   ["PluginDescriptorProvider", "PluginDescriptor"],
+  // A provider contract claiming to honour omit entries: the claim is omitted
+  // when false, so this is the descriptor vector where dropping it moves the bytes.
+  ["PluginDescriptorProviderOmits", "PluginDescriptor"],
   ["PluginDescriptorMinimal", "PluginDescriptor"],
   ["PluginDescriptorMoo", "PluginDescriptor"],
   ["ParseInput", "ParseInput"],

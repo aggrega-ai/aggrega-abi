@@ -15,7 +15,7 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
 }
 
-/// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, and the pre-evaluated inputs the node's bound Recipe declares — an acquired-source listing, a workload, an artifact set — each present only when that Recipe declares it.
+/// The payload a Provider guest receives on its render_node export: the per-node IR projection the guest renders, the render-time context, the pre-evaluated inputs the node's bound Recipe declares — an acquired-source listing, a workload, an artifact set — each present only when that Recipe declares it, and the entries naming rendered units the guest leaves out of a source render.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderNodeInput {
     pub node: IRNodeProjection,
@@ -30,6 +30,9 @@ pub struct RenderNodeInput {
     /// The pre-evaluated artifact set the host hands the guest to place into the node's output, present when the bound Recipe declares artifacts. The host has already read each entry's source, evaluated it as a Go template against the render context, and computed the build-provenance key sets; the guest decides the output format, the provenance placement, the on-disk path, and the final bytes. Absent when the node declares no artifacts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artifacts_projection: Option<Box<ArtifactsProjection>>,
+    /// The entries naming rendered units the guest leaves out of this node's output, in the order the author declared them. Each entry arrives resolved, its fields plain strings, and an entry that does not apply to this build is not carried. What an entry's kind, name and namespace select is this provider's own documented contract, not this socket's: the guest matches every entry against what it rendered in its own format's terms, leaves each unit an entry matches out of everything it returns — its files, the names it declares in derived_keys and the facts it reports in render_facts — and reports in the output's omitted how many units each entry matched. The entries accompany a source listing and no other input: a render of a synthesized workload or of an artifact set never carries them. Absent when there are no entries, and a guest handed none renders exactly as it would if the field did not exist.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub omits: Vec<OmitEntry>,
 }
 
 /// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys and over the values as a whole, outbound uses edges, boundary path, sync wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
@@ -102,7 +105,7 @@ pub struct NodeProvenance {
     pub provider_version: String,
 }
 
-/// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, the facts it reports about what it emitted, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
+/// The payload a Provider guest returns from its render_node export: the serialized bytes of each output file the guest emitted, the names it derived into each of its own key spaces, the facts it reports about what it emitted, how many rendered units each omit entry it was handed matched, and any diagnostics the guest raised while rendering. The guest returns each file's serialized bytes; the host writes them verbatim and runs no serializer. Determinism is the guest's responsibility: identical input must produce identical bytes.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderNodeOutput {
     /// The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
@@ -113,6 +116,9 @@ pub struct RenderNodeOutput {
     /// Facts the guest reports about what it emitted for this node, in the order the guest lists them. Each fact pairs a name with a value, and both are the guest's own vocabulary: which facts a provider reports, what each name means and what its entries hold are part of that provider's documented contract, not of this socket's. Every fact's value is a list, even when it holds one entry: the host refuses a fact whose value is anything else, naming the provider and the fact, and halts the build. That is the one thing the host learns about a value. It keys facts by name and hands each list to the templates that read it, joining the lists of one name reported by more than one render of the same node in the order those renders ran, and it never learns what a name or an entry means or derives a fact itself — so a provider can report something only its own format knowledge can see, such as a property of the documents it wrote, without the host learning that format. Reporting facts never changes what is written: the files the host writes are the files the guest returned, whether or not facts accompany them. The guest lists its facts in a fixed order so the payload is byte-identical across runs of identical input. Absent when the guest reports nothing, which is a complete answer rather than a missing one.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub render_facts: Vec<RenderFact>,
+    /// How many rendered units each entry of the input's omits matched: one count per entry the guest was handed, in the same order, each the number of units that entry matched whether or not another entry also matched them. A count of zero is a complete answer — the entry matched nothing the guest rendered. The counts are all the socket carries back about what was left out: the units themselves are simply absent from what the guest returned. Absent when the guest was handed no entries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub omitted: Vec<i64>,
     /// Diagnostics the guest raised while rendering. Each element is the shared Wasm-plugin diagnostic shape.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
@@ -163,6 +169,18 @@ pub struct RenderFact {
     pub name: String,
     /// The fact's value: a JSON array — always a list, even with one entry or none — whose entries are any JSON values in the shape the provider documents for that name. A list is what lets one name be reported by more than one render of a node: the host joins the lists into one. It is carried as the JSON document the guest wrote, byte for byte, so the order of the list's entries and of each object's keys is the guest's own.
     pub value: Box<RawValue>,
+}
+
+/// One entry naming rendered units a Provider guest leaves out of a node's output, its fields already resolved to plain strings. The socket attaches no meaning to them: each provider documents what kind, name and namespace select in its own format, and matches them itself.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct OmitEntry {
+    /// The kind of rendered unit the entry names, in the provider's own vocabulary.
+    pub kind: String,
+    /// The name of the rendered unit the entry names, in the provider's own vocabulary.
+    pub name: String,
+    /// The namespace the named unit sits in, for a provider whose format places units in one. Absent when the author wrote none; what an entry with no namespace matches is the provider's own contract.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub namespace: String,
 }
 
 /// One file of a pre-packaged source projection: its chart-root-relative path and its raw bytes, exactly as the host read them from the local source at compile time.
@@ -646,12 +664,23 @@ impl RenderNodeInput {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
+        if !self.omits.is_empty() { n += 1; }
         if self.source_listing.is_some() { n += 1; }
         if self.workload_projection.is_some() { n += 1; }
         if self.artifacts_projection.is_some() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "node");
         self.node.append_cbor(out)?;
+        if !self.omits.is_empty() {
+            crate::cbor_gen::write_text(out, "omits");
+            {
+                let c = &self.omits;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
         crate::cbor_gen::write_text(out, "context");
         crate::cbor_gen::write_bytes(out, self.context.get().as_bytes());
         if let Some(ref x) = self.source_listing {
@@ -682,6 +711,7 @@ impl RenderNodeInput {
         let mut f_source_listing: Option<Box<SourceListing>> = None;
         let mut f_workload_projection: Option<Box<WorkloadProjection>> = None;
         let mut f_artifacts_projection: Option<Box<ArtifactsProjection>> = None;
+        let mut f_omits: Vec<OmitEntry> = Vec::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -691,6 +721,7 @@ impl RenderNodeInput {
                 "source_listing" => f_source_listing = Some(Box::new(SourceListing::decode_cbor_from(dec)?)),
                 "workload_projection" => f_workload_projection = Some(Box::new(WorkloadProjection::decode_cbor_from(dec)?)),
                 "artifacts_projection" => f_artifacts_projection = Some(Box::new(ArtifactsProjection::decode_cbor_from(dec)?)),
+                "omits" => f_omits = { let sn = dec.read_array_header()?; let mut sv: Vec<OmitEntry> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(OmitEntry::decode_cbor_from(dec)?); } sv },
                 _ => dec.skip()?,
             }
         }
@@ -700,6 +731,7 @@ impl RenderNodeInput {
             source_listing: f_source_listing,
             workload_projection: f_workload_projection,
             artifacts_projection: f_artifacts_projection,
+            omits: f_omits,
         })
     }
 }
@@ -998,6 +1030,7 @@ impl RenderNodeOutput {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
         if !self.error.is_empty() { n += 1; }
+        if !self.omitted.is_empty() { n += 1; }
         if !self.diagnostics.is_empty() { n += 1; }
         if !self.derived_keys.is_empty() { n += 1; }
         if !self.render_facts.is_empty() { n += 1; }
@@ -1014,6 +1047,16 @@ impl RenderNodeOutput {
             crate::cbor_gen::write_head(out, 4, c.len() as u64);
             for ev in c {
                 ev.append_cbor(out)?;
+            }
+        }
+        if !self.omitted.is_empty() {
+            crate::cbor_gen::write_text(out, "omitted");
+            {
+                let c = &self.omitted;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_int(out, *ev);
+                }
             }
         }
         if !self.diagnostics.is_empty() {
@@ -1078,6 +1121,7 @@ impl RenderNodeOutput {
         let mut f_files: Option<Vec<RenderedFile>> = None;
         let mut f_derived_keys: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut f_render_facts: Vec<RenderFact> = Vec::new();
+        let mut f_omitted: Vec<i64> = Vec::new();
         let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
         let mut f_error: String = String::new();
         let mut f_condition_code: String = String::new();
@@ -1089,6 +1133,7 @@ impl RenderNodeOutput {
                 "files" => f_files = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv }),
                 "derived_keys" => f_derived_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
                 "render_facts" => f_render_facts = { let sn = dec.read_array_header()?; let mut sv: Vec<RenderFact> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderFact::decode_cbor_from(dec)?); } sv },
+                "omitted" => f_omitted = { let sn = dec.read_array_header()?; let mut sv: Vec<i64> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_int()?); } sv },
                 "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
                 "error" => f_error = dec.read_text()?,
                 "condition_code" => f_condition_code = dec.read_text()?,
@@ -1100,6 +1145,7 @@ impl RenderNodeOutput {
             files: f_files.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field files".to_string()))?,
             derived_keys: f_derived_keys,
             render_facts: f_render_facts,
+            omitted: f_omitted,
             diagnostics: f_diagnostics,
             error: f_error,
             condition_code: f_condition_code,
@@ -1275,6 +1321,59 @@ impl RenderFact {
         Ok(Self {
             name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
             value: f_value.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field value".to_string()))?,
+        })
+    }
+}
+
+impl OmitEntry {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if !self.namespace.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "kind");
+        crate::cbor_gen::write_text(out, &self.kind);
+        crate::cbor_gen::write_text(out, "name");
+        crate::cbor_gen::write_text(out, &self.name);
+        if !self.namespace.is_empty() {
+            crate::cbor_gen::write_text(out, "namespace");
+            crate::cbor_gen::write_text(out, &self.namespace);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_kind: Option<String> = None;
+        let mut f_name: Option<String> = None;
+        let mut f_namespace: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "kind" => f_kind = Some(dec.read_text()?),
+                "name" => f_name = Some(dec.read_text()?),
+                "namespace" => f_namespace = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            kind: f_kind.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field kind".to_string()))?,
+            name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
+            namespace: f_namespace,
         })
     }
 }
