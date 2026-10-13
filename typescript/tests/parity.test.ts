@@ -159,6 +159,12 @@ const vectors: Array<[string, string]> = [
   ["PluginDescriptorMinimal", "PluginDescriptor"],
   ["PluginDescriptorMoo", "PluginDescriptor"],
   ["ParseInput", "ParseInput"],
+  // A parse input whose source bytes are not valid UTF-8 — a bare 0xff 0xfe pair,
+  // a NUL, and a lead byte followed by a non-continuation byte — and which omits
+  // the options document. This package holds the bytes as a base64 string, so the
+  // vector pins that the binary half writes them as the raw byte string the other
+  // two languages emit, and reads them back to the same base64.
+  ["ParseInputNonUTF8Source", "ParseInput"],
   ["ParseOutput", "ParseOutput"],
   ["ParseOutputBare", "ParseOutput"],
   ["ImportInput", "ImportInput"],

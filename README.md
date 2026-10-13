@@ -11,9 +11,10 @@ Three siblings live here, one per supported source language:
   `@aggrega-ai/aggrega-abi`.
 
 Each codec encodes and decodes the Wasm socket payloads — the typed
-documents that cross the host/guest boundary — to and from the JSON
-wire form. The codec is reflect-free and generated from the canonical
-schemas, so the wire shape stays byte-stable across every language.
+documents that cross the host/guest boundary — to and from both wire
+forms, JSON text and canonical CBOR, whichever a socket carries. The
+codec is reflect-free and generated from the canonical schemas, so the
+wire shape stays byte-stable across every language.
 
 The codec is consumable on its own: a plugin author working directly
 against the raw Extism runtime depends on `aggrega-abi` alone. The

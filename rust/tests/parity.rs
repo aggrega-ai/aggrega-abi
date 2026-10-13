@@ -255,6 +255,13 @@ cbor_case!(link_publish_output, aggrega_abi::LinkPublishOutput, "LinkPublishOutp
 cbor_case!(link_resolve_input, aggrega_abi::LinkResolveInput, "LinkResolveInput");
 cbor_case!(link_resolve_output, aggrega_abi::LinkResolveOutput, "LinkResolveOutput");
 cbor_case!(parse_input, aggrega_abi::ParseInput, "ParseInput");
+// A second vector for ParseInput, so cbor_vector rather than cbor_case: the trait
+// binding for this type is declared by the vector above. Its source bytes are not
+// valid UTF-8 — a bare 0xff 0xfe pair, a NUL, and a lead byte followed by a
+// non-continuation byte — so a codec that carried them as text, or as base64 text,
+// rather than as a raw byte string cannot reproduce the canonical bytes. It omits
+// the options document the vector above carries, so it also pins that omission.
+cbor_vector!(parse_input_non_utf8_source, aggrega_abi::ParseInput, "ParseInputNonUTF8Source");
 cbor_case!(parse_output, aggrega_abi::ParseOutput, "ParseOutput");
 cbor_case!(import_input, aggrega_abi::ImportInput, "ImportInput");
 // A second vector for ImportInput, so cbor_vector rather than cbor_case: the trait

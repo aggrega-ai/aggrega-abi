@@ -507,6 +507,17 @@ func TestSocketParity_ParseInput(t *testing.T) {
 	roundTripBothGolden[abi.ParseInput](t, "ParseInput")
 }
 
+// TestSocketParity_ParseInputNonUTF8Source pins the source bytes as a raw byte
+// string. They are not valid UTF-8 — a bare 0xff 0xfe pair, a NUL, and a lead
+// byte followed by a non-continuation byte — so a codec that carried them as text,
+// or as base64 text, cannot reproduce the canonical bytes. It omits the options
+// document, which the vector above carries, so it is also where that member's
+// omission is pinned.
+func TestSocketParity_ParseInputNonUTF8Source(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.ParseInput](t, "ParseInputNonUTF8Source")
+}
+
 func TestSocketParity_ParseOutput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.ParseOutput](t, "ParseOutput")
