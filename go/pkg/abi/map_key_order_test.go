@@ -436,6 +436,14 @@ func TestSocketParity_MapOrderProbes(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.MutatorNode](t, "MapOrderMutatorNode")
 	})
+	// The policy payload declares no map of its own; it carries the graph, whose
+	// nodes and a node's labels are order-preserving maps. This vector holds them in
+	// a populated payload, as the ir-verdict role hands it to a guest, so the order
+	// is pinned where a policy reads it and not only on the graph in isolation.
+	t.Run("PolicyInput", func(t *testing.T) {
+		t.Parallel()
+		roundTripBothGolden[abi.PolicyInput](t, "MapOrderPolicyInput")
+	})
 	t.Run("RenderNodeOutput", func(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.RenderNodeOutput](t, "MapOrderRenderNodeOutput")

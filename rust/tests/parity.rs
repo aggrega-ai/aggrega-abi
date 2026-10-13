@@ -356,10 +356,12 @@ cbor_case!(annotation_transform_output, aggrega_abi::AnnotationTransformOutput, 
 // order-preserving field is declared `OrderedMap` and both its halves are written
 // in the order it holds, which these vectors pin on both wires.
 //
-// FRPStepInput, FRPStepOutput, LinkPublishOutput, LinkResolveInput, LinterInput and
-// RenderNodeOutput already carry a harness binding from their socket vectors above,
-// so they take cbor_vector alone — a second impl_cbor_case for the same type would
-// not compile.
+// FRPStepInput, FRPStepOutput, LinkPublishOutput, LinkResolveInput, LinterInput,
+// PolicyInput and RenderNodeOutput already carry a harness binding from their socket
+// vectors above, so they take cbor_vector alone — a second impl_cbor_case for the
+// same type would not compile. PolicyInput declares no map of its own; its vector
+// here holds the graph's order-preserving nodes and labels inside a populated policy
+// payload, as the ir-verdict role hands it to a guest.
 cbor_case!(map_order_annotation_target, aggrega_abi::AnnotationTarget, "MapOrderAnnotationTarget");
 cbor_case!(map_order_artifact_projection_entry, aggrega_abi::ArtifactProjectionEntry, "MapOrderArtifactProjectionEntry");
 cbor_case!(map_order_boundary_env_overrides_input, aggrega_abi::BoundaryEnvOverridesInput, "MapOrderBoundaryEnvOverridesInput");
@@ -378,6 +380,7 @@ cbor_vector!(map_order_link_resolve_input, aggrega_abi::LinkResolveInput, "MapOr
 cbor_vector!(map_order_linter_input, aggrega_abi::LinterInput, "MapOrderLinterInput");
 cbor_case!(map_order_mutator_graph, aggrega_abi::MutatorGraph, "MapOrderMutatorGraph");
 cbor_case!(map_order_mutator_node, aggrega_abi::MutatorNode, "MapOrderMutatorNode");
+cbor_vector!(map_order_policy_input, aggrega_abi::PolicyInput, "MapOrderPolicyInput");
 cbor_vector!(map_order_render_node_output, aggrega_abi::RenderNodeOutput, "MapOrderRenderNodeOutput");
 cbor_case!(map_order_rendered_node, aggrega_abi::RenderedNode, "MapOrderRenderedNode");
 cbor_case!(map_order_sub_chart, aggrega_abi::SubChart, "MapOrderSubChart");

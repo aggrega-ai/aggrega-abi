@@ -266,6 +266,9 @@ const vectors: Array<[string, string]> = [
   ["MapOrderLinterInput", "LinterInput"],
   ["MapOrderMutatorGraph", "MutatorGraph"],
   ["MapOrderMutatorNode", "MutatorNode"],
+  // The policy payload declares no map of its own; it carries the graph, whose nodes
+  // and a node's labels are order-preserving maps, held here in a populated payload.
+  ["MapOrderPolicyInput", "PolicyInput"],
   ["MapOrderRenderNodeOutput", "RenderNodeOutput"],
   ["MapOrderRenderedNode", "RenderedNode"],
   ["MapOrderSubChart", "SubChart"],
