@@ -6,7 +6,9 @@
 //! The socket codec — the typed payloads that cross the host/guest
 //! boundary plus their JSON serialization — is generated into this crate
 //! from the canonical schemas. serde_json is the wire codec; the
-//! generated types are shaped (BTreeMap for sorted map keys, RawValue for
+//! generated types are shaped (BTreeMap for a plain map, whose keys are
+//! written sorted; [`OrderedMap`] for a map the schema marks
+//! order-preserving, which is written in the order it holds; RawValue for
 //! verbatim opaque carry) so the wire is byte-identical to the Go and
 //! TypeScript codecs generated from the same schema. The codec is
 //! consumable directly by plugin authors working against the raw Extism

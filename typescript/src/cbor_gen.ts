@@ -207,6 +207,12 @@ export function sortKeys(keys: string[]): void {
   });
 }
 
+// duplicateKeyError is the refusal of an order-preserving map's array form that
+// repeats a key, naming the key.
+export function duplicateKeyError(k: string): Error {
+  return new Error("cbor: duplicate key " + JSON.stringify(k));
+}
+
 function b64Val(c: number): number {
   if (c >= 65 && c <= 90) return c - 65;
   if (c >= 97 && c <= 122) return c - 97 + 26;
@@ -318,6 +324,16 @@ export class CborDec {
     const [major, , arg] = this.readHead();
     if (major !== 4) throw new Error("cbor: expected array, got major " + major);
     return arg;
+  }
+
+  // readEntryKey reads the start of one entry of an order-preserving map's array
+  // form — a two-element array whose first element is the text-string key — and
+  // returns the key, leaving the value as the next item. An entry of any other
+  // shape is refused.
+  readEntryKey(): string {
+    const n = this.readArrayHeader();
+    if (n !== 2) throw new Error("cbor: an order-preserving map entry holds " + n + " items, want 2");
+    return this.readText();
   }
 
   readText(): string {

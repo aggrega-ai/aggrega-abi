@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::collections::BTreeMap;
+use crate::OrderedMap;
 
 fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
@@ -60,11 +60,11 @@ pub struct IRFeatureEntry {
     /// The exact semantic version resolved during compilation.
     pub resolved_version: String,
     /// The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub labels: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub labels: OrderedMap<String>,
     /// The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub catalog_annotations: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub catalog_annotations: OrderedMap<String>,
     /// Names the attachment slot this attachment fills, or "free" when it fills no declared slot. A slot is declared in one of two places, and where the attachment was written decides which: an attachment of the node's own attachment block fills a slot the host Component declares in its featuresSchema, and an attachment written on a connection fills a slot the connection's socket declares in that socket's featuresSchema on the host Component. The pairing is by name in both — an attachment fills a slot when the Feature is attached under the slot's name, on the component's block or on the connection — so the value is an exact key from the declared slot set, never anything read out of the attachment's key. A socket's slot set is closed, since an attachment written on a connection under a name its socket does not declare halts the build, so an attachment that carries a connection never reports free. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub binding: String,
@@ -87,11 +87,11 @@ pub struct IRFeatureEntry {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub annotation_source: String,
     /// Per-leaf origin for the values payload, keyed by dotted leaf path.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub values_provenance: BTreeMap<String, FieldProvenance>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub values_provenance: OrderedMap<FieldProvenance>,
     /// Per-leaf origin for the infra payload, keyed by dotted leaf path.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub infra_provenance: BTreeMap<String, FieldProvenance>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub infra_provenance: OrderedMap<FieldProvenance>,
     /// True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the slot the attachment fills declares the material it carries sensitive: the host Component's attachment slot of the same name, or, for an attachment written on a connection, the slot of that name the connection's socket declares. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
     #[serde(default, skip_serializing_if = "is_default")]
     pub sensitive: bool,
@@ -147,7 +147,7 @@ pub struct IRNode {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
     /// The entity's duck-typing and ontology labels.
-    pub labels: BTreeMap<String, String>,
+    pub labels: OrderedMap<String>,
     /// The name of the underlying Component.
     pub component: String,
     /// The exact Semantic Version of the Component resolved during compilation.
@@ -170,14 +170,14 @@ pub struct IRNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub catalog_metadata: Option<Box<CatalogMetadata>>,
     /// Immutable, intrinsic component characteristics authored by the Platform Architect in Domain 2.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub catalog_annotations: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub catalog_annotations: OrderedMap<String>,
     /// Physical topology strings and Ops realities cascading from boundaries in the Release.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub release_annotations: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub release_annotations: OrderedMap<String>,
     /// Cognitive metadata, developer intent, and FinOps cascading from subsystems in the Aggregate.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub aggregate_annotations: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub aggregate_annotations: OrderedMap<String>,
     /// Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub self_inject: Option<Box<RawValue>>,
@@ -248,18 +248,18 @@ pub struct IRProvenance {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRSpec {
     /// Dictionary of all nodes in the graph, keyed by their absolute ID. Purely topological.
-    pub nodes: BTreeMap<String, IRNode>,
+    pub nodes: OrderedMap<IRNode>,
     /// Explicit logical network paths and dependencies between nodes.
     pub edges: Vec<IREdge>,
     /// The single source of truth for opaque pass-through cognitive payloads, mapped by node ID.
-    pub values_mapping: BTreeMap<String, Box<RawValue>>,
+    pub values_mapping: OrderedMap<Box<RawValue>>,
     /// The physical sizing payload injected from the Release, mapped by node ID.
-    pub infra_mapping: BTreeMap<String, Box<RawValue>>,
+    pub infra_mapping: OrderedMap<Box<RawValue>>,
     /// Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment. An attachment written on one of the node's connections is keyed by its qualified name, the connection's alias and the slot joined by a dot, and names its connection in its own connection field.
-    pub feature_values_mapping: BTreeMap<String, BTreeMap<String, IRFeatureEntry>>,
+    pub feature_values_mapping: OrderedMap<OrderedMap<IRFeatureEntry>>,
     /// Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub boundary_features: BTreeMap<String, BTreeMap<String, IRBoundaryFeature>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub boundary_features: OrderedMap<OrderedMap<IRBoundaryFeature>>,
     pub provenance: IRProvenance,
 }
 
@@ -488,12 +488,10 @@ impl IRFeatureEntry {
             crate::cbor_gen::write_text(out, "labels");
             {
                 let c = &self.labels;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_text(out, mv);
                 }
             }
@@ -530,12 +528,10 @@ impl IRFeatureEntry {
             crate::cbor_gen::write_text(out, "infra_provenance");
             {
                 let c = &self.infra_provenance;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     mv.append_cbor(out)?;
                 }
             }
@@ -554,12 +550,10 @@ impl IRFeatureEntry {
             crate::cbor_gen::write_text(out, "values_provenance");
             {
                 let c = &self.values_provenance;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     mv.append_cbor(out)?;
                 }
             }
@@ -568,12 +562,10 @@ impl IRFeatureEntry {
             crate::cbor_gen::write_text(out, "catalog_annotations");
             {
                 let c = &self.catalog_annotations;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_text(out, mv);
                 }
             }
@@ -601,8 +593,8 @@ impl IRFeatureEntry {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_type: Option<String> = None;
         let mut f_resolved_version: Option<String> = None;
-        let mut f_labels: BTreeMap<String, String> = BTreeMap::new();
-        let mut f_catalog_annotations: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_labels: OrderedMap<String> = OrderedMap::new();
+        let mut f_catalog_annotations: OrderedMap<String> = OrderedMap::new();
         let mut f_binding: String = String::new();
         let mut f_values: Option<Box<RawValue>> = None;
         let mut f_infra: Option<Box<RawValue>> = None;
@@ -610,8 +602,8 @@ impl IRFeatureEntry {
         let mut f_origin: String = String::new();
         let mut f_annotation_key: String = String::new();
         let mut f_annotation_source: String = String::new();
-        let mut f_values_provenance: BTreeMap<String, FieldProvenance> = BTreeMap::new();
-        let mut f_infra_provenance: BTreeMap<String, FieldProvenance> = BTreeMap::new();
+        let mut f_values_provenance: OrderedMap<FieldProvenance> = OrderedMap::new();
+        let mut f_infra_provenance: OrderedMap<FieldProvenance> = OrderedMap::new();
         let mut f_sensitive: bool = false;
         let mut f_sensitive_inject: Option<Box<RawValue>> = None;
         let mut f_sensitive_payload_leaves: Vec<String> = Vec::new();
@@ -623,8 +615,8 @@ impl IRFeatureEntry {
             match k.as_str() {
                 "type" => f_type = Some(dec.read_text()?),
                 "resolved_version" => f_resolved_version = Some(dec.read_text()?),
-                "labels" => f_labels = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
-                "catalog_annotations" => f_catalog_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "labels" => f_labels = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
+                "catalog_annotations" => f_catalog_annotations = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "binding" => f_binding = dec.read_text()?,
                 "values" => f_values = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "infra" => f_infra = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
@@ -632,8 +624,8 @@ impl IRFeatureEntry {
                 "origin" => f_origin = dec.read_text()?,
                 "annotation_key" => f_annotation_key = dec.read_text()?,
                 "annotation_source" => f_annotation_source = dec.read_text()?,
-                "values_provenance" => f_values_provenance = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, FieldProvenance> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = FieldProvenance::decode_cbor_from(dec)?; m.insert(mk, mv); } m },
-                "infra_provenance" => f_infra_provenance = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, FieldProvenance> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = FieldProvenance::decode_cbor_from(dec)?; m.insert(mk, mv); } m },
+                "values_provenance" => f_values_provenance = { let mn = dec.read_array_header()?; let mut m: OrderedMap<FieldProvenance> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = FieldProvenance::decode_cbor_from(dec)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
+                "infra_provenance" => f_infra_provenance = { let mn = dec.read_array_header()?; let mut m: OrderedMap<FieldProvenance> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = FieldProvenance::decode_cbor_from(dec)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "sensitive" => f_sensitive = dec.read_bool()?,
                 "sensitive_inject" => f_sensitive_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "sensitive_payload_leaves" => f_sensitive_payload_leaves = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
@@ -855,12 +847,10 @@ impl IRNode {
         crate::cbor_gen::write_text(out, "labels");
         {
             let c = &self.labels;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 crate::cbor_gen::write_text(out, mv);
             }
         }
@@ -900,12 +890,10 @@ impl IRNode {
             crate::cbor_gen::write_text(out, "catalog_annotations");
             {
                 let c = &self.catalog_annotations;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_text(out, mv);
                 }
             }
@@ -914,12 +902,10 @@ impl IRNode {
             crate::cbor_gen::write_text(out, "release_annotations");
             {
                 let c = &self.release_annotations;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_text(out, mv);
                 }
             }
@@ -932,12 +918,10 @@ impl IRNode {
             crate::cbor_gen::write_text(out, "aggregate_annotations");
             {
                 let c = &self.aggregate_annotations;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_text(out, mv);
                 }
             }
@@ -968,7 +952,7 @@ impl IRNode {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_description: String = String::new();
-        let mut f_labels: Option<BTreeMap<String, String>> = None;
+        let mut f_labels: Option<OrderedMap<String>> = None;
         let mut f_component: Option<String> = None;
         let mut f_resolved_version: Option<String> = None;
         let mut f_sync_wave: i64 = 0;
@@ -977,9 +961,9 @@ impl IRNode {
         let mut f_synthesized_subsystem: bool = false;
         let mut f_synthesized_boundary: bool = false;
         let mut f_catalog_metadata: Option<Box<CatalogMetadata>> = None;
-        let mut f_catalog_annotations: BTreeMap<String, String> = BTreeMap::new();
-        let mut f_release_annotations: BTreeMap<String, String> = BTreeMap::new();
-        let mut f_aggregate_annotations: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_catalog_annotations: OrderedMap<String> = OrderedMap::new();
+        let mut f_release_annotations: OrderedMap<String> = OrderedMap::new();
+        let mut f_aggregate_annotations: OrderedMap<String> = OrderedMap::new();
         let mut f_self_inject: Option<Box<RawValue>> = None;
         let mut f_source_file: String = String::new();
         let mut f_uses: Option<Box<RawValue>> = None;
@@ -989,7 +973,7 @@ impl IRNode {
             let k = dec.read_text()?;
             match k.as_str() {
                 "description" => f_description = dec.read_text()?,
-                "labels" => f_labels = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }),
+                "labels" => f_labels = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
                 "component" => f_component = Some(dec.read_text()?),
                 "resolved_version" => f_resolved_version = Some(dec.read_text()?),
                 "sync_wave" => f_sync_wave = dec.read_int()?,
@@ -998,9 +982,9 @@ impl IRNode {
                 "synthesized_subsystem" => f_synthesized_subsystem = dec.read_bool()?,
                 "synthesized_boundary" => f_synthesized_boundary = dec.read_bool()?,
                 "catalog_metadata" => f_catalog_metadata = Some(Box::new(CatalogMetadata::decode_cbor_from(dec)?)),
-                "catalog_annotations" => f_catalog_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
-                "release_annotations" => f_release_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
-                "aggregate_annotations" => f_aggregate_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "catalog_annotations" => f_catalog_annotations = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
+                "release_annotations" => f_release_annotations = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
+                "aggregate_annotations" => f_aggregate_annotations = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "self_inject" => f_self_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "source_file" => f_source_file = dec.read_text()?,
                 "uses" => f_uses = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
@@ -1279,12 +1263,10 @@ impl IRSpec {
         crate::cbor_gen::write_text(out, "nodes");
         {
             let c = &self.nodes;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 mv.append_cbor(out)?;
             }
         }
@@ -1293,24 +1275,20 @@ impl IRSpec {
         crate::cbor_gen::write_text(out, "infra_mapping");
         {
             let c = &self.infra_mapping;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
             }
         }
         crate::cbor_gen::write_text(out, "values_mapping");
         {
             let c = &self.values_mapping;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
             }
         }
@@ -1318,20 +1296,16 @@ impl IRSpec {
             crate::cbor_gen::write_text(out, "boundary_features");
             {
                 let c = &self.boundary_features;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     {
                         let c = mv;
-                        let mut ks: Vec<&String> = c.keys().collect();
-                        crate::cbor_gen::sort_keys(&mut ks);
-                        crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                        for k in ks {
+                        crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                        for (k, mv) in c.iter() {
+                            crate::cbor_gen::write_head(out, 4, 2);
                             crate::cbor_gen::write_text(out, k);
-                            let mv = &c[k];
                             mv.append_cbor(out)?;
                         }
                     }
@@ -1341,20 +1315,16 @@ impl IRSpec {
         crate::cbor_gen::write_text(out, "feature_values_mapping");
         {
             let c = &self.feature_values_mapping;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 {
                     let c = mv;
-                    let mut ks: Vec<&String> = c.keys().collect();
-                    crate::cbor_gen::sort_keys(&mut ks);
-                    crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                    for k in ks {
+                    crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                    for (k, mv) in c.iter() {
+                        crate::cbor_gen::write_head(out, 4, 2);
                         crate::cbor_gen::write_text(out, k);
-                        let mv = &c[k];
                         mv.append_cbor(out)?;
                     }
                 }
@@ -1371,23 +1341,23 @@ impl IRSpec {
     }
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_nodes: Option<BTreeMap<String, IRNode>> = None;
+        let mut f_nodes: Option<OrderedMap<IRNode>> = None;
         let mut f_edges: Option<Vec<IREdge>> = None;
-        let mut f_values_mapping: Option<BTreeMap<String, Box<RawValue>>> = None;
-        let mut f_infra_mapping: Option<BTreeMap<String, Box<RawValue>>> = None;
-        let mut f_feature_values_mapping: Option<BTreeMap<String, BTreeMap<String, IRFeatureEntry>>> = None;
-        let mut f_boundary_features: BTreeMap<String, BTreeMap<String, IRBoundaryFeature>> = BTreeMap::new();
+        let mut f_values_mapping: Option<OrderedMap<Box<RawValue>>> = None;
+        let mut f_infra_mapping: Option<OrderedMap<Box<RawValue>>> = None;
+        let mut f_feature_values_mapping: Option<OrderedMap<OrderedMap<IRFeatureEntry>>> = None;
+        let mut f_boundary_features: OrderedMap<OrderedMap<IRBoundaryFeature>> = OrderedMap::new();
         let mut f_provenance: Option<IRProvenance> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
-                "nodes" => f_nodes = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRNode> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRNode::decode_cbor_from(dec)?; m.insert(mk, mv); } m }),
+                "nodes" => f_nodes = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<IRNode> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = IRNode::decode_cbor_from(dec)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
                 "edges" => f_edges = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<IREdge> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(IREdge::decode_cbor_from(dec)?); } sv }),
-                "values_mapping" => f_values_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m }),
-                "infra_mapping" => f_infra_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m }),
-                "feature_values_mapping" => f_feature_values_mapping = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, IRFeatureEntry>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRFeatureEntry> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRFeatureEntry::decode_cbor_from(dec)?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m }),
-                "boundary_features" => f_boundary_features = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, IRBoundaryFeature>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, IRBoundaryFeature> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = IRBoundaryFeature::decode_cbor_from(dec)?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
+                "values_mapping" => f_values_mapping = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
+                "infra_mapping" => f_infra_mapping = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
+                "feature_values_mapping" => f_feature_values_mapping = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<OrderedMap<IRFeatureEntry>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = { let mn = dec.read_array_header()?; let mut m: OrderedMap<IRFeatureEntry> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = IRFeatureEntry::decode_cbor_from(dec)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
+                "boundary_features" => f_boundary_features = { let mn = dec.read_array_header()?; let mut m: OrderedMap<OrderedMap<IRBoundaryFeature>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = { let mn = dec.read_array_header()?; let mut m: OrderedMap<IRBoundaryFeature> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = IRBoundaryFeature::decode_cbor_from(dec)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "provenance" => f_provenance = Some(IRProvenance::decode_cbor_from(dec)?),
                 _ => dec.skip()?,
             }

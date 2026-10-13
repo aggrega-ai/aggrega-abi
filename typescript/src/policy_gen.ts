@@ -6,8 +6,9 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
-import { type IRGraph, encodeIRGraph } from "./ir_gen.ts";
+import { type IRGraph, encodeIRGraph, decodeIRGraph } from "./ir_gen.ts";
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import { readJSONMembers } from "./orderedmap_gen.ts";
 import {
   writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
   sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
@@ -96,7 +97,16 @@ export function encodePolicyInput(v: PolicyInput): string {
 }
 
 export function decodePolicyInput(data: string): PolicyInput {
-  return JSON.parse(data) as PolicyInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "graph": o["graph"] = decodeIRGraph(raw); break;
+      case "precalculated_paths": o["precalculated_paths"] = JSON.parse(raw); break;
+      case "sources": o["sources"] = JSON.parse(raw); break;
+      case "settings": o["settings"] = JSON.parse(raw); break;
+    }
+  });
+  return o as PolicyInput;
 }
 
 export function encodePolicyOutput(v: PolicyOutput): string {

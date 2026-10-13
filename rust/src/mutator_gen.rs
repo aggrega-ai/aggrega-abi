@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::collections::BTreeMap;
+use crate::OrderedMap;
 
 /// The payload the host hands the mutator plugin on each invocation: release-level compilation context plus a labels-only projection of the topology graph.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -46,7 +46,7 @@ pub struct CompilationContext {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MutatorGraph {
     /// Nodes keyed by absolute node ID.
-    pub nodes: BTreeMap<String, MutatorNode>,
+    pub nodes: OrderedMap<MutatorNode>,
 }
 
 /// The minimum per-node projection the mutator plugin needs to evaluate compliance rules: which Component the node implements, which version of that Component resolved, and which labels the node carries.
@@ -57,7 +57,7 @@ pub struct MutatorNode {
     /// The exact Semantic Version of the Component the resolver pinned for this node.
     pub resolved_version: String,
     /// The node's duck-typing and ontology labels.
-    pub labels: BTreeMap<String, String>,
+    pub labels: OrderedMap<String>,
 }
 
 /// One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -251,12 +251,10 @@ impl MutatorGraph {
         crate::cbor_gen::write_text(out, "nodes");
         {
             let c = &self.nodes;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 mv.append_cbor(out)?;
             }
         }
@@ -271,12 +269,12 @@ impl MutatorGraph {
     }
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_nodes: Option<BTreeMap<String, MutatorNode>> = None;
+        let mut f_nodes: Option<OrderedMap<MutatorNode>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
-                "nodes" => f_nodes = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, MutatorNode> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = MutatorNode::decode_cbor_from(dec)?; m.insert(mk, mv); } m }),
+                "nodes" => f_nodes = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<MutatorNode> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = MutatorNode::decode_cbor_from(dec)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
                 _ => dec.skip()?,
             }
         }
@@ -301,12 +299,10 @@ impl MutatorNode {
         crate::cbor_gen::write_text(out, "labels");
         {
             let c = &self.labels;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 crate::cbor_gen::write_text(out, mv);
             }
         }
@@ -327,14 +323,14 @@ impl MutatorNode {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_component: Option<String> = None;
         let mut f_resolved_version: Option<String> = None;
-        let mut f_labels: Option<BTreeMap<String, String>> = None;
+        let mut f_labels: Option<OrderedMap<String>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "component" => f_component = Some(dec.read_text()?),
                 "resolved_version" => f_resolved_version = Some(dec.read_text()?),
-                "labels" => f_labels = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }),
+                "labels" => f_labels = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
                 _ => dec.skip()?,
             }
         }

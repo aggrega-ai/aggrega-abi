@@ -23,7 +23,7 @@ import (
 type FRPStepInput struct {
 	Documents DocumentSet `json:"documents" yaml:"documents" cbor:"documents"`
 	// StepInput The step's rendered `with` block, an author-ordered key set the guest reads as its step-local input. Preserves author order so the payload is byte-identical across runs of identical input.
-	StepInput map[string]json.RawMessage `json:"step_input,omitempty" yaml:"step_input,omitempty" cbor:"step_input,omitempty"`
+	StepInput OrderedMap[json.RawMessage] `json:"step_input,omitempty,omitzero" yaml:"step_input,omitempty" cbor:"step_input,omitempty"`
 	// Context The render-time context the host hands the step. The step carries it through; the schema does not interpret its internal shape (an opaque passthrough), so the FRP socket schema does not bind to the cross-boundary render-context shape. The render context's own contract is the render-context wire shape; a guest that reads it consults that contract.
 	Context json.RawMessage `json:"context" yaml:"context" cbor:"context"`
 	// StepIndex This step's zero-based position in the pipeline.
@@ -41,7 +41,7 @@ type FRPStepOutput struct {
 	// Diagnostics Diagnostics the guest raised. Each element is the shared Wasm-plugin diagnostic shape.
 	Diagnostics []Diagnostic `json:"diagnostics,omitempty" yaml:"diagnostics,omitempty" cbor:"diagnostics,omitempty"`
 	// Outputs The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
-	Outputs map[string]json.RawMessage `json:"outputs,omitempty" yaml:"outputs,omitempty" cbor:"outputs,omitempty"`
+	Outputs OrderedMap[json.RawMessage] `json:"outputs,omitempty,omitzero" yaml:"outputs,omitempty" cbor:"outputs,omitempty"`
 	// Error A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
 	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
@@ -49,9 +49,9 @@ type FRPStepOutput struct {
 // DocumentSet The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and is blind to its content; the guest selects the documents it targets by content and addresses its patches by key.
 type DocumentSet struct {
 	// Own The node's own rendered output, keyed by unit token. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
-	Own map[string]Unit `json:"own" yaml:"own" cbor:"own"`
+	Own OrderedMap[Unit] `json:"own" yaml:"own" cbor:"own"`
 	// Host The rendered output of the component a component-scope FeatureRecipe is attached to — the cross-entity surface. Absent for Recipe steps and boundary-scope FeatureRecipe steps, which have no host component. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
-	Host map[string]Unit `json:"host,omitempty" yaml:"host,omitempty" cbor:"host,omitempty"`
+	Host OrderedMap[Unit] `json:"host,omitempty,omitzero" yaml:"host,omitempty" cbor:"host,omitempty"`
 }
 
 // Unit One addressable piece a provider's emitted output carves into — the hybrid view of one piece of output. A structured unit carries a tree (an RFC-6902-addressable view) and is a PATCH target; an opaque unit carries only its media type and bytes (no tree) and is a SELECT and EMIT target but not a PATCH target.
@@ -127,29 +127,16 @@ func (t FRPStepInput) MarshalJSON() ([]byte, error) {
 	} else {
 		buf.Write(enc)
 	}
-	if len(t.StepInput) != 0 {
+	if !t.StepInput.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"step_input\":")
-		{
-			keys := make([]string, 0, len(t.StepInput))
-			for k := range t.StepInput {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.StepInput[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.StepInput.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if !first {
@@ -211,25 +198,12 @@ func (t *FRPStepInput) UnmarshalJSON(data []byte) error {
 				}
 			}
 		case "step_input":
-			t.StepInput = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.StepInput.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.StepInput[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "context":
 			if raw, err := readRaw(dec, data); err != nil {
@@ -353,29 +327,16 @@ func (t FRPStepOutput) MarshalJSON() ([]byte, error) {
 		}
 		buf.WriteByte(']')
 	}
-	if len(t.Outputs) != 0 {
+	if !t.Outputs.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"outputs\":")
-		{
-			keys := make([]string, 0, len(t.Outputs))
-			for k := range t.Outputs {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Outputs[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Outputs.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if t.Error != "" {
@@ -462,25 +423,12 @@ func (t *FRPStepOutput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 		case "outputs":
-			t.Outputs = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Outputs.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.Outputs[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "error":
 			if s, err := readString(dec); err != nil {
@@ -524,55 +472,21 @@ func (t DocumentSet) MarshalJSON() ([]byte, error) {
 	}
 	first = false
 	buf.WriteString("\"own\":")
-	{
-		keys := make([]string, 0, len(t.Own))
-		for k := range t.Own {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Own[k]
-			if enc, err := mv.MarshalJSON(); err != nil {
-				return nil, err
-			} else {
-				buf.Write(enc)
-			}
-		}
-		buf.WriteByte('}')
+	if enc, err := t.Own.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
-	if len(t.Host) != 0 {
+	if !t.Host.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"host\":")
-		{
-			keys := make([]string, 0, len(t.Host))
-			for k := range t.Host {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Host[k]
-				if enc, err := mv.MarshalJSON(); err != nil {
-					return nil, err
-				} else {
-					buf.Write(enc)
-				}
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Host.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	buf.WriteByte('}')
@@ -594,50 +508,20 @@ func (t *DocumentSet) UnmarshalJSON(data []byte) error {
 		}
 		switch key {
 		case "own":
-			t.Own = make(map[string]Unit)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Own.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv Unit
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					if err := mv.UnmarshalJSON(raw); err != nil {
-						return err
-					}
-				}
-				t.Own[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "host":
-			t.Host = make(map[string]Unit)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Host.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv Unit
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					if err := mv.UnmarshalJSON(raw); err != nil {
-						return err
-					}
-				}
-				t.Host[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -1207,7 +1091,7 @@ func (t FRPStepInput) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t FRPStepInput) appendCBOR(dst []byte) ([]byte, error) {
 	n := 3
-	if len(t.StepInput) != 0 {
+	if !t.StepInput.IsZero() {
 		n++
 	}
 	if len(t.PrecedingSteps) != 0 {
@@ -1223,20 +1107,13 @@ func (t FRPStepInput) appendCBOR(dst []byte) ([]byte, error) {
 	}
 	dst = appendCBORTextString(dst, "step_index")
 	dst = appendCBORInt(dst, int64(t.StepIndex))
-	if len(t.StepInput) != 0 {
+	if !t.StepInput.IsZero() {
 		dst = appendCBORTextString(dst, "step_input")
-		{
-			keys := make([]string, 0, len(t.StepInput))
-			for k := range t.StepInput {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.StepInput[k]
-				dst = appendCBORByteString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.StepInput.Len()))
+		for k, mv := range t.StepInput.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORByteString(dst, mv)
 		}
 	}
 	if len(t.PrecedingSteps) != 0 {
@@ -1276,15 +1153,18 @@ func (t *FRPStepInput) decodeCBOR(dec *cborDec) error {
 			}
 		case "step_input":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -1292,9 +1172,9 @@ func (t *FRPStepInput) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.StepInput = m
+				t.StepInput = om
 			}
 		case "context":
 			if v, err := dec.readByteString(); err != nil {
@@ -1360,7 +1240,7 @@ func (t FRPStepOutput) appendCBOR(dst []byte) ([]byte, error) {
 	if t.Error != "" {
 		n++
 	}
-	if len(t.Outputs) != 0 {
+	if !t.Outputs.IsZero() {
 		n++
 	}
 	if len(t.Patches) != 0 {
@@ -1378,20 +1258,13 @@ func (t FRPStepOutput) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "error")
 		dst = appendCBORTextString(dst, t.Error)
 	}
-	if len(t.Outputs) != 0 {
+	if !t.Outputs.IsZero() {
 		dst = appendCBORTextString(dst, "outputs")
-		{
-			keys := make([]string, 0, len(t.Outputs))
-			for k := range t.Outputs {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Outputs[k]
-				dst = appendCBORByteString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Outputs.Len()))
+		for k, mv := range t.Outputs.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORByteString(dst, mv)
 		}
 	}
 	if len(t.Patches) != 0 {
@@ -1495,15 +1368,18 @@ func (t *FRPStepOutput) decodeCBOR(dec *cborDec) error {
 			}
 		case "outputs":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -1511,9 +1387,9 @@ func (t *FRPStepOutput) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Outputs = m
+				t.Outputs = om
 			}
 		case "error":
 			if s, err := dec.readTextString(); err != nil {
@@ -1554,42 +1430,28 @@ func (t DocumentSet) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t DocumentSet) appendCBOR(dst []byte) ([]byte, error) {
 	n := 1
-	if len(t.Host) != 0 {
+	if !t.Host.IsZero() {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
 	var err error
 	dst = appendCBORTextString(dst, "own")
-	{
-		keys := make([]string, 0, len(t.Own))
-		for k := range t.Own {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.Own[k]
-			if dst, err = mv.appendCBOR(dst); err != nil {
-				return nil, err
-			}
+	dst = appendCBORHead(dst, 4, uint64(t.Own.Len()))
+	for k, mv := range t.Own.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		if dst, err = mv.appendCBOR(dst); err != nil {
+			return nil, err
 		}
 	}
-	if len(t.Host) != 0 {
+	if !t.Host.IsZero() {
 		dst = appendCBORTextString(dst, "host")
-		{
-			keys := make([]string, 0, len(t.Host))
-			for k := range t.Host {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Host[k]
-				if dst, err = mv.appendCBOR(dst); err != nil {
-					return nil, err
-				}
+		dst = appendCBORHead(dst, 4, uint64(t.Host.Len()))
+		for k, mv := range t.Host.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			if dst, err = mv.appendCBOR(dst); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -1616,43 +1478,49 @@ func (t *DocumentSet) decodeCBOR(dec *cborDec) error {
 		switch key {
 		case "own":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]Unit, mn)
+				var om OrderedMap[Unit]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv Unit
 					if err := (&mv).decodeCBOR(dec); err != nil {
 						return err
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Own = m
+				t.Own = om
 			}
 		case "host":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]Unit, mn)
+				var om OrderedMap[Unit]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv Unit
 					if err := (&mv).decodeCBOR(dec); err != nil {
 						return err
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Host = m
+				t.Host = om
 			}
 		default:
 			if err := dec.skip(); err != nil {
@@ -2685,6 +2553,27 @@ func (d *cborDec) readArrayHeader() (int, error) {
 		return 0, fmt.Errorf("abi: cbor: expected array, got major %d", major)
 	}
 	return int(arg), nil
+}
+
+// readEntryKey reads the start of one entry of an order-preserving map's array
+// form — a two-element array whose first element is the text-string key — and
+// returns the key, leaving the value as the next item. An entry of any other
+// shape is refused.
+func (d *cborDec) readEntryKey() (string, error) {
+	n, err := d.readArrayHeader()
+	if err != nil {
+		return "", err
+	}
+	if n != 2 {
+		return "", fmt.Errorf("abi: cbor: an order-preserving map entry holds %d items, want 2", n)
+	}
+	return d.readTextString()
+}
+
+// duplicateKeyError is the refusal of an encoded order-preserving map that
+// repeats a key, naming the key.
+func duplicateKeyError(k string) error {
+	return fmt.Errorf("abi: duplicate key %q", k)
 }
 
 func (d *cborDec) readTextString() (string, error) {

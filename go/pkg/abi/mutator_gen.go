@@ -11,7 +11,6 @@ package abi
 import (
 	"bytes"
 	"encoding/json"
-	"sort"
 )
 
 // MutatorInput The payload the host hands the mutator plugin on each invocation: release-level compilation context plus a labels-only projection of the topology graph.
@@ -43,7 +42,7 @@ type CompilationContext struct {
 // MutatorGraph The labels-only projection of the topology graph exposed to the mutator plugin. Intentionally narrower than the full topology result: edges, values, and feature payloads are not exposed because the mutator's job is labelling, not topology reshaping.
 type MutatorGraph struct {
 	// Nodes Nodes keyed by absolute node ID.
-	Nodes map[string]MutatorNode `json:"nodes" yaml:"nodes" cbor:"nodes"`
+	Nodes OrderedMap[MutatorNode] `json:"nodes" yaml:"nodes" cbor:"nodes"`
 }
 
 // MutatorNode The minimum per-node projection the mutator plugin needs to evaluate compliance rules: which Component the node implements, which version of that Component resolved, and which labels the node carries.
@@ -53,7 +52,7 @@ type MutatorNode struct {
 	// ResolvedVersion The exact Semantic Version of the Component the resolver pinned for this node.
 	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
 	// Labels The node's duck-typing and ontology labels.
-	Labels map[string]string `json:"labels" yaml:"labels" cbor:"labels"`
+	Labels OrderedMap[string] `json:"labels" yaml:"labels" cbor:"labels"`
 }
 
 // MutatorSource One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -380,27 +379,10 @@ func (t MutatorGraph) MarshalJSON() ([]byte, error) {
 	}
 	first = false
 	buf.WriteString("\"nodes\":")
-	{
-		keys := make([]string, 0, len(t.Nodes))
-		for k := range t.Nodes {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Nodes[k]
-			if enc, err := mv.MarshalJSON(); err != nil {
-				return nil, err
-			} else {
-				buf.Write(enc)
-			}
-		}
-		buf.WriteByte('}')
+	if enc, err := t.Nodes.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
@@ -421,27 +403,12 @@ func (t *MutatorGraph) UnmarshalJSON(data []byte) error {
 		}
 		switch key {
 		case "nodes":
-			t.Nodes = make(map[string]MutatorNode)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Nodes.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv MutatorNode
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					if err := mv.UnmarshalJSON(raw); err != nil {
-						return err
-					}
-				}
-				t.Nodes[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -491,23 +458,10 @@ func (t MutatorNode) MarshalJSON() ([]byte, error) {
 	}
 	first = false
 	buf.WriteString("\"labels\":")
-	{
-		keys := make([]string, 0, len(t.Labels))
-		for k := range t.Labels {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Labels[k]
-			writeJSONString(&buf, mv)
-		}
-		buf.WriteByte('}')
+	if enc, err := t.Labels.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
@@ -540,25 +494,12 @@ func (t *MutatorNode) UnmarshalJSON(data []byte) error {
 				t.ResolvedVersion = s
 			}
 		case "labels":
-			t.Labels = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Labels.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.Labels[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -949,19 +890,12 @@ func (t MutatorGraph) appendCBOR(dst []byte) ([]byte, error) {
 	dst = appendCBORHead(dst, 5, uint64(n))
 	var err error
 	dst = appendCBORTextString(dst, "nodes")
-	{
-		keys := make([]string, 0, len(t.Nodes))
-		for k := range t.Nodes {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.Nodes[k]
-			if dst, err = mv.appendCBOR(dst); err != nil {
-				return nil, err
-			}
+	dst = appendCBORHead(dst, 4, uint64(t.Nodes.Len()))
+	for k, mv := range t.Nodes.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		if dst, err = mv.appendCBOR(dst); err != nil {
+			return nil, err
 		}
 	}
 	return dst, nil
@@ -987,23 +921,26 @@ func (t *MutatorGraph) decodeCBOR(dec *cborDec) error {
 		switch key {
 		case "nodes":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]MutatorNode, mn)
+				var om OrderedMap[MutatorNode]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv MutatorNode
 					if err := (&mv).decodeCBOR(dec); err != nil {
 						return err
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Nodes = m
+				t.Nodes = om
 			}
 		default:
 			if err := dec.skip(); err != nil {
@@ -1040,18 +977,11 @@ func (t MutatorNode) appendCBOR(dst []byte) ([]byte, error) {
 	n := 3
 	dst = appendCBORHead(dst, 5, uint64(n))
 	dst = appendCBORTextString(dst, "labels")
-	{
-		keys := make([]string, 0, len(t.Labels))
-		for k := range t.Labels {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.Labels[k]
-			dst = appendCBORTextString(dst, mv)
-		}
+	dst = appendCBORHead(dst, 4, uint64(t.Labels.Len()))
+	for k, mv := range t.Labels.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		dst = appendCBORTextString(dst, mv)
 	}
 	dst = appendCBORTextString(dst, "component")
 	dst = appendCBORTextString(dst, t.Component)
@@ -1092,15 +1022,18 @@ func (t *MutatorNode) decodeCBOR(dec *cborDec) error {
 			}
 		case "labels":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -1108,9 +1041,9 @@ func (t *MutatorNode) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Labels = m
+				t.Labels = om
 			}
 		default:
 			if err := dec.skip(); err != nil {

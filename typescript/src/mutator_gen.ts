@@ -6,9 +6,10 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import { readJSONMembers, readOrderedObject, writeOrderedObject } from "./orderedmap_gen.ts";
 import {
   writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
-  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec, duplicateKeyError,
 } from "./cbor_gen.ts";
 
 function jstr(s: string): string {
@@ -51,7 +52,7 @@ export interface CompilationContext {
 // The labels-only projection of the topology graph exposed to the mutator plugin. Intentionally narrower than the full topology result: edges, values, and feature payloads are not exposed because the mutator's job is labelling, not topology reshaping.
 export interface MutatorGraph {
   // Nodes keyed by absolute node ID.
-  nodes: Record<string, MutatorNode>;
+  nodes: Map<string, MutatorNode>;
 }
 
 // The minimum per-node projection the mutator plugin needs to evaluate compliance rules: which Component the node implements, which version of that Component resolved, and which labels the node carries.
@@ -61,7 +62,7 @@ export interface MutatorNode {
   // The exact Semantic Version of the Component the resolver pinned for this node.
   resolved_version: string;
   // The node's duck-typing and ontology labels.
-  labels: Record<string, string>;
+  labels: Map<string, string>;
 }
 
 // One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -82,7 +83,16 @@ export function encodeMutatorInput(v: MutatorInput): string {
 }
 
 export function decodeMutatorInput(data: string): MutatorInput {
-  return JSON.parse(data) as MutatorInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "compilation_context": o["compilation_context"] = JSON.parse(raw); break;
+      case "graph": o["graph"] = decodeMutatorGraph(raw); break;
+      case "sources": o["sources"] = JSON.parse(raw); break;
+      case "settings": o["settings"] = JSON.parse(raw); break;
+    }
+  });
+  return o as MutatorInput;
 }
 
 export function encodeMutatorOutput(v: MutatorOutput): string {
@@ -109,24 +119,38 @@ export function decodeCompilationContext(data: string): CompilationContext {
 
 export function encodeMutatorGraph(v: MutatorGraph): string {
   const parts: string[] = [];
-  parts.push(`${jstr("nodes")}:${`{${Object.keys(v.nodes!).sort().map((k0) => `${jstr(k0)}:${encodeMutatorNode(v.nodes![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("nodes")}:${writeOrderedObject(v.nodes!, (v0) => encodeMutatorNode(v0))}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeMutatorGraph(data: string): MutatorGraph {
-  return JSON.parse(data) as MutatorGraph;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "nodes": o["nodes"] = readOrderedObject(raw, (r0) => decodeMutatorNode(r0)); break;
+    }
+  });
+  return o as MutatorGraph;
 }
 
 export function encodeMutatorNode(v: MutatorNode): string {
   const parts: string[] = [];
   parts.push(`${jstr("component")}:${jstr(v.component)}`);
   parts.push(`${jstr("resolved_version")}:${jstr(v.resolved_version)}`);
-  parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("labels")}:${writeOrderedObject(v.labels!, (v0) => jstr(v0))}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeMutatorNode(data: string): MutatorNode {
-  return JSON.parse(data) as MutatorNode;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "component": o["component"] = JSON.parse(raw); break;
+      case "resolved_version": o["resolved_version"] = JSON.parse(raw); break;
+      case "labels": o["labels"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+    }
+  });
+  return o as MutatorNode;
 }
 
 export function encodeMutatorSource(v: MutatorSource): string {
@@ -281,11 +305,11 @@ export function appendCBORMutatorGraph(out: number[], v: MutatorGraph): void {
   writeText(out, "nodes");
   {
     const m0 = v.nodes;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      appendCBORMutatorNode(out, m0[kk0]);
+      appendCBORMutatorNode(out, vv0);
     }
   }
 }
@@ -301,7 +325,7 @@ export function decodeCBORMutatorGraphFrom(dec: CborDec): MutatorGraph {
   for (let i = 0; i < n; i++) {
     const k = dec.readText();
     switch (k) {
-      case "nodes": o["nodes"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORMutatorNodeFrom(dec); } return m; })(); break;
+      case "nodes": o["nodes"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, decodeCBORMutatorNodeFrom(dec)); } return m; })(); break;
       default: dec.skip();
     }
   }
@@ -320,11 +344,11 @@ export function appendCBORMutatorNode(out: number[], v: MutatorNode): void {
   writeText(out, "labels");
   {
     const m0 = v.labels;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      writeText(out, m0[kk0]);
+      writeText(out, vv0);
     }
   }
   writeText(out, "component");
@@ -346,7 +370,7 @@ export function decodeCBORMutatorNodeFrom(dec: CborDec): MutatorNode {
     switch (k) {
       case "component": o["component"] = dec.readText(); break;
       case "resolved_version": o["resolved_version"] = dec.readText(); break;
-      case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "labels": o["labels"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
       default: dec.skip();
     }
   }

@@ -7,9 +7,10 @@
 // aggrega-cli checkout.
 
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import { readJSONMembers, readOrderedObject, writeOrderedObject } from "./orderedmap_gen.ts";
 import {
   writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
-  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec, duplicateKeyError,
 } from "./cbor_gen.ts";
 import { appendCBORDiagnostic, decodeCBORDiagnosticFrom } from "./diagnostic_gen.ts";
 
@@ -39,7 +40,7 @@ export interface LinterInput {
   // Parsed structure of the Release a release-scoped lint names, with its extends chain folded in, so a child Release carries what it inherits from its base. The host converts it from YAML to JSON as it does proposed. Its spec.parameters block holds the values that fulfil the Aggregate's parameters, so it is removed whole before the Release is handed over: a parameter's value can be the credential itself, no rule reads the block, and so no parameter value reaches a linter plugin through this field. Present only on the input of a rule that reads a whole Release, where proposed is the Aggregate this Release deploys, with its parameter values removed as proposed describes; omitted on every other input.
   release?: unknown;
   // The Component each component instance of the Aggregate is an instance of, keyed by the instance name the Aggregate gives it, which is the same key the Aggregate's and the Release's own components maps use. Each value is the Component the instance's type resolves to, with any extends chain folded in, converted to JSON as implemented_component is. An instance whose Component is not reachable in the workspace's catalog directories is absent, and a rule reads that absence as unavailable rather than as a Component declaring nothing. Present only beside release, on the input of a rule that reads a whole Release; omitted on every other input.
-  components?: Record<string, unknown>;
+  components?: Map<string, unknown>;
   // Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
   source_path?: string;
   // The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
@@ -82,14 +83,28 @@ export function encodeLinterInput(v: LinterInput): string {
   if (v.previous !== undefined && v.previous !== null) parts.push(`${jstr("previous")}:${encodeOpaque(v.previous)}`);
   if (v.implemented_component !== undefined && v.implemented_component !== null) parts.push(`${jstr("implemented_component")}:${encodeOpaque(v.implemented_component)}`);
   if (v.release !== undefined && v.release !== null) parts.push(`${jstr("release")}:${encodeOpaque(v.release)}`);
-  if (v.components !== undefined && Object.keys(v.components).length > 0) parts.push(`${jstr("components")}:${`{${Object.keys(v.components!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.components![k0])}`).join(",")}}`}`);
+  if (v.components !== undefined && v.components.size > 0) parts.push(`${jstr("components")}:${writeOrderedObject(v.components!, (v0) => encodeOpaque(v0))}`);
   if (v.source_path !== undefined && v.source_path !== "") parts.push(`${jstr("source_path")}:${jstr(v.source_path)}`);
   if (v.policies !== undefined) parts.push(`${jstr("policies")}:${encodePolicies(v.policies)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeLinterInput(data: string): LinterInput {
-  return JSON.parse(data) as LinterInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "rule_id": o["rule_id"] = JSON.parse(raw); break;
+      case "entity_kind": o["entity_kind"] = JSON.parse(raw); break;
+      case "proposed": o["proposed"] = JSON.parse(raw); break;
+      case "previous": o["previous"] = JSON.parse(raw); break;
+      case "implemented_component": o["implemented_component"] = JSON.parse(raw); break;
+      case "release": o["release"] = JSON.parse(raw); break;
+      case "components": o["components"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "source_path": o["source_path"] = JSON.parse(raw); break;
+      case "policies": o["policies"] = JSON.parse(raw); break;
+    }
+  });
+  return o as LinterInput;
 }
 
 export function encodeLinterOutput(v: LinterOutput): string {
@@ -131,7 +146,7 @@ export function appendCBORLinterInput(out: number[], v: LinterInput): void {
   if (v.release !== undefined && v.release !== null) n++;
   if (v.policies !== undefined) n++;
   if (v.previous !== undefined && v.previous !== null) n++;
-  if (v.components !== undefined && Object.keys(v.components).length > 0) n++;
+  if (v.components !== undefined && v.components.size > 0) n++;
   if (v.source_path !== undefined && v.source_path !== "") n++;
   if (v.implemented_component !== undefined && v.implemented_component !== null) n++;
   writeHead(out, 5, n);
@@ -151,15 +166,15 @@ export function appendCBORLinterInput(out: number[], v: LinterInput): void {
   }
   writeText(out, "proposed");
   writeBytes(out, utf8Encode(JSON.stringify(v.proposed)));
-  if (v.components !== undefined && Object.keys(v.components).length > 0) {
+  if (v.components !== undefined && v.components.size > 0) {
     writeText(out, "components");
     {
       const m0 = v.components;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
       }
     }
   }
@@ -192,7 +207,7 @@ export function decodeCBORLinterInputFrom(dec: CborDec): LinterInput {
       case "previous": o["previous"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "implemented_component": o["implemented_component"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "release": o["release"] = JSON.parse(utf8Decode(dec.readBytes())); break;
-      case "components": o["components"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "components": o["components"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       case "source_path": o["source_path"] = dec.readText(); break;
       case "policies": o["policies"] = decodeCBORPoliciesFrom(dec); break;
       default: dec.skip();

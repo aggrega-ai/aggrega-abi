@@ -119,6 +119,49 @@ export function readOrderedObject<V>(text: string, value: (raw: string) => V): M
   return out;
 }
 
+// readJSONArray reads the JSON array in text into an array, decoding each
+// element's raw text with element, in the order the elements are written. A
+// generated codec reads a list this way when its elements hold an
+// order-preserving map, so no element passes through JSON.parse whole. Text that
+// is not one JSON array, with nothing but whitespace around it, is refused.
+export function readJSONArray<E>(text: string, element: (raw: string) => E): E[] {
+  const out: E[] = [];
+  let i = skipWhitespace(text, 0);
+  if (text.charCodeAt(i) !== 0x5b) throw new Error("abi: expected a JSON array");
+  i = skipWhitespace(text, i + 1);
+  if (text.charCodeAt(i) === 0x5d) {
+    i = skipWhitespace(text, i + 1);
+  } else {
+    for (;;) {
+      const end = endOfValue(text, i);
+      out.push(element(text.slice(i, end)));
+      i = skipWhitespace(text, end);
+      const c = text.charCodeAt(i);
+      if (c === 0x5d) {
+        i = skipWhitespace(text, i + 1);
+        break;
+      }
+      if (c !== 0x2c) throw new Error("abi: expected ',' or ']' at offset " + i);
+      i = skipWhitespace(text, i + 1);
+    }
+  }
+  if (i !== text.length) throw new Error("abi: unexpected text after the JSON array at offset " + i);
+  return out;
+}
+
+// readPlainObject reads the JSON object in text into a plain object, decoding
+// each member's raw value text with value. A generated codec reads a plain map
+// this way when its values hold an order-preserving map: the plain map's own
+// order carries nothing, but its values' order does. As with JSON.parse, every
+// key becomes an own member, and a key the text repeats keeps its last value.
+export function readPlainObject<V>(text: string, value: (raw: string) => V): Record<string, V> {
+  const out: Record<string, V> = {};
+  readJSONMembers(text, (key, raw) => {
+    Object.defineProperty(out, key, { value: value(raw), enumerable: true, writable: true, configurable: true });
+  });
+  return out;
+}
+
 // writeOrderedObject writes m as a JSON object whose members are in the map's
 // order, encoding each value with value.
 export function writeOrderedObject<V>(m: Map<string, V>, value: (v: V) => string): string {

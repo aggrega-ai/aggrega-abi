@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::collections::BTreeMap;
+use crate::OrderedMap;
 
 /// The payload the host hands the annotation-transform plugin on each invocation: the resolved injection targets with their current annotations, the Manifest's registered annotation-binding keys, and the attachment's own pinned sources and settings.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -43,7 +43,7 @@ pub struct AnnotationTarget {
     /// The component's name within its boundary.
     pub component_name: String,
     /// The component's current scalar annotation set, keyed by annotation key.
-    pub annotations: BTreeMap<String, String>,
+    pub annotations: OrderedMap<String>,
 }
 
 /// One annotation to inject onto a target: the target coordinate plus the annotation key and its string value.
@@ -217,12 +217,10 @@ impl AnnotationTarget {
         crate::cbor_gen::write_text(out, "annotations");
         {
             let c = &self.annotations;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 crate::cbor_gen::write_text(out, mv);
             }
         }
@@ -243,14 +241,14 @@ impl AnnotationTarget {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_boundary_path: Option<String> = None;
         let mut f_component_name: Option<String> = None;
-        let mut f_annotations: Option<BTreeMap<String, String>> = None;
+        let mut f_annotations: Option<OrderedMap<String>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "boundary_path" => f_boundary_path = Some(dec.read_text()?),
                 "component_name" => f_component_name = Some(dec.read_text()?),
-                "annotations" => f_annotations = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }),
+                "annotations" => f_annotations = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
                 _ => dec.skip()?,
             }
         }

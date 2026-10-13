@@ -39,15 +39,15 @@ type IRNodeProjection struct {
 	// ResolvedRecipe Declared and deliberately withheld: the host always emits this as the empty string. The bound Recipe's identity already reaches the guest as the recipe name and version it stamps into provenance, so the resolved URI adds nothing a guest renders from. A guest that needs to attribute output to a Recipe reads those provenance fields instead.
 	ResolvedRecipe string `json:"resolved_recipe" yaml:"resolved_recipe" cbor:"resolved_recipe"`
 	// Values The node's rendered values dictionary, the key set the guest renders from. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself.
-	Values map[string]json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
+	Values OrderedMap[json.RawMessage] `json:"values,omitempty,omitzero" yaml:"values,omitempty" cbor:"values,omitempty"`
 	// Features The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
-	Features map[string]json.RawMessage `json:"features,omitempty" yaml:"features,omitempty" cbor:"features,omitempty"`
+	Features OrderedMap[json.RawMessage] `json:"features,omitempty,omitzero" yaml:"features,omitempty" cbor:"features,omitempty"`
 	// SensitiveRenderedKeys Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here — whether such a payload was produced from a value declared sensitive is carried instead by sensitive_values, and by an artifact entry's own sensitive_content. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
 	SensitiveRenderedKeys map[string]string `json:"sensitive_rendered_keys,omitempty" yaml:"sensitive_rendered_keys,omitempty" cbor:"sensitive_rendered_keys,omitempty"`
 	// SensitiveValues True when the values this payload carries were produced by a template that reads a value an author declared sensitive, or a value traced to one: a Recipe's or a FeatureRecipe's valuesMapping, a single template whose output keys and values are its own invention, so no key of that output can be traced back to the datum it came from and the whole map is marked instead. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from a value's content or a key's name. A guest composing text a person reads, a refusal or a warning, keeps every value of the node's values out of that text when this is true, and keeps out the value under any key sensitive_rendered_keys names whether or not it is: the two compose, one naming the keys whose identity is recovered exactly and this one covering the map where none can be. Absent when no such template read such a value, which includes values that are the declared leaves themselves, marked per key in sensitive_rendered_keys instead, and absent on a payload carrying no values. Absence never states that no value is sensitive.
 	SensitiveValues bool `json:"sensitive_values,omitempty" yaml:"sensitive_values,omitempty" cbor:"sensitive_values,omitempty"`
 	// Uses Declared and deliberately withheld: the host never populates this, so the map is absent from every render payload. An outbound edge is consumed before dispatch — the edge's published values are rehydrated into the node's own inject pipe, which the Recipe has already evaluated into the values and workload the guest receives — and a guest assembling a boundary receives the edge list on its own input instead. Were it populated it would key the node's outbound uses edges by socket alias, each carrying that socket's ordered target node ids in author order.
-	Uses map[string][]string `json:"uses,omitempty" yaml:"uses,omitempty" cbor:"uses,omitempty"`
+	Uses OrderedMap[[]string] `json:"uses,omitempty,omitzero" yaml:"uses,omitempty" cbor:"uses,omitempty"`
 	// BoundaryPath The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
 	BoundaryPath string `json:"boundary_path,omitempty" yaml:"boundary_path,omitempty" cbor:"boundary_path,omitempty"`
 	// SyncWave The deployment wave this node inherited from its containing boundary (default 0; negative permitted), carrying the value the IR node holds as `sync_wave`. What a guest does with it is the guest's own choice, and recording the value and ordering on it are independent rather than alternatives — a guest may do either, both or neither. Among the standard-library providers: `helm` and `helm-chart` emit it as an `argocd.argoproj.io/sync-wave` annotation on every rendered resource, and additionally as `helm.sh/hook-weight` on a resource the chart already marks as a Helm hook; `compose` both records it as a service label and orders the services of the file it renders into, through `depends_on` between them; `cloudformation` orders provisioning of the assembled stack, declaring every resource in a wave to depend on the resources of the wave before it; `terraform` orders the module blocks of the root configuration a boundary assembles into, declaring every module in a wave to depend on the modules of the wave before it, and also records it with the node's build provenance.
@@ -85,7 +85,7 @@ type RenderNodeOutput struct {
 	// Files The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
 	Files []RenderedFile `json:"files" yaml:"files" cbor:"files"`
 	// DerivedKeys The names the guest derived while rendering this node, keyed by the key space it derived them into, each space carrying its names in derivation order. A guest that derives the name its output addresses a resource by has put that name inside the file bytes the host writes verbatim, where the host cannot see it; declaring it here is how the guest asks the host to confirm no two derivations landed on one name. The host compares declared names for equality within one declared space and does nothing else — it does not parse a name, does not learn what a space or a name means, and never derives one itself. Two contributors to the same assembled output that declare the same name in the same space halt the build, and the halt names the space, the name, and both contributors. Both the space names and the names within them are the guest's own vocabulary: a guest wanting uniqueness across a narrower or wider scope than one assembled output expresses that scope in the space name it declares. Preserves declaration order so the payload is byte-identical across runs of identical input. Absent when the guest derives no names it wants checked, which leaves the check inert for that guest.
-	DerivedKeys map[string][]string `json:"derived_keys,omitempty" yaml:"derived_keys,omitempty" cbor:"derived_keys,omitempty"`
+	DerivedKeys OrderedMap[[]string] `json:"derived_keys,omitempty,omitzero" yaml:"derived_keys,omitempty" cbor:"derived_keys,omitempty"`
 	// RenderFacts Facts the guest reports about what it emitted for this node, in the order the guest lists them. Each fact pairs a name with a value, and both are the guest's own vocabulary: which facts a provider reports, what each name means and what its entries hold are part of that provider's documented contract, not of this socket's. Every fact's value is a list, even when it holds one entry: the host refuses a fact whose value is anything else, naming the provider and the fact, and halts the build. That is the one thing the host learns about a value. It keys facts by name and hands each list to the templates that read it, joining the lists of one name reported by more than one render of the same node in the order those renders ran, and it never learns what a name or an entry means or derives a fact itself — so a provider can report something only its own format knowledge can see, such as a property of the documents it wrote, without the host learning that format. Reporting facts never changes what is written: the files the host writes are the files the guest returned, whether or not facts accompany them. The guest lists its facts in a fixed order so the payload is byte-identical across runs of identical input. Absent when the guest reports nothing, which is a complete answer rather than a missing one.
 	RenderFacts []RenderFact `json:"render_facts,omitempty" yaml:"render_facts,omitempty" cbor:"render_facts,omitempty"`
 	// Omitted How many rendered units each entry of the input's omits matched: one count per entry the guest was handed, in the same order, each the number of units that entry matched whether or not another entry also matched them. A count of zero is a complete answer — the entry matched nothing the guest rendered. The counts are all the socket carries back about what was left out: the units themselves are simply absent from what the guest returned. Absent when the guest was handed no entries.
@@ -225,7 +225,7 @@ type WorkloadProjection struct {
 	// SensitiveWorkload True when the template that produced workload reads a value an author declared sensitive, or a value traced to one. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the content of any field. A rendered workload's fields carry no link back to the data its template read, so this marks the whole document: a guest composing text a person reads, a refusal or a warning, keeps every value the workload carries out of that text when this is true, while the document's shape — its keys and where a value sits — stays readable. The attachment entries the node projection's sensitive_rendered_keys names are marked there whether or not this is set. Absent when the template reads no such value; absence never states that no field is sensitive.
 	SensitiveWorkload bool `json:"sensitive_workload,omitempty" yaml:"sensitive_workload,omitempty" cbor:"sensitive_workload,omitempty"`
 	// AttachmentProvides Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced. Whether an attachment handles declared-sensitive material is not repeated here: it travels on the node projection's matching feature entry, which a guest reads by the same instance name.
-	AttachmentProvides map[string]map[string]string `json:"attachment_provides,omitempty" yaml:"attachment_provides,omitempty" cbor:"attachment_provides,omitempty"`
+	AttachmentProvides map[string]OrderedMap[string] `json:"attachment_provides,omitempty" yaml:"attachment_provides,omitempty" cbor:"attachment_provides,omitempty"`
 }
 
 // ArtifactsProjection The pre-evaluated artifact set the host hands a Provider guest to place into the node's output. The host has already resolved each entry's source (inline content or an imported file it read), evaluated it as a Go template against the render context using the guest's declared artifact-template delimiter pair, and computed the build-provenance label and annotation key sets. The guest owns the format decision, the provenance placement, the on-disk path, and the final bytes. Entries preserve author order so the placed output is byte-identical across runs of identical input.
@@ -282,11 +282,11 @@ type RenderedNode struct {
 	OutputDirectory string           `json:"output_directory,omitempty" yaml:"output_directory,omitempty" cbor:"output_directory,omitempty"`
 	Rendered        RenderNodeOutput `json:"rendered" yaml:"rendered" cbor:"rendered"`
 	// Annotations The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
-	Annotations map[string]string `json:"annotations,omitempty" yaml:"annotations,omitempty" cbor:"annotations,omitempty"`
+	Annotations OrderedMap[string] `json:"annotations,omitempty,omitzero" yaml:"annotations,omitempty" cbor:"annotations,omitempty"`
 	// SyncWave The deployment wave this node inherited from its containing boundary (default 0; negative permitted), so a boundary assembler can order the contributors it merges relative to one another. A dispatch group can merge contributors from several boundaries, each carrying its own wave, so the wave travels with every node here rather than once for the whole payload. An assembler whose output shape expresses no ordering ignores it.
 	SyncWave int `json:"sync_wave,omitempty" yaml:"sync_wave,omitempty" cbor:"sync_wave,omitempty"`
 	// Values The values the compiler resolved for this node, present only for a node rendered from a source — the render_node call that produced its files carried a source_listing. That is the one case where the files came from elsewhere and the values could not be written into them, so a position outside them has to supply them: a boundary assembler places a present dictionary as that contributor's inputs in the assembled artifact itself, rather than beside the contributor's own files, and where the assembled artifact is the only position the target evaluates, that is the difference between an input the target reads and one it never reaches. A node rendered from a workload_projection or an artifacts_projection resolved these values into the files it produced, so it carries none here and the field is absent: supplying them a second time would offer the assembled artifact inputs that node's own files never declare, which the target is free to reject. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself. An assembler whose output shape carries no per-contributor inputs ignores the field.
-	Values map[string]json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
+	Values OrderedMap[json.RawMessage] `json:"values,omitempty,omitzero" yaml:"values,omitempty" cbor:"values,omitempty"`
 }
 
 type RenderEdge struct {
@@ -303,7 +303,7 @@ type SubChart struct {
 	// Version The version the umbrella pins for the sub-chart. A sub-chart vendored from a chart source instead draws its dependency name and version from that chart's Chart.yaml file so the dependency binds; this value applies to a generative sub-chart that carries no vendored chart.
 	Version string `json:"version,omitempty" yaml:"version,omitempty" cbor:"version,omitempty"`
 	// Values The per-instance values the umbrella scopes under the sub-chart's alias in the umbrella values.yaml file. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself.
-	Values map[string]json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
+	Values OrderedMap[json.RawMessage] `json:"values,omitempty,omitzero" yaml:"values,omitempty" cbor:"values,omitempty"`
 	// ChartYaml The pristine bytes of the vendored chart's Chart.yaml, read from the local source at compile time, from which the umbrella draws the sub-chart dependency's name and version. Empty for a generative sub-chart that carries no vendored chart. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the guest decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
 	ChartYaml []byte `json:"chart_yaml,omitempty" yaml:"chart_yaml,omitempty" cbor:"chart_yaml,omitempty"`
 }
@@ -363,7 +363,7 @@ type BoundaryEnvOverridesInput struct {
 	// InternalUsesEdges The boundary's internal uses edges — the directed edges whose endpoints both live inside the boundary's subtree, each enriched with the producer's provides and the consumer's inject mapping. The guest reads them to decide which consumers need an env override and what value to write. Opaque at this schema layer; the guest reads the enriched-edge shape through the template-context wire contract.
 	InternalUsesEdges []json.RawMessage `json:"internal_uses_edges,omitempty" yaml:"internal_uses_edges,omitempty" cbor:"internal_uses_edges,omitempty"`
 	// Infra The driving feature's resolved infra, an author-ordered key set the guest reads for the channel's tunables (for a compose bridge, the listen-port base and the upstream host provides-field selector). Preserves author order so the payload is byte-identical across runs of identical input.
-	Infra map[string]json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
+	Infra OrderedMap[json.RawMessage] `json:"infra,omitempty,omitzero" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 }
 
 // BoundaryEnvOverridesOutput The payload a Provider guest returns from its boundary_env_overrides export: the per-consumer environment overrides the host applies to each named consumer's injected env after the per-node render pass. The values are opaque strings the host carries without interpretation; a consumer absent from the map is left untouched.
@@ -453,9 +453,9 @@ type LinkEdge struct {
 	// Socket The socket alias the uses edge is bound under.
 	Socket string `json:"socket" yaml:"socket" cbor:"socket"`
 	// Provides The consumed endpoint's provides output, an author-ordered key set exposing the target's declared outputs. Preserves author order so the payload is byte-identical across runs of identical input.
-	Provides map[string]string `json:"provides" yaml:"provides" cbor:"provides"`
+	Provides OrderedMap[string] `json:"provides" yaml:"provides" cbor:"provides"`
 	// Inject The consuming endpoint's inject mapping, keyed by delivery mechanism to an author-ordered key set, describing how the consuming end receives the consumed endpoint's output. Preserves author order so the payload is byte-identical across runs of identical input.
-	Inject map[string]map[string]string `json:"inject" yaml:"inject" cbor:"inject"`
+	Inject OrderedMap[OrderedMap[string]] `json:"inject" yaml:"inject" cbor:"inject"`
 }
 
 // LinkPatch One per-file structural patch a provider returns as artifact wiring: the output file and the ordered structural operations to apply to it. A later host pass carves the named file, applies the operations, and reassembles it byte-faithfully. The operation shape is the shared pipeline patch-operation vocabulary; it is opaque at this schema layer, so a guest carries each operation verbatim while the host realizes the typed operation its pipeline applies.
@@ -718,54 +718,28 @@ func (t IRNodeProjection) MarshalJSON() ([]byte, error) {
 	first = false
 	buf.WriteString("\"resolved_recipe\":")
 	writeJSONString(&buf, t.ResolvedRecipe)
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"values\":")
-		{
-			keys := make([]string, 0, len(t.Values))
-			for k := range t.Values {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Values[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Values.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
-	if len(t.Features) != 0 {
+	if !t.Features.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"features\":")
-		{
-			keys := make([]string, 0, len(t.Features))
-			for k := range t.Features {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Features[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Features.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if len(t.SensitiveRenderedKeys) != 0 {
@@ -805,37 +779,16 @@ func (t IRNodeProjection) MarshalJSON() ([]byte, error) {
 			buf.WriteString("false")
 		}
 	}
-	if len(t.Uses) != 0 {
+	if !t.Uses.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"uses\":")
-		{
-			keys := make([]string, 0, len(t.Uses))
-			for k := range t.Uses {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Uses[k]
-				buf.WriteByte('[')
-				for i := range mv {
-					if i > 0 {
-						buf.WriteByte(',')
-					}
-					ev := mv[i]
-					writeJSONString(&buf, ev)
-				}
-				buf.WriteByte(']')
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Uses.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if t.BoundaryPath != "" {
@@ -958,46 +911,20 @@ func (t *IRNodeProjection) UnmarshalJSON(data []byte) error {
 				t.ResolvedRecipe = s
 			}
 		case "values":
-			t.Values = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Values.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.Values[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "features":
-			t.Features = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Features.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.Features[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "sensitive_rendered_keys":
 			t.SensitiveRenderedKeys = make(map[string]string)
@@ -1027,29 +954,12 @@ func (t *IRNodeProjection) UnmarshalJSON(data []byte) error {
 				t.SensitiveValues = v
 			}
 		case "uses":
-			t.Uses = make(map[string][]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Uses.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv []string
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					dec2 := json.NewDecoder(bytes.NewReader(raw))
-					dec2.UseNumber()
-					if err := dec2.Decode(&mv); err != nil {
-						return err
-					}
-				}
-				t.Uses[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "boundary_path":
 			if s, err := readString(dec); err != nil {
@@ -1284,37 +1194,16 @@ func (t RenderNodeOutput) MarshalJSON() ([]byte, error) {
 		}
 	}
 	buf.WriteByte(']')
-	if len(t.DerivedKeys) != 0 {
+	if !t.DerivedKeys.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"derived_keys\":")
-		{
-			keys := make([]string, 0, len(t.DerivedKeys))
-			for k := range t.DerivedKeys {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.DerivedKeys[k]
-				buf.WriteByte('[')
-				for i := range mv {
-					if i > 0 {
-						buf.WriteByte(',')
-					}
-					ev := mv[i]
-					writeJSONString(&buf, ev)
-				}
-				buf.WriteByte(']')
-			}
-			buf.WriteByte('}')
+		if enc, err := t.DerivedKeys.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if len(t.RenderFacts) != 0 {
@@ -1435,29 +1324,12 @@ func (t *RenderNodeOutput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 		case "derived_keys":
-			t.DerivedKeys = make(map[string][]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.DerivedKeys.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv []string
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					dec2 := json.NewDecoder(bytes.NewReader(raw))
-					dec2.UseNumber()
-					if err := dec2.Decode(&mv); err != nil {
-						return err
-					}
-				}
-				t.DerivedKeys[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "render_facts":
 			t.RenderFacts = nil
@@ -2771,23 +2643,10 @@ func (t WorkloadProjection) MarshalJSON() ([]byte, error) {
 				writeJSONString(&buf, k)
 				buf.WriteByte(':')
 				mv := t.AttachmentProvides[k]
-				{
-					keys := make([]string, 0, len(mv))
-					for k := range mv {
-						keys = append(keys, k)
-					}
-					sort.Strings(keys)
-					buf.WriteByte('{')
-					for i, k := range keys {
-						if i > 0 {
-							buf.WriteByte(',')
-						}
-						writeJSONString(&buf, k)
-						buf.WriteByte(':')
-						mv := mv[k]
-						writeJSONString(&buf, mv)
-					}
-					buf.WriteByte('}')
+				if enc, err := mv.MarshalJSON(); err != nil {
+					return nil, err
+				} else {
+					buf.Write(enc)
 				}
 			}
 			buf.WriteByte('}')
@@ -2824,7 +2683,7 @@ func (t *WorkloadProjection) UnmarshalJSON(data []byte) error {
 				t.SensitiveWorkload = v
 			}
 		case "attachment_provides":
-			t.AttachmentProvides = make(map[string]map[string]string)
+			t.AttachmentProvides = make(map[string]OrderedMap[string])
 			if err := expectDelim(dec, '{'); err != nil {
 				return err
 			}
@@ -2833,13 +2692,11 @@ func (t *WorkloadProjection) UnmarshalJSON(data []byte) error {
 				if err != nil {
 					return err
 				}
-				var mv map[string]string
+				var mv OrderedMap[string]
 				if raw, err := readRaw(dec, data); err != nil {
 					return err
 				} else {
-					dec2 := json.NewDecoder(bytes.NewReader(raw))
-					dec2.UseNumber()
-					if err := dec2.Decode(&mv); err != nil {
+					if err := mv.UnmarshalJSON(raw); err != nil {
 						return err
 					}
 				}
@@ -3428,29 +3285,16 @@ func (t RenderedNode) MarshalJSON() ([]byte, error) {
 	} else {
 		buf.Write(enc)
 	}
-	if len(t.Annotations) != 0 {
+	if !t.Annotations.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"annotations\":")
-		{
-			keys := make([]string, 0, len(t.Annotations))
-			for k := range t.Annotations {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Annotations[k]
-				writeJSONString(&buf, mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Annotations.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if t.SyncWave != 0 {
@@ -3461,29 +3305,16 @@ func (t RenderedNode) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"sync_wave\":")
 		buf.WriteString(strconv.FormatInt(int64(t.SyncWave), 10))
 	}
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"values\":")
-		{
-			keys := make([]string, 0, len(t.Values))
-			for k := range t.Values {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Values[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Values.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	buf.WriteByte('}')
@@ -3537,25 +3368,12 @@ func (t *RenderedNode) UnmarshalJSON(data []byte) error {
 				}
 			}
 		case "annotations":
-			t.Annotations = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Annotations.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.Annotations[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "sync_wave":
 			if n, err := readInt(dec); err != nil {
@@ -3564,25 +3382,12 @@ func (t *RenderedNode) UnmarshalJSON(data []byte) error {
 				t.SyncWave = int(n)
 			}
 		case "values":
-			t.Values = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Values.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.Values[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -3702,29 +3507,16 @@ func (t SubChart) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"version\":")
 		writeJSONString(&buf, t.Version)
 	}
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"values\":")
-		{
-			keys := make([]string, 0, len(t.Values))
-			for k := range t.Values {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Values[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Values.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if len(t.ChartYaml) != 0 {
@@ -3766,25 +3558,12 @@ func (t *SubChart) UnmarshalJSON(data []byte) error {
 				t.Version = s
 			}
 		case "values":
-			t.Values = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Values.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.Values[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "chart_yaml":
 			if v, err := readBytes(dec); err != nil {
@@ -4387,29 +4166,16 @@ func (t BoundaryEnvOverridesInput) MarshalJSON() ([]byte, error) {
 		}
 		buf.WriteByte(']')
 	}
-	if len(t.Infra) != 0 {
+	if !t.Infra.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"infra\":")
-		{
-			keys := make([]string, 0, len(t.Infra))
-			for k := range t.Infra {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Infra[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Infra.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	buf.WriteByte('}')
@@ -4448,25 +4214,12 @@ func (t *BoundaryEnvOverridesInput) UnmarshalJSON(data []byte) error {
 				return err
 			}
 		case "infra":
-			t.Infra = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Infra.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.Infra[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -5333,63 +5086,20 @@ func (t LinkEdge) MarshalJSON() ([]byte, error) {
 	}
 	first = false
 	buf.WriteString("\"provides\":")
-	{
-		keys := make([]string, 0, len(t.Provides))
-		for k := range t.Provides {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Provides[k]
-			writeJSONString(&buf, mv)
-		}
-		buf.WriteByte('}')
+	if enc, err := t.Provides.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	if !first {
 		buf.WriteByte(',')
 	}
 	first = false
 	buf.WriteString("\"inject\":")
-	{
-		keys := make([]string, 0, len(t.Inject))
-		for k := range t.Inject {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Inject[k]
-			{
-				keys := make([]string, 0, len(mv))
-				for k := range mv {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				buf.WriteByte('{')
-				for i, k := range keys {
-					if i > 0 {
-						buf.WriteByte(',')
-					}
-					writeJSONString(&buf, k)
-					buf.WriteByte(':')
-					mv := mv[k]
-					writeJSONString(&buf, mv)
-				}
-				buf.WriteByte('}')
-			}
-		}
-		buf.WriteByte('}')
+	if enc, err := t.Inject.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
@@ -5474,50 +5184,20 @@ func (t *LinkEdge) UnmarshalJSON(data []byte) error {
 				t.Socket = s
 			}
 		case "provides":
-			t.Provides = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Provides.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.Provides[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "inject":
-			t.Inject = make(map[string]map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Inject.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv map[string]string
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					dec2 := json.NewDecoder(bytes.NewReader(raw))
-					dec2.UseNumber()
-					if err := dec2.Decode(&mv); err != nil {
-						return err
-					}
-				}
-				t.Inject[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -6363,13 +6043,13 @@ func (t IRNodeProjection) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t IRNodeProjection) appendCBOR(dst []byte) ([]byte, error) {
 	n := 4
-	if len(t.Uses) != 0 {
+	if !t.Uses.IsZero() {
 		n++
 	}
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		n++
 	}
-	if len(t.Features) != 0 {
+	if !t.Features.IsZero() {
 		n++
 	}
 	if t.SyncWave != 0 {
@@ -6405,56 +6085,35 @@ func (t IRNodeProjection) appendCBOR(dst []byte) ([]byte, error) {
 	dst = appendCBORTextString(dst, t.ID)
 	dst = appendCBORTextString(dst, "type")
 	dst = appendCBORTextString(dst, t.Type)
-	if len(t.Uses) != 0 {
+	if !t.Uses.IsZero() {
 		dst = appendCBORTextString(dst, "uses")
-		{
-			keys := make([]string, 0, len(t.Uses))
-			for k := range t.Uses {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Uses[k]
-				dst = appendCBORHead(dst, 4, uint64(len(mv)))
-				for i := range mv {
-					ev := mv[i]
-					dst = appendCBORTextString(dst, ev)
-				}
+		dst = appendCBORHead(dst, 4, uint64(t.Uses.Len()))
+		for k, mv := range t.Uses.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORHead(dst, 4, uint64(len(mv)))
+			for i := range mv {
+				ev := mv[i]
+				dst = appendCBORTextString(dst, ev)
 			}
 		}
 	}
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		dst = appendCBORTextString(dst, "values")
-		{
-			keys := make([]string, 0, len(t.Values))
-			for k := range t.Values {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Values[k]
-				dst = appendCBORByteString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Values.Len()))
+		for k, mv := range t.Values.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORByteString(dst, mv)
 		}
 	}
-	if len(t.Features) != 0 {
+	if !t.Features.IsZero() {
 		dst = appendCBORTextString(dst, "features")
-		{
-			keys := make([]string, 0, len(t.Features))
-			for k := range t.Features {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Features[k]
-				dst = appendCBORByteString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Features.Len()))
+		for k, mv := range t.Features.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORByteString(dst, mv)
 		}
 	}
 	if t.SyncWave != 0 {
@@ -6564,15 +6223,18 @@ func (t *IRNodeProjection) decodeCBOR(dec *cborDec) error {
 			}
 		case "values":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -6580,21 +6242,24 @@ func (t *IRNodeProjection) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Values = m
+				t.Values = om
 			}
 		case "features":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -6602,9 +6267,9 @@ func (t *IRNodeProjection) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Features = m
+				t.Features = om
 			}
 		case "sensitive_rendered_keys":
 			{
@@ -6636,15 +6301,18 @@ func (t *IRNodeProjection) decodeCBOR(dec *cborDec) error {
 			}
 		case "uses":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string][]string, mn)
+				var om OrderedMap[[]string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv []string
 					{
@@ -6664,9 +6332,9 @@ func (t *IRNodeProjection) decodeCBOR(dec *cborDec) error {
 						}
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Uses = m
+				t.Uses = om
 			}
 		case "boundary_path":
 			if s, err := dec.readTextString(); err != nil {
@@ -6892,7 +6560,7 @@ func (t RenderNodeOutput) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Diagnostics) != 0 {
 		n++
 	}
-	if len(t.DerivedKeys) != 0 {
+	if !t.DerivedKeys.IsZero() {
 		n++
 	}
 	if len(t.RenderFacts) != 0 {
@@ -6936,23 +6604,16 @@ func (t RenderNodeOutput) appendCBOR(dst []byte) ([]byte, error) {
 			}
 		}
 	}
-	if len(t.DerivedKeys) != 0 {
+	if !t.DerivedKeys.IsZero() {
 		dst = appendCBORTextString(dst, "derived_keys")
-		{
-			keys := make([]string, 0, len(t.DerivedKeys))
-			for k := range t.DerivedKeys {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.DerivedKeys[k]
-				dst = appendCBORHead(dst, 4, uint64(len(mv)))
-				for i := range mv {
-					ev := mv[i]
-					dst = appendCBORTextString(dst, ev)
-				}
+		dst = appendCBORHead(dst, 4, uint64(t.DerivedKeys.Len()))
+		for k, mv := range t.DerivedKeys.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORHead(dst, 4, uint64(len(mv)))
+			for i := range mv {
+				ev := mv[i]
+				dst = appendCBORTextString(dst, ev)
 			}
 		}
 	}
@@ -7013,15 +6674,18 @@ func (t *RenderNodeOutput) decodeCBOR(dec *cborDec) error {
 			}
 		case "derived_keys":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string][]string, mn)
+				var om OrderedMap[[]string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv []string
 					{
@@ -7041,9 +6705,9 @@ func (t *RenderNodeOutput) decodeCBOR(dec *cborDec) error {
 						}
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.DerivedKeys = m
+				t.DerivedKeys = om
 			}
 		case "render_facts":
 			{
@@ -8297,18 +7961,11 @@ func (t WorkloadProjection) appendCBOR(dst []byte) ([]byte, error) {
 			for _, k := range keys {
 				dst = appendCBORTextString(dst, k)
 				mv := t.AttachmentProvides[k]
-				{
-					keys := make([]string, 0, len(mv))
-					for k := range mv {
-						keys = append(keys, k)
-					}
-					sortCBORKeys(keys)
-					dst = appendCBORHead(dst, 5, uint64(len(keys)))
-					for _, k := range keys {
-						dst = appendCBORTextString(dst, k)
-						mv := mv[k]
-						dst = appendCBORTextString(dst, mv)
-					}
+				dst = appendCBORHead(dst, 4, uint64(mv.Len()))
+				for k, mv := range mv.All() {
+					dst = appendCBORHead(dst, 4, 2)
+					dst = appendCBORTextString(dst, k)
+					dst = appendCBORTextString(dst, mv)
 				}
 			}
 		}
@@ -8352,23 +8009,26 @@ func (t *WorkloadProjection) decodeCBOR(dec *cborDec) error {
 				if err != nil {
 					return err
 				}
-				m := make(map[string]map[string]string, mn)
+				m := make(map[string]OrderedMap[string], mn)
 				for mi := 0; mi < mn; mi++ {
 					mk, err := dec.readTextString()
 					if err != nil {
 						return err
 					}
-					var mv map[string]string
+					var mv OrderedMap[string]
 					{
-						mn, err := dec.readMapHeader()
+						mn, err := dec.readArrayHeader()
 						if err != nil {
 							return err
 						}
-						m := make(map[string]string, mn)
+						var om OrderedMap[string]
 						for mi := 0; mi < mn; mi++ {
-							mk, err := dec.readTextString()
+							mk, err := dec.readEntryKey()
 							if err != nil {
 								return err
+							}
+							if _, dup := om.Get(mk); dup {
+								return duplicateKeyError(mk)
 							}
 							var mv string
 							if s, err := dec.readTextString(); err != nil {
@@ -8376,9 +8036,9 @@ func (t *WorkloadProjection) decodeCBOR(dec *cborDec) error {
 							} else {
 								mv = s
 							}
-							m[mk] = mv
+							om.Set(mk, mv)
 						}
-						mv = m
+						mv = om
 					}
 					m[mk] = mv
 				}
@@ -8864,13 +8524,13 @@ func (t RenderedNode) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t RenderedNode) appendCBOR(dst []byte) ([]byte, error) {
 	n := 3
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		n++
 	}
 	if t.SyncWave != 0 {
 		n++
 	}
-	if len(t.Annotations) != 0 {
+	if !t.Annotations.IsZero() {
 		n++
 	}
 	if t.OutputDirectory != "" {
@@ -8885,20 +8545,13 @@ func (t RenderedNode) appendCBOR(dst []byte) ([]byte, error) {
 	dst = appendCBORTextString(dst, t.ID)
 	dst = appendCBORTextString(dst, "type")
 	dst = appendCBORTextString(dst, t.Type)
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		dst = appendCBORTextString(dst, "values")
-		{
-			keys := make([]string, 0, len(t.Values))
-			for k := range t.Values {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Values[k]
-				dst = appendCBORByteString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Values.Len()))
+		for k, mv := range t.Values.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORByteString(dst, mv)
 		}
 	}
 	dst = appendCBORTextString(dst, "rendered")
@@ -8909,20 +8562,13 @@ func (t RenderedNode) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "sync_wave")
 		dst = appendCBORInt(dst, int64(t.SyncWave))
 	}
-	if len(t.Annotations) != 0 {
+	if !t.Annotations.IsZero() {
 		dst = appendCBORTextString(dst, "annotations")
-		{
-			keys := make([]string, 0, len(t.Annotations))
-			for k := range t.Annotations {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Annotations[k]
-				dst = appendCBORTextString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Annotations.Len()))
+		for k, mv := range t.Annotations.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORTextString(dst, mv)
 		}
 	}
 	if t.OutputDirectory != "" {
@@ -8984,15 +8630,18 @@ func (t *RenderedNode) decodeCBOR(dec *cborDec) error {
 			}
 		case "annotations":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -9000,9 +8649,9 @@ func (t *RenderedNode) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Annotations = m
+				t.Annotations = om
 			}
 		case "sync_wave":
 			if v, err := dec.readInt(); err != nil {
@@ -9012,15 +8661,18 @@ func (t *RenderedNode) decodeCBOR(dec *cborDec) error {
 			}
 		case "values":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -9028,9 +8680,9 @@ func (t *RenderedNode) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Values = m
+				t.Values = om
 			}
 		default:
 			if err := dec.skip(); err != nil {
@@ -9136,7 +8788,7 @@ func (t SubChart) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t SubChart) appendCBOR(dst []byte) ([]byte, error) {
 	n := 1
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		n++
 	}
 	if t.Version != "" {
@@ -9146,20 +8798,13 @@ func (t SubChart) appendCBOR(dst []byte) ([]byte, error) {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
-	if len(t.Values) != 0 {
+	if !t.Values.IsZero() {
 		dst = appendCBORTextString(dst, "values")
-		{
-			keys := make([]string, 0, len(t.Values))
-			for k := range t.Values {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Values[k]
-				dst = appendCBORByteString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Values.Len()))
+		for k, mv := range t.Values.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORByteString(dst, mv)
 		}
 	}
 	if t.Version != "" {
@@ -9207,15 +8852,18 @@ func (t *SubChart) decodeCBOR(dec *cborDec) error {
 			}
 		case "values":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -9223,9 +8871,9 @@ func (t *SubChart) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Values = m
+				t.Values = om
 			}
 		case "chart_yaml":
 			if v, err := dec.readByteString(); err != nil {
@@ -9782,27 +9430,20 @@ func (t BoundaryEnvOverridesInput) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t BoundaryEnvOverridesInput) appendCBOR(dst []byte) ([]byte, error) {
 	n := 0
-	if len(t.Infra) != 0 {
+	if !t.Infra.IsZero() {
 		n++
 	}
 	if len(t.InternalUsesEdges) != 0 {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
-	if len(t.Infra) != 0 {
+	if !t.Infra.IsZero() {
 		dst = appendCBORTextString(dst, "infra")
-		{
-			keys := make([]string, 0, len(t.Infra))
-			for k := range t.Infra {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Infra[k]
-				dst = appendCBORByteString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Infra.Len()))
+		for k, mv := range t.Infra.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORByteString(dst, mv)
 		}
 	}
 	if len(t.InternalUsesEdges) != 0 {
@@ -9854,15 +9495,18 @@ func (t *BoundaryEnvOverridesInput) decodeCBOR(dec *cborDec) error {
 			}
 		case "infra":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -9870,9 +9514,9 @@ func (t *BoundaryEnvOverridesInput) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Infra = m
+				t.Infra = om
 			}
 		default:
 			if err := dec.skip(); err != nil {
@@ -10642,29 +10286,15 @@ func (t LinkEdge) appendCBOR(dst []byte) ([]byte, error) {
 	dst = appendCBORHead(dst, 5, uint64(n))
 	var err error
 	dst = appendCBORTextString(dst, "inject")
-	{
-		keys := make([]string, 0, len(t.Inject))
-		for k := range t.Inject {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
+	dst = appendCBORHead(dst, 4, uint64(t.Inject.Len()))
+	for k, mv := range t.Inject.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		dst = appendCBORHead(dst, 4, uint64(mv.Len()))
+		for k, mv := range mv.All() {
+			dst = appendCBORHead(dst, 4, 2)
 			dst = appendCBORTextString(dst, k)
-			mv := t.Inject[k]
-			{
-				keys := make([]string, 0, len(mv))
-				for k := range mv {
-					keys = append(keys, k)
-				}
-				sortCBORKeys(keys)
-				dst = appendCBORHead(dst, 5, uint64(len(keys)))
-				for _, k := range keys {
-					dst = appendCBORTextString(dst, k)
-					mv := mv[k]
-					dst = appendCBORTextString(dst, mv)
-				}
-			}
+			dst = appendCBORTextString(dst, mv)
 		}
 	}
 	dst = appendCBORTextString(dst, "socket")
@@ -10678,18 +10308,11 @@ func (t LinkEdge) appendCBOR(dst []byte) ([]byte, error) {
 		return nil, err
 	}
 	dst = appendCBORTextString(dst, "provides")
-	{
-		keys := make([]string, 0, len(t.Provides))
-		for k := range t.Provides {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.Provides[k]
-			dst = appendCBORTextString(dst, mv)
-		}
+	dst = appendCBORHead(dst, 4, uint64(t.Provides.Len()))
+	for k, mv := range t.Provides.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		dst = appendCBORTextString(dst, mv)
 	}
 	if len(t.SourceAnnotations) != 0 {
 		dst = appendCBORTextString(dst, "source_annotations")
@@ -10804,15 +10427,18 @@ func (t *LinkEdge) decodeCBOR(dec *cborDec) error {
 			}
 		case "provides":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -10820,33 +10446,39 @@ func (t *LinkEdge) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Provides = m
+				t.Provides = om
 			}
 		case "inject":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]map[string]string, mn)
+				var om OrderedMap[OrderedMap[string]]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
 					}
-					var mv map[string]string
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
+					}
+					var mv OrderedMap[string]
 					{
-						mn, err := dec.readMapHeader()
+						mn, err := dec.readArrayHeader()
 						if err != nil {
 							return err
 						}
-						m := make(map[string]string, mn)
+						var om OrderedMap[string]
 						for mi := 0; mi < mn; mi++ {
-							mk, err := dec.readTextString()
+							mk, err := dec.readEntryKey()
 							if err != nil {
 								return err
+							}
+							if _, dup := om.Get(mk); dup {
+								return duplicateKeyError(mk)
 							}
 							var mv string
 							if s, err := dec.readTextString(); err != nil {
@@ -10854,13 +10486,13 @@ func (t *LinkEdge) decodeCBOR(dec *cborDec) error {
 							} else {
 								mv = s
 							}
-							m[mk] = mv
+							om.Set(mk, mv)
 						}
-						mv = m
+						mv = om
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Inject = m
+				t.Inject = om
 			}
 		default:
 			if err := dec.skip(); err != nil {

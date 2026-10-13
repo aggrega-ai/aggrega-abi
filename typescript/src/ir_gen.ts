@@ -6,9 +6,10 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import { readJSONMembers, readOrderedObject, writeOrderedObject } from "./orderedmap_gen.ts";
 import {
   writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
-  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec, duplicateKeyError,
 } from "./cbor_gen.ts";
 
 function jstr(s: string): string {
@@ -57,9 +58,9 @@ export interface IRFeatureEntry {
   // The exact semantic version resolved during compilation.
   resolved_version: string;
   // The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
-  labels?: Record<string, string>;
+  labels?: Map<string, string>;
   // The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
-  catalog_annotations?: Record<string, string>;
+  catalog_annotations?: Map<string, string>;
   // Names the attachment slot this attachment fills, or "free" when it fills no declared slot. A slot is declared in one of two places, and where the attachment was written decides which: an attachment of the node's own attachment block fills a slot the host Component declares in its featuresSchema, and an attachment written on a connection fills a slot the connection's socket declares in that socket's featuresSchema on the host Component. The pairing is by name in both — an attachment fills a slot when the Feature is attached under the slot's name, on the component's block or on the connection — so the value is an exact key from the declared slot set, never anything read out of the attachment's key. A socket's slot set is closed, since an attachment written on a connection under a name its socket does not declare halts the build, so an attachment that carries a connection never reports free. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
   binding?: string;
   // Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
@@ -75,9 +76,9 @@ export interface IRFeatureEntry {
   // Source location of the annotation declaration as <release-file-path>:<dotted-yaml-key-path>. Empty when origin is explicit.
   annotation_source?: string;
   // Per-leaf origin for the values payload, keyed by dotted leaf path.
-  values_provenance?: Record<string, FieldProvenance>;
+  values_provenance?: Map<string, FieldProvenance>;
   // Per-leaf origin for the infra payload, keyed by dotted leaf path.
-  infra_provenance?: Record<string, FieldProvenance>;
+  infra_provenance?: Map<string, FieldProvenance>;
   // True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the slot the attachment fills declares the material it carries sensitive: the host Component's attachment slot of the same name, or, for an attachment written on a connection, the slot of that name the connection's socket declares. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
   sensitive?: boolean;
   // The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
@@ -115,7 +116,7 @@ export interface IRNode {
   // Optional developer-authored documentation describing this component instance's role in the application. Passed through from the Aggregate for augmenting rendering and linting diagnostics.
   description?: string;
   // The entity's duck-typing and ontology labels.
-  labels: Record<string, string>;
+  labels: Map<string, string>;
   // The name of the underlying Component.
   component: string;
   // The exact Semantic Version of the Component resolved during compilation.
@@ -132,11 +133,11 @@ export interface IRNode {
   synthesized_boundary?: boolean;
   catalog_metadata?: CatalogMetadata;
   // Immutable, intrinsic component characteristics authored by the Platform Architect in Domain 2.
-  catalog_annotations?: Record<string, string>;
+  catalog_annotations?: Map<string, string>;
   // Physical topology strings and Ops realities cascading from boundaries in the Release.
-  release_annotations?: Record<string, string>;
+  release_annotations?: Map<string, string>;
   // Cognitive metadata, developer intent, and FinOps cascading from subsystems in the Aggregate.
-  aggregate_annotations?: Record<string, string>;
+  aggregate_annotations?: Map<string, string>;
   // Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
   self_inject?: unknown;
   // Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
@@ -191,17 +192,17 @@ export interface IRProvenance {
 
 export interface IRSpec {
   // Dictionary of all nodes in the graph, keyed by their absolute ID. Purely topological.
-  nodes: Record<string, IRNode>;
+  nodes: Map<string, IRNode>;
   // Explicit logical network paths and dependencies between nodes.
   edges: IREdge[];
   // The single source of truth for opaque pass-through cognitive payloads, mapped by node ID.
-  values_mapping: Record<string, unknown>;
+  values_mapping: Map<string, unknown>;
   // The physical sizing payload injected from the Release, mapped by node ID.
-  infra_mapping: Record<string, unknown>;
+  infra_mapping: Map<string, unknown>;
   // Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment. An attachment written on one of the node's connections is keyed by its qualified name, the connection's alias and the slot joined by a dot, and names its connection in its own connection field.
-  feature_values_mapping: Record<string, Record<string, IRFeatureEntry>>;
+  feature_values_mapping: Map<string, Map<string, IRFeatureEntry>>;
   // Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
-  boundary_features?: Record<string, Record<string, IRBoundaryFeature>>;
+  boundary_features?: Map<string, Map<string, IRBoundaryFeature>>;
   provenance: IRProvenance;
 }
 
@@ -253,8 +254,8 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   const parts: string[] = [];
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
   parts.push(`${jstr("resolved_version")}:${jstr(v.resolved_version)}`);
-  if (v.labels !== undefined && Object.keys(v.labels).length > 0) parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
-  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) parts.push(`${jstr("catalog_annotations")}:${`{${Object.keys(v.catalog_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.catalog_annotations![k0])}`).join(",")}}`}`);
+  if (v.labels !== undefined && v.labels.size > 0) parts.push(`${jstr("labels")}:${writeOrderedObject(v.labels!, (v0) => jstr(v0))}`);
+  if (v.catalog_annotations !== undefined && v.catalog_annotations.size > 0) parts.push(`${jstr("catalog_annotations")}:${writeOrderedObject(v.catalog_annotations!, (v0) => jstr(v0))}`);
   if (v.binding !== undefined && v.binding !== "") parts.push(`${jstr("binding")}:${jstr(v.binding)}`);
   if (v.values !== undefined && v.values !== null) parts.push(`${jstr("values")}:${encodeOpaque(v.values)}`);
   if (v.infra !== undefined && v.infra !== null) parts.push(`${jstr("infra")}:${encodeOpaque(v.infra)}`);
@@ -262,8 +263,8 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
   if (v.origin !== undefined && v.origin !== "") parts.push(`${jstr("origin")}:${jstr(v.origin)}`);
   if (v.annotation_key !== undefined && v.annotation_key !== "") parts.push(`${jstr("annotation_key")}:${jstr(v.annotation_key)}`);
   if (v.annotation_source !== undefined && v.annotation_source !== "") parts.push(`${jstr("annotation_source")}:${jstr(v.annotation_source)}`);
-  if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) parts.push(`${jstr("values_provenance")}:${`{${Object.keys(v.values_provenance!).sort().map((k0) => `${jstr(k0)}:${encodeFieldProvenance(v.values_provenance![k0])}`).join(",")}}`}`);
-  if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) parts.push(`${jstr("infra_provenance")}:${`{${Object.keys(v.infra_provenance!).sort().map((k0) => `${jstr(k0)}:${encodeFieldProvenance(v.infra_provenance![k0])}`).join(",")}}`}`);
+  if (v.values_provenance !== undefined && v.values_provenance.size > 0) parts.push(`${jstr("values_provenance")}:${writeOrderedObject(v.values_provenance!, (v0) => encodeFieldProvenance(v0))}`);
+  if (v.infra_provenance !== undefined && v.infra_provenance.size > 0) parts.push(`${jstr("infra_provenance")}:${writeOrderedObject(v.infra_provenance!, (v0) => encodeFieldProvenance(v0))}`);
   if (v.sensitive !== undefined && v.sensitive !== false) parts.push(`${jstr("sensitive")}:${String(v.sensitive)}`);
   if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) parts.push(`${jstr("sensitive_inject")}:${encodeOpaque(v.sensitive_inject)}`);
   if (v.sensitive_payload_leaves !== undefined && v.sensitive_payload_leaves.length > 0) parts.push(`${jstr("sensitive_payload_leaves")}:${`[${v.sensitive_payload_leaves!.map((e0) => jstr(e0)).join(",")}]`}`);
@@ -273,7 +274,30 @@ export function encodeIRFeatureEntry(v: IRFeatureEntry): string {
 }
 
 export function decodeIRFeatureEntry(data: string): IRFeatureEntry {
-  return JSON.parse(data) as IRFeatureEntry;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "type": o["type"] = JSON.parse(raw); break;
+      case "resolved_version": o["resolved_version"] = JSON.parse(raw); break;
+      case "labels": o["labels"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "catalog_annotations": o["catalog_annotations"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "binding": o["binding"] = JSON.parse(raw); break;
+      case "values": o["values"] = JSON.parse(raw); break;
+      case "infra": o["infra"] = JSON.parse(raw); break;
+      case "inject": o["inject"] = JSON.parse(raw); break;
+      case "origin": o["origin"] = JSON.parse(raw); break;
+      case "annotation_key": o["annotation_key"] = JSON.parse(raw); break;
+      case "annotation_source": o["annotation_source"] = JSON.parse(raw); break;
+      case "values_provenance": o["values_provenance"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "infra_provenance": o["infra_provenance"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "sensitive": o["sensitive"] = JSON.parse(raw); break;
+      case "sensitive_inject": o["sensitive_inject"] = JSON.parse(raw); break;
+      case "sensitive_payload_leaves": o["sensitive_payload_leaves"] = JSON.parse(raw); break;
+      case "connection": o["connection"] = JSON.parse(raw); break;
+      case "realization": o["realization"] = JSON.parse(raw); break;
+    }
+  });
+  return o as IRFeatureEntry;
 }
 
 export function encodeIRBoundaryFeature(v: IRBoundaryFeature): string {
@@ -306,7 +330,7 @@ export function decodeCatalogMetadata(data: string): CatalogMetadata {
 export function encodeIRNode(v: IRNode): string {
   const parts: string[] = [];
   if (v.description !== undefined && v.description !== "") parts.push(`${jstr("description")}:${jstr(v.description)}`);
-  parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("labels")}:${writeOrderedObject(v.labels!, (v0) => jstr(v0))}`);
   parts.push(`${jstr("component")}:${jstr(v.component)}`);
   parts.push(`${jstr("resolved_version")}:${jstr(v.resolved_version)}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
@@ -315,9 +339,9 @@ export function encodeIRNode(v: IRNode): string {
   if (v.synthesized_subsystem !== undefined && v.synthesized_subsystem !== false) parts.push(`${jstr("synthesized_subsystem")}:${String(v.synthesized_subsystem)}`);
   if (v.synthesized_boundary !== undefined && v.synthesized_boundary !== false) parts.push(`${jstr("synthesized_boundary")}:${String(v.synthesized_boundary)}`);
   if (v.catalog_metadata !== undefined && v.catalog_metadata !== null) parts.push(`${jstr("catalog_metadata")}:${encodeCatalogMetadata(v.catalog_metadata)}`);
-  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) parts.push(`${jstr("catalog_annotations")}:${`{${Object.keys(v.catalog_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.catalog_annotations![k0])}`).join(",")}}`}`);
-  if (v.release_annotations !== undefined && Object.keys(v.release_annotations).length > 0) parts.push(`${jstr("release_annotations")}:${`{${Object.keys(v.release_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.release_annotations![k0])}`).join(",")}}`}`);
-  if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) parts.push(`${jstr("aggregate_annotations")}:${`{${Object.keys(v.aggregate_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.aggregate_annotations![k0])}`).join(",")}}`}`);
+  if (v.catalog_annotations !== undefined && v.catalog_annotations.size > 0) parts.push(`${jstr("catalog_annotations")}:${writeOrderedObject(v.catalog_annotations!, (v0) => jstr(v0))}`);
+  if (v.release_annotations !== undefined && v.release_annotations.size > 0) parts.push(`${jstr("release_annotations")}:${writeOrderedObject(v.release_annotations!, (v0) => jstr(v0))}`);
+  if (v.aggregate_annotations !== undefined && v.aggregate_annotations.size > 0) parts.push(`${jstr("aggregate_annotations")}:${writeOrderedObject(v.aggregate_annotations!, (v0) => jstr(v0))}`);
   if (v.self_inject !== undefined && v.self_inject !== null) parts.push(`${jstr("self_inject")}:${encodeOpaque(v.self_inject)}`);
   if (v.source_file !== undefined && v.source_file !== "") parts.push(`${jstr("source_file")}:${jstr(v.source_file)}`);
   if (v.uses !== undefined && v.uses !== null) parts.push(`${jstr("uses")}:${encodeOpaque(v.uses)}`);
@@ -326,7 +350,29 @@ export function encodeIRNode(v: IRNode): string {
 }
 
 export function decodeIRNode(data: string): IRNode {
-  return JSON.parse(data) as IRNode;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "description": o["description"] = JSON.parse(raw); break;
+      case "labels": o["labels"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "component": o["component"] = JSON.parse(raw); break;
+      case "resolved_version": o["resolved_version"] = JSON.parse(raw); break;
+      case "sync_wave": o["sync_wave"] = JSON.parse(raw); break;
+      case "boundary_path": o["boundary_path"] = JSON.parse(raw); break;
+      case "subsystem_path": o["subsystem_path"] = JSON.parse(raw); break;
+      case "synthesized_subsystem": o["synthesized_subsystem"] = JSON.parse(raw); break;
+      case "synthesized_boundary": o["synthesized_boundary"] = JSON.parse(raw); break;
+      case "catalog_metadata": o["catalog_metadata"] = JSON.parse(raw); break;
+      case "catalog_annotations": o["catalog_annotations"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "release_annotations": o["release_annotations"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "aggregate_annotations": o["aggregate_annotations"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "self_inject": o["self_inject"] = JSON.parse(raw); break;
+      case "source_file": o["source_file"] = JSON.parse(raw); break;
+      case "uses": o["uses"] = JSON.parse(raw); break;
+      case "sensitive_payload_leaves": o["sensitive_payload_leaves"] = JSON.parse(raw); break;
+    }
+  });
+  return o as IRNode;
 }
 
 export function encodeIREdge(v: IREdge): string {
@@ -376,18 +422,30 @@ export function decodeIRProvenance(data: string): IRProvenance {
 
 export function encodeIRSpec(v: IRSpec): string {
   const parts: string[] = [];
-  parts.push(`${jstr("nodes")}:${`{${Object.keys(v.nodes!).sort().map((k0) => `${jstr(k0)}:${encodeIRNode(v.nodes![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("nodes")}:${writeOrderedObject(v.nodes!, (v0) => encodeIRNode(v0))}`);
   parts.push(`${jstr("edges")}:${`[${v.edges!.map((e0) => encodeIREdge(e0)).join(",")}]`}`);
-  parts.push(`${jstr("values_mapping")}:${`{${Object.keys(v.values_mapping!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values_mapping![k0])}`).join(",")}}`}`);
-  parts.push(`${jstr("infra_mapping")}:${`{${Object.keys(v.infra_mapping!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.infra_mapping![k0])}`).join(",")}}`}`);
-  parts.push(`${jstr("feature_values_mapping")}:${`{${Object.keys(v.feature_values_mapping!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.feature_values_mapping![k0]!).sort().map((k1) => `${jstr(k1)}:${encodeIRFeatureEntry(v.feature_values_mapping![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
-  if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) parts.push(`${jstr("boundary_features")}:${`{${Object.keys(v.boundary_features!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.boundary_features![k0]!).sort().map((k1) => `${jstr(k1)}:${encodeIRBoundaryFeature(v.boundary_features![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
+  parts.push(`${jstr("values_mapping")}:${writeOrderedObject(v.values_mapping!, (v0) => encodeOpaque(v0))}`);
+  parts.push(`${jstr("infra_mapping")}:${writeOrderedObject(v.infra_mapping!, (v0) => encodeOpaque(v0))}`);
+  parts.push(`${jstr("feature_values_mapping")}:${writeOrderedObject(v.feature_values_mapping!, (v0) => writeOrderedObject(v0!, (v1) => encodeIRFeatureEntry(v1)))}`);
+  if (v.boundary_features !== undefined && v.boundary_features.size > 0) parts.push(`${jstr("boundary_features")}:${writeOrderedObject(v.boundary_features!, (v0) => writeOrderedObject(v0!, (v1) => encodeIRBoundaryFeature(v1)))}`);
   parts.push(`${jstr("provenance")}:${encodeIRProvenance(v.provenance)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeIRSpec(data: string): IRSpec {
-  return JSON.parse(data) as IRSpec;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "nodes": o["nodes"] = readOrderedObject(raw, (r0) => decodeIRNode(r0)); break;
+      case "edges": o["edges"] = JSON.parse(raw); break;
+      case "values_mapping": o["values_mapping"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "infra_mapping": o["infra_mapping"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "feature_values_mapping": o["feature_values_mapping"] = readOrderedObject(raw, (r0) => readOrderedObject(r0, (r1) => decodeIRFeatureEntry(r1))); break;
+      case "boundary_features": o["boundary_features"] = readOrderedObject(raw, (r0) => readOrderedObject(r0, (r1) => JSON.parse(r1))); break;
+      case "provenance": o["provenance"] = JSON.parse(raw); break;
+    }
+  });
+  return o as IRSpec;
 }
 
 export function encodeIRGraph(v: IRGraph): string {
@@ -400,7 +458,16 @@ export function encodeIRGraph(v: IRGraph): string {
 }
 
 export function decodeIRGraph(data: string): IRGraph {
-  return JSON.parse(data) as IRGraph;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "apiVersion": o["apiVersion"] = JSON.parse(raw); break;
+      case "kind": o["kind"] = JSON.parse(raw); break;
+      case "metadata": o["metadata"] = JSON.parse(raw); break;
+      case "spec": o["spec"] = decodeIRSpec(raw); break;
+    }
+  });
+  return o as IRGraph;
 }
 
 export function encodeCBORMaintainer(v: Maintainer): Uint8Array {
@@ -545,7 +612,7 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   let n = 2;
   if (v.infra !== undefined && v.infra !== null) n++;
   if (v.inject !== undefined && v.inject !== null) n++;
-  if (v.labels !== undefined && Object.keys(v.labels).length > 0) n++;
+  if (v.labels !== undefined && v.labels.size > 0) n++;
   if (v.origin !== undefined && v.origin !== "") n++;
   if (v.values !== undefined && v.values !== null) n++;
   if (v.binding !== undefined && v.binding !== "") n++;
@@ -553,11 +620,11 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
   if (v.connection !== undefined && v.connection !== null) n++;
   if (v.realization !== undefined && v.realization !== "") n++;
   if (v.annotation_key !== undefined && v.annotation_key !== "") n++;
-  if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) n++;
+  if (v.infra_provenance !== undefined && v.infra_provenance.size > 0) n++;
   if (v.sensitive_inject !== undefined && v.sensitive_inject !== null) n++;
   if (v.annotation_source !== undefined && v.annotation_source !== "") n++;
-  if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) n++;
-  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) n++;
+  if (v.values_provenance !== undefined && v.values_provenance.size > 0) n++;
+  if (v.catalog_annotations !== undefined && v.catalog_annotations.size > 0) n++;
   if (v.sensitive_payload_leaves !== undefined && v.sensitive_payload_leaves.length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "type");
@@ -570,15 +637,15 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
     writeText(out, "inject");
     writeBytes(out, utf8Encode(JSON.stringify(v.inject)));
   }
-  if (v.labels !== undefined && Object.keys(v.labels).length > 0) {
+  if (v.labels !== undefined && v.labels.size > 0) {
     writeText(out, "labels");
     {
       const m0 = v.labels;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeText(out, m0[kk0]);
+        writeText(out, vv0);
       }
     }
   }
@@ -610,15 +677,15 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
     writeText(out, "annotation_key");
     writeText(out, v.annotation_key);
   }
-  if (v.infra_provenance !== undefined && Object.keys(v.infra_provenance).length > 0) {
+  if (v.infra_provenance !== undefined && v.infra_provenance.size > 0) {
     writeText(out, "infra_provenance");
     {
       const m0 = v.infra_provenance;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        appendCBORFieldProvenance(out, m0[kk0]);
+        appendCBORFieldProvenance(out, vv0);
       }
     }
   }
@@ -632,27 +699,27 @@ export function appendCBORIRFeatureEntry(out: number[], v: IRFeatureEntry): void
     writeText(out, "annotation_source");
     writeText(out, v.annotation_source);
   }
-  if (v.values_provenance !== undefined && Object.keys(v.values_provenance).length > 0) {
+  if (v.values_provenance !== undefined && v.values_provenance.size > 0) {
     writeText(out, "values_provenance");
     {
       const m0 = v.values_provenance;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        appendCBORFieldProvenance(out, m0[kk0]);
+        appendCBORFieldProvenance(out, vv0);
       }
     }
   }
-  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) {
+  if (v.catalog_annotations !== undefined && v.catalog_annotations.size > 0) {
     writeText(out, "catalog_annotations");
     {
       const m0 = v.catalog_annotations;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeText(out, m0[kk0]);
+        writeText(out, vv0);
       }
     }
   }
@@ -681,8 +748,8 @@ export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
     switch (k) {
       case "type": o["type"] = dec.readText(); break;
       case "resolved_version": o["resolved_version"] = dec.readText(); break;
-      case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
-      case "catalog_annotations": o["catalog_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "labels": o["labels"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
+      case "catalog_annotations": o["catalog_annotations"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
       case "binding": o["binding"] = dec.readText(); break;
       case "values": o["values"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;
@@ -690,8 +757,8 @@ export function decodeCBORIRFeatureEntryFrom(dec: CborDec): IRFeatureEntry {
       case "origin": o["origin"] = dec.readText(); break;
       case "annotation_key": o["annotation_key"] = dec.readText(); break;
       case "annotation_source": o["annotation_source"] = dec.readText(); break;
-      case "values_provenance": o["values_provenance"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORFieldProvenanceFrom(dec); } return m; })(); break;
-      case "infra_provenance": o["infra_provenance"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORFieldProvenanceFrom(dec); } return m; })(); break;
+      case "values_provenance": o["values_provenance"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, decodeCBORFieldProvenanceFrom(dec)); } return m; })(); break;
+      case "infra_provenance": o["infra_provenance"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, decodeCBORFieldProvenanceFrom(dec)); } return m; })(); break;
       case "sensitive": o["sensitive"] = dec.readBool(); break;
       case "sensitive_inject": o["sensitive_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "sensitive_payload_leaves": o["sensitive_payload_leaves"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
@@ -844,10 +911,10 @@ export function appendCBORIRNode(out: number[], v: IRNode): void {
   if (v.boundary_path !== undefined && v.boundary_path !== "") n++;
   if (v.subsystem_path !== undefined && v.subsystem_path !== "") n++;
   if (v.catalog_metadata !== undefined && v.catalog_metadata !== null) n++;
-  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) n++;
-  if (v.release_annotations !== undefined && Object.keys(v.release_annotations).length > 0) n++;
+  if (v.catalog_annotations !== undefined && v.catalog_annotations.size > 0) n++;
+  if (v.release_annotations !== undefined && v.release_annotations.size > 0) n++;
   if (v.synthesized_boundary !== undefined && v.synthesized_boundary !== false) n++;
-  if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) n++;
+  if (v.aggregate_annotations !== undefined && v.aggregate_annotations.size > 0) n++;
   if (v.synthesized_subsystem !== undefined && v.synthesized_subsystem !== false) n++;
   if (v.sensitive_payload_leaves !== undefined && v.sensitive_payload_leaves.length > 0) n++;
   writeHead(out, 5, n);
@@ -858,11 +925,11 @@ export function appendCBORIRNode(out: number[], v: IRNode): void {
   writeText(out, "labels");
   {
     const m0 = v.labels;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      writeText(out, m0[kk0]);
+      writeText(out, vv0);
     }
   }
   writeText(out, "component");
@@ -897,27 +964,27 @@ export function appendCBORIRNode(out: number[], v: IRNode): void {
   }
   writeText(out, "resolved_version");
   writeText(out, v.resolved_version);
-  if (v.catalog_annotations !== undefined && Object.keys(v.catalog_annotations).length > 0) {
+  if (v.catalog_annotations !== undefined && v.catalog_annotations.size > 0) {
     writeText(out, "catalog_annotations");
     {
       const m0 = v.catalog_annotations;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeText(out, m0[kk0]);
+        writeText(out, vv0);
       }
     }
   }
-  if (v.release_annotations !== undefined && Object.keys(v.release_annotations).length > 0) {
+  if (v.release_annotations !== undefined && v.release_annotations.size > 0) {
     writeText(out, "release_annotations");
     {
       const m0 = v.release_annotations;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeText(out, m0[kk0]);
+        writeText(out, vv0);
       }
     }
   }
@@ -925,15 +992,15 @@ export function appendCBORIRNode(out: number[], v: IRNode): void {
     writeText(out, "synthesized_boundary");
     writeBool(out, v.synthesized_boundary);
   }
-  if (v.aggregate_annotations !== undefined && Object.keys(v.aggregate_annotations).length > 0) {
+  if (v.aggregate_annotations !== undefined && v.aggregate_annotations.size > 0) {
     writeText(out, "aggregate_annotations");
     {
       const m0 = v.aggregate_annotations;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeText(out, m0[kk0]);
+        writeText(out, vv0);
       }
     }
   }
@@ -965,7 +1032,7 @@ export function decodeCBORIRNodeFrom(dec: CborDec): IRNode {
     const k = dec.readText();
     switch (k) {
       case "description": o["description"] = dec.readText(); break;
-      case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "labels": o["labels"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
       case "component": o["component"] = dec.readText(); break;
       case "resolved_version": o["resolved_version"] = dec.readText(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;
@@ -974,9 +1041,9 @@ export function decodeCBORIRNodeFrom(dec: CborDec): IRNode {
       case "synthesized_subsystem": o["synthesized_subsystem"] = dec.readBool(); break;
       case "synthesized_boundary": o["synthesized_boundary"] = dec.readBool(); break;
       case "catalog_metadata": o["catalog_metadata"] = decodeCBORCatalogMetadataFrom(dec); break;
-      case "catalog_annotations": o["catalog_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
-      case "release_annotations": o["release_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
-      case "aggregate_annotations": o["aggregate_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "catalog_annotations": o["catalog_annotations"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
+      case "release_annotations": o["release_annotations"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
+      case "aggregate_annotations": o["aggregate_annotations"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
       case "self_inject": o["self_inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "source_file": o["source_file"] = dec.readText(); break;
       case "uses": o["uses"] = JSON.parse(utf8Decode(dec.readBytes())); break;
@@ -1163,7 +1230,7 @@ export function encodeCBORIRSpec(v: IRSpec): Uint8Array {
 
 export function appendCBORIRSpec(out: number[], v: IRSpec): void {
   let n = 6;
-  if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) n++;
+  if (v.boundary_features !== undefined && v.boundary_features.size > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "edges");
   {
@@ -1176,11 +1243,11 @@ export function appendCBORIRSpec(out: number[], v: IRSpec): void {
   writeText(out, "nodes");
   {
     const m0 = v.nodes;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      appendCBORIRNode(out, m0[kk0]);
+      appendCBORIRNode(out, vv0);
     }
   }
   writeText(out, "provenance");
@@ -1188,38 +1255,38 @@ export function appendCBORIRSpec(out: number[], v: IRSpec): void {
   writeText(out, "infra_mapping");
   {
     const m0 = v.infra_mapping;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+      writeBytes(out, utf8Encode(JSON.stringify(vv0)));
     }
   }
   writeText(out, "values_mapping");
   {
     const m0 = v.values_mapping;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+      writeBytes(out, utf8Encode(JSON.stringify(vv0)));
     }
   }
-  if (v.boundary_features !== undefined && Object.keys(v.boundary_features).length > 0) {
+  if (v.boundary_features !== undefined && v.boundary_features.size > 0) {
     writeText(out, "boundary_features");
     {
       const m0 = v.boundary_features;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
         {
-          const m1 = m0[kk0];
-          const ks1 = Object.keys(m1); sortKeys(ks1);
-          writeHead(out, 5, ks1.length);
-          for (const kk1 of ks1) {
+          const m1 = vv0;
+          writeHead(out, 4, m1.size);
+          for (const [kk1, vv1] of m1) {
+            writeHead(out, 4, 2);
             writeText(out, kk1);
-            appendCBORIRBoundaryFeature(out, m1[kk1]);
+            appendCBORIRBoundaryFeature(out, vv1);
           }
         }
       }
@@ -1228,17 +1295,17 @@ export function appendCBORIRSpec(out: number[], v: IRSpec): void {
   writeText(out, "feature_values_mapping");
   {
     const m0 = v.feature_values_mapping;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
       {
-        const m1 = m0[kk0];
-        const ks1 = Object.keys(m1); sortKeys(ks1);
-        writeHead(out, 5, ks1.length);
-        for (const kk1 of ks1) {
+        const m1 = vv0;
+        writeHead(out, 4, m1.size);
+        for (const [kk1, vv1] of m1) {
+          writeHead(out, 4, 2);
           writeText(out, kk1);
-          appendCBORIRFeatureEntry(out, m1[kk1]);
+          appendCBORIRFeatureEntry(out, vv1);
         }
       }
     }
@@ -1256,12 +1323,12 @@ export function decodeCBORIRSpecFrom(dec: CborDec): IRSpec {
   for (let i = 0; i < n; i++) {
     const k = dec.readText();
     switch (k) {
-      case "nodes": o["nodes"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRNodeFrom(dec); } return m; })(); break;
+      case "nodes": o["nodes"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, decodeCBORIRNodeFrom(dec)); } return m; })(); break;
       case "edges": o["edges"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORIREdgeFrom(dec)); } return a; })(); break;
-      case "values_mapping": o["values_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
-      case "infra_mapping": o["infra_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
-      case "feature_values_mapping": o["feature_values_mapping"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRFeatureEntryFrom(dec); } return m; })(); } return m; })(); break;
-      case "boundary_features": o["boundary_features"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORIRBoundaryFeatureFrom(dec); } return m; })(); } return m; })(); break;
+      case "values_mapping": o["values_mapping"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
+      case "infra_mapping": o["infra_mapping"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
+      case "feature_values_mapping": o["feature_values_mapping"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, decodeCBORIRFeatureEntryFrom(dec)); } return m; })()); } return m; })(); break;
+      case "boundary_features": o["boundary_features"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, decodeCBORIRBoundaryFeatureFrom(dec)); } return m; })()); } return m; })(); break;
       case "provenance": o["provenance"] = decodeCBORIRProvenanceFrom(dec); break;
       default: dec.skip();
     }

@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::collections::BTreeMap;
+use crate::OrderedMap;
 use crate::Diagnostic;
 
 fn is_default<T: Default + PartialEq>(v: &T) -> bool {
@@ -34,8 +34,8 @@ pub struct LinterInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release: Option<Box<RawValue>>,
     /// The Component each component instance of the Aggregate is an instance of, keyed by the instance name the Aggregate gives it, which is the same key the Aggregate's and the Release's own components maps use. Each value is the Component the instance's type resolves to, with any extends chain folded in, converted to JSON as implemented_component is. An instance whose Component is not reachable in the workspace's catalog directories is absent, and a rule reads that absence as unavailable rather than as a Component declaring nothing. Present only beside release, on the input of a rule that reads a whole Release; omitted on every other input.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub components: BTreeMap<String, Box<RawValue>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub components: OrderedMap<Box<RawValue>>,
     /// Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_path: String,
@@ -119,12 +119,10 @@ impl LinterInput {
             crate::cbor_gen::write_text(out, "components");
             {
                 let c = &self.components;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
                 }
             }
@@ -156,7 +154,7 @@ impl LinterInput {
         let mut f_previous: Option<Box<RawValue>> = None;
         let mut f_implemented_component: Option<Box<RawValue>> = None;
         let mut f_release: Option<Box<RawValue>> = None;
-        let mut f_components: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_components: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let mut f_source_path: String = String::new();
         let mut f_policies: Policies = Policies::default();
         let n = dec.read_map_header()?;
@@ -169,7 +167,7 @@ impl LinterInput {
                 "previous" => f_previous = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "implemented_component" => f_implemented_component = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "release" => f_release = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
-                "components" => f_components = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "components" => f_components = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "source_path" => f_source_path = dec.read_text()?,
                 "policies" => f_policies = Policies::decode_cbor_from(dec)?,
                 _ => dec.skip()?,

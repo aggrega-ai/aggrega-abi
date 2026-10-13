@@ -16,8 +16,9 @@ import (
 // goldens the Rust and TypeScript codecs validate against, so a byte-match here
 // is a cross-language parity assertion: the three codecs are generated from one
 // schema and produce one wire. Each golden carries the determinism-sensitive
-// cases — sorted map keys, verbatim opaque carry, omitted empty fields — so a
-// codec regression breaks the byte-compare loudly.
+// cases — a plain map's sorted keys, an order-preserving map's own order,
+// verbatim opaque carry, omitted empty fields — so a codec regression breaks the
+// byte-compare loudly.
 //
 // Every payload runs through one helper covering both wire forms. A vector that
 // exercised only JSON would leave the CBOR codec — a separate set of generated
@@ -46,13 +47,16 @@ type cborEncoder interface {
 // cannot make. It is the only one that feeds the CBOR decoder the committed
 // canonical bytes — the other CBOR legs decode this codec's own fresh output, so
 // an encoder and decoder that shared a compensating defect would agree with each
-// other and stay green. And it is the only one that can observe a map-key sort
-// being lost from the JSON encoder: the two wire forms order map keys by
-// different rules — JSON lexicographically, CBOR by the encoded key bytes, whose
-// length head leads — so a value arriving from the CBOR wire presents its keys in
-// an order the JSON wire must actively re-sort. A value decoded from the JSON
-// golden instead arrives already in JSON order, which is why the first contract
-// stays green whether the encoder sorts or not.
+// other and stay green. And it is the only one that can observe a plain map's
+// key sort being lost from the JSON encoder: the two wire forms order a plain
+// map's keys by different rules — JSON lexicographically, CBOR by the encoded key
+// bytes, whose length head leads — so a value arriving from the CBOR wire
+// presents its keys in an order the JSON wire must actively re-sort. A value
+// decoded from the JSON golden instead arrives already in JSON order, which is
+// why the first contract stays green whether the encoder sorts or not. An
+// order-preserving map carries one order on both wires, the one it holds, so
+// for it the same contract proves the order survives the trip through the
+// binary form.
 //
 // Both halves of the codec are constrained rather than asserted at run time, so
 // naming a type that carries no CBOR codec fails to compile at the call site
@@ -146,10 +150,10 @@ func TestSocketParity_LinterOutput(t *testing.T) {
 // Both are omitted when empty, so the vector above carries the same bytes whether
 // a codec handles them or drops them; this one does not. The Release and each
 // Component cross as opaque documents with their keys out of key order, so a codec
-// that re-serialised one instead of carrying it would not match. The map's two
-// instance names sort differently in the two wire forms — "agent" first in the
-// JSON, "db" first in the canonical CBOR, whose length head leads — so a codec
-// applying either rule to the other wire fails the byte-compare.
+// that re-serialised one instead of carrying it would not match. The Component map
+// is order-preserving and holds "agent" before "db", which is not the length-first
+// order a sorted binary map would take, so a codec that sorted it on the binary
+// wire fails the byte-compare.
 func TestSocketParity_LinterInputRelease(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.LinterInput](t, "LinterInputRelease")
@@ -179,23 +183,17 @@ func TestSocketParity_PolicyOutput(t *testing.T) {
 //
 // The two annotation-transform goldens are the wire an annotation-transform
 // attachment receives and returns. The input carries a target whose annotation
-// map is empty (pinning that all three codecs emit an empty object rather than
-// dropping the member), a binding-key list whose entries are NOT in sorted
+// map is empty (pinning that all three codecs emit an empty container rather
+// than dropping the member), a binding-key list whose entries are NOT in sorted
 // order (pinning that a list is carried in author order rather than sorted),
 // and an opaque settings object with out-of-order keys (pinning the verbatim
 // carry). The output omits the failure member, pinning that omission.
 //
-// The annotation map's key sort is pinned in both wire forms, but by two
-// different contracts, and the difference is worth knowing before trusting
-// either. The CBOR half falls out of the golden round-trip itself, because CBOR
-// orders map keys by their encoded bytes, whose length head leads, so a short key
-// precedes a long one — an order that differs from the lexicographic order the
-// golden's JSON carries, leaving the encoder no choice but to re-sort. The JSON
-// half is invisible to that round-trip, whose value arrives from the JSON golden
-// already in JSON order; it is pinned instead by the helper's fourth contract,
-// which sources the value from the committed CBOR bytes and so presents the keys
-// in the other order. TestAnnotationTargetMapKeyOrder below pins the same rule a
-// third way, from a constructed value, and states both orders literally.
+// The annotation map is order-preserving, so neither wire form sorts it: both
+// carry the order the target holds. A golden round-trip shows that only where the
+// golden's order is neither sorted order, which is what the map-order probe vector
+// is for. TestAnnotationTargetKeepsTheAnnotationOrder below pins it a third way,
+// from a constructed value, and states the order literally.
 //
 // MutatorInputSources is the label-transform payload WITH its pinned sources
 // and settings populated. The pre-existing mutator golden leaves both absent,
@@ -222,49 +220,42 @@ func TestSocketParity_MutatorInputSources(t *testing.T) {
 	roundTripBothGolden[abi.MutatorInput](t, "MutatorInputSources")
 }
 
-// TestAnnotationTargetMapKeyOrder pins the annotation map's key ordering in both
-// wire forms by ENCODING a constructed value, the one path on which a lost JSON
-// sort is observable: a value decoded from a golden already carries the golden's
-// lexicographic order, so the round-trip assertions above stay green whether the
-// JSON encoder sorts or not. Map iteration here is unordered, so without the
-// sort this assertion fails on most runs rather than on every run — which is
-// itself a reason to assert the order against a fixed expectation instead of
-// relying on the round-trip.
+// TestAnnotationTargetKeepsTheAnnotationOrder pins the annotation map's order in
+// both wire forms by ENCODING a constructed value whose order is neither of the
+// two sorted orders: not the lexicographic one a JSON map sort would give
+// ("8080", "aggrega.ai/owner", "cost-center", "tier"), not the length-first one a
+// CBOR map sort would give ("8080", "tier", "cost-center", "aggrega.ai/owner"),
+// and with a key that is an array index, which a plain JavaScript object would
+// move to the front. An encoder applying any of those orders fails here.
 //
-// The two wire forms order the same three keys differently, and the test asserts
-// both. JSON sorts lexicographically. CBOR sorts by the encoded key bytes, whose
-// length head leads, so a shorter key always precedes a longer one and the three
-// keys emit in the exact reverse of their JSON order. A codec that applied the
-// JSON rule to the CBOR wire would satisfy neither assertion.
-func TestAnnotationTargetMapKeyOrder(t *testing.T) {
+// The map is order-preserving, so both wire forms carry the order it holds —
+// the JSON form as an object written in that order, the binary form as an array
+// of entries in that order — and the test asserts each, literally.
+func TestAnnotationTargetKeepsTheAnnotationOrder(t *testing.T) {
 	t.Parallel()
 
-	v := abi.AnnotationTarget{
-		BoundaryPath:  "prod/edge",
-		ComponentName: "web",
-		Annotations: map[string]string{
-			"tier":             "frontend",
-			"aggrega.ai/owner": "checkout",
-			"cost-center":      "42",
-		},
+	ordered := []string{"tier", "aggrega.ai/owner", "8080", "cost-center"}
+	values := map[string]string{"tier": "frontend", "aggrega.ai/owner": "checkout", "8080": "port", "cost-center": "42"}
+	var annotations abi.OrderedMap[string]
+	for _, k := range ordered {
+		annotations.Set(k, values[k])
 	}
+	v := abi.AnnotationTarget{BoundaryPath: "prod/edge", ComponentName: "web", Annotations: annotations}
 
 	const wantJSON = `{"boundary_path":"prod/edge","component_name":"web",` +
-		`"annotations":{"aggrega.ai/owner":"checkout","cost-center":"42","tier":"frontend"}}`
+		`"annotations":{"tier":"frontend","aggrega.ai/owner":"checkout","8080":"port","cost-center":"42"}}`
 	gotJSON, err := json.Marshal(v)
 	if err != nil {
 		t.Fatalf("codec marshal AnnotationTarget: %v", err)
 	}
 	if string(gotJSON) != wantJSON {
-		t.Errorf("JSON annotation keys not in lexicographic order:\n want: %s\n  got: %s", wantJSON, gotJSON)
+		t.Errorf("JSON annotation keys not in the order the map holds:\n want: %s\n  got: %s", wantJSON, gotJSON)
 	}
 
 	enc, err := v.EncodeCBOR()
 	if err != nil {
 		t.Fatalf("codec encode CBOR AnnotationTarget: %v", err)
 	}
-	// Shortest key first: "tier" (4), "cost-center" (11), "aggrega.ai/owner" (16).
-	ordered := []string{"tier", "cost-center", "aggrega.ai/owner"}
 	at := make([]int, len(ordered))
 	for i, k := range ordered {
 		if at[i] = bytes.Index(enc, []byte(k)); at[i] < 0 {
@@ -273,7 +264,7 @@ func TestAnnotationTargetMapKeyOrder(t *testing.T) {
 	}
 	for i := 1; i < len(at); i++ {
 		if at[i-1] >= at[i] {
-			t.Errorf("CBOR annotation keys not in canonical length-first order (%q@%d before %q@%d): %s",
+			t.Errorf("CBOR annotation entries not in the order the map holds (%q@%d before %q@%d): %s",
 				ordered[i], at[i], ordered[i-1], at[i-1], hex.EncodeToString(enc))
 			break
 		}

@@ -37,7 +37,9 @@ fn entry_ref<V>(entry: &(String, V)) -> (&String, &V) {
 ///
 /// Its serde form is a map whose entries are written in the map's order, which
 /// serde_json writes as an object. Deserializing reads the entries in the order
-/// they appear and refuses a map that repeats a key, naming the key.
+/// they appear and refuses a map that repeats a key, naming the key. On the
+/// binary encoding a generated codec writes a field of this type as a list of key
+/// and value entries in the map's order, and refuses one that repeats a key.
 #[derive(Clone)]
 pub struct OrderedMap<V> {
     entries: Vec<(String, V)>,

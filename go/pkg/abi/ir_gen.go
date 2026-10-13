@@ -11,7 +11,6 @@ package abi
 import (
 	"bytes"
 	"encoding/json"
-	"sort"
 	"strconv"
 )
 
@@ -50,9 +49,9 @@ type IRFeatureEntry struct {
 	// ResolvedVersion The exact semantic version resolved during compilation.
 	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
 	// Labels The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
-	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" cbor:"labels,omitempty"`
+	Labels OrderedMap[string] `json:"labels,omitempty,omitzero" yaml:"labels,omitempty" cbor:"labels,omitempty"`
 	// CatalogAnnotations The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
-	CatalogAnnotations map[string]string `json:"catalog_annotations,omitempty" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
+	CatalogAnnotations OrderedMap[string] `json:"catalog_annotations,omitempty,omitzero" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
 	// Binding Names the attachment slot this attachment fills, or "free" when it fills no declared slot. A slot is declared in one of two places, and where the attachment was written decides which: an attachment of the node's own attachment block fills a slot the host Component declares in its featuresSchema, and an attachment written on a connection fills a slot the connection's socket declares in that socket's featuresSchema on the host Component. The pairing is by name in both — an attachment fills a slot when the Feature is attached under the slot's name, on the component's block or on the connection — so the value is an exact key from the declared slot set, never anything read out of the attachment's key. A socket's slot set is closed, since an attachment written on a connection under a name its socket does not declare halts the build, so an attachment that carries a connection never reports free. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
 	Binding string `json:"binding,omitempty" yaml:"binding,omitempty" cbor:"binding,omitempty"`
 	// Values Operational configuration payload for the attachment. For a credential, whichever form the author declared — a pointer into a secret store, or the material itself.
@@ -68,9 +67,9 @@ type IRFeatureEntry struct {
 	// AnnotationSource Source location of the annotation declaration as <release-file-path>:<dotted-yaml-key-path>. Empty when origin is explicit.
 	AnnotationSource string `json:"annotation_source,omitempty" yaml:"annotation_source,omitempty" cbor:"annotation_source,omitempty"`
 	// ValuesProvenance Per-leaf origin for the values payload, keyed by dotted leaf path.
-	ValuesProvenance map[string]FieldProvenance `json:"values_provenance,omitempty" yaml:"values_provenance,omitempty" cbor:"values_provenance,omitempty"`
+	ValuesProvenance OrderedMap[FieldProvenance] `json:"values_provenance,omitempty,omitzero" yaml:"values_provenance,omitempty" cbor:"values_provenance,omitempty"`
 	// InfraProvenance Per-leaf origin for the infra payload, keyed by dotted leaf path.
-	InfraProvenance map[string]FieldProvenance `json:"infra_provenance,omitempty" yaml:"infra_provenance,omitempty" cbor:"infra_provenance,omitempty"`
+	InfraProvenance OrderedMap[FieldProvenance] `json:"infra_provenance,omitempty,omitzero" yaml:"infra_provenance,omitempty" cbor:"infra_provenance,omitempty"`
 	// Sensitive True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the slot the attachment fills declares the material it carries sensitive: the host Component's attachment slot of the same name, or, for an attachment written on a connection, the slot of that name the connection's socket declares. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
 	Sensitive bool `json:"sensitive,omitempty" yaml:"sensitive,omitempty" cbor:"sensitive,omitempty"`
 	// SensitiveInject The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
@@ -108,7 +107,7 @@ type IRNode struct {
 	// Description Optional developer-authored documentation describing this component instance's role in the application. Passed through from the Aggregate for augmenting rendering and linting diagnostics.
 	Description string `json:"description,omitempty" yaml:"description,omitempty" cbor:"description,omitempty"`
 	// Labels The entity's duck-typing and ontology labels.
-	Labels map[string]string `json:"labels" yaml:"labels" cbor:"labels"`
+	Labels OrderedMap[string] `json:"labels" yaml:"labels" cbor:"labels"`
 	// Component The name of the underlying Component.
 	Component string `json:"component" yaml:"component" cbor:"component"`
 	// ResolvedVersion The exact Semantic Version of the Component resolved during compilation.
@@ -125,11 +124,11 @@ type IRNode struct {
 	SynthesizedBoundary bool             `json:"synthesized_boundary,omitempty" yaml:"synthesized_boundary,omitempty" cbor:"synthesized_boundary,omitempty"`
 	CatalogMetadata     *CatalogMetadata `json:"catalog_metadata,omitempty" yaml:"catalog_metadata,omitempty" cbor:"catalog_metadata,omitempty"`
 	// CatalogAnnotations Immutable, intrinsic component characteristics authored by the Platform Architect in Domain 2.
-	CatalogAnnotations map[string]string `json:"catalog_annotations,omitempty" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
+	CatalogAnnotations OrderedMap[string] `json:"catalog_annotations,omitempty,omitzero" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
 	// ReleaseAnnotations Physical topology strings and Ops realities cascading from boundaries in the Release.
-	ReleaseAnnotations map[string]string `json:"release_annotations,omitempty" yaml:"release_annotations,omitempty" cbor:"release_annotations,omitempty"`
+	ReleaseAnnotations OrderedMap[string] `json:"release_annotations,omitempty,omitzero" yaml:"release_annotations,omitempty" cbor:"release_annotations,omitempty"`
 	// AggregateAnnotations Cognitive metadata, developer intent, and FinOps cascading from subsystems in the Aggregate.
-	AggregateAnnotations map[string]string `json:"aggregate_annotations,omitempty" yaml:"aggregate_annotations,omitempty" cbor:"aggregate_annotations,omitempty"`
+	AggregateAnnotations OrderedMap[string] `json:"aggregate_annotations,omitempty,omitzero" yaml:"aggregate_annotations,omitempty" cbor:"aggregate_annotations,omitempty"`
 	// SelfInject Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
 	SelfInject json.RawMessage `json:"self_inject,omitempty" yaml:"self_inject,omitempty" cbor:"self_inject,omitempty"`
 	// SourceFile Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
@@ -184,18 +183,18 @@ type IRProvenance struct {
 
 type IRSpec struct {
 	// Nodes Dictionary of all nodes in the graph, keyed by their absolute ID. Purely topological.
-	Nodes map[string]IRNode `json:"nodes" yaml:"nodes" cbor:"nodes"`
+	Nodes OrderedMap[IRNode] `json:"nodes" yaml:"nodes" cbor:"nodes"`
 	// Edges Explicit logical network paths and dependencies between nodes.
 	Edges []IREdge `json:"edges" yaml:"edges" cbor:"edges"`
 	// ValuesMapping The single source of truth for opaque pass-through cognitive payloads, mapped by node ID.
-	ValuesMapping map[string]json.RawMessage `json:"values_mapping" yaml:"values_mapping" cbor:"values_mapping"`
+	ValuesMapping OrderedMap[json.RawMessage] `json:"values_mapping" yaml:"values_mapping" cbor:"values_mapping"`
 	// InfraMapping The physical sizing payload injected from the Release, mapped by node ID.
-	InfraMapping map[string]json.RawMessage `json:"infra_mapping" yaml:"infra_mapping" cbor:"infra_mapping"`
+	InfraMapping OrderedMap[json.RawMessage] `json:"infra_mapping" yaml:"infra_mapping" cbor:"infra_mapping"`
 	// FeatureValuesMapping Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment. An attachment written on one of the node's connections is keyed by its qualified name, the connection's alias and the slot joined by a dot, and names its connection in its own connection field.
-	FeatureValuesMapping map[string]map[string]IRFeatureEntry `json:"feature_values_mapping" yaml:"feature_values_mapping" cbor:"feature_values_mapping"`
+	FeatureValuesMapping OrderedMap[OrderedMap[IRFeatureEntry]] `json:"feature_values_mapping" yaml:"feature_values_mapping" cbor:"feature_values_mapping"`
 	// BoundaryFeatures Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
-	BoundaryFeatures map[string]map[string]IRBoundaryFeature `json:"boundary_features,omitempty" yaml:"boundary_features,omitempty" cbor:"boundary_features,omitempty"`
-	Provenance       IRProvenance                            `json:"provenance" yaml:"provenance" cbor:"provenance"`
+	BoundaryFeatures OrderedMap[OrderedMap[IRBoundaryFeature]] `json:"boundary_features,omitempty,omitzero" yaml:"boundary_features,omitempty" cbor:"boundary_features,omitempty"`
+	Provenance       IRProvenance                              `json:"provenance" yaml:"provenance" cbor:"provenance"`
 }
 
 type IRGraph struct {
@@ -510,54 +509,28 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 	first = false
 	buf.WriteString("\"resolved_version\":")
 	writeJSONString(&buf, t.ResolvedVersion)
-	if len(t.Labels) != 0 {
+	if !t.Labels.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"labels\":")
-		{
-			keys := make([]string, 0, len(t.Labels))
-			for k := range t.Labels {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Labels[k]
-				writeJSONString(&buf, mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Labels.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
-	if len(t.CatalogAnnotations) != 0 {
+	if !t.CatalogAnnotations.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"catalog_annotations\":")
-		{
-			keys := make([]string, 0, len(t.CatalogAnnotations))
-			for k := range t.CatalogAnnotations {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.CatalogAnnotations[k]
-				writeJSONString(&buf, mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.CatalogAnnotations.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if t.Binding != "" {
@@ -616,62 +589,28 @@ func (t IRFeatureEntry) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"annotation_source\":")
 		writeJSONString(&buf, t.AnnotationSource)
 	}
-	if len(t.ValuesProvenance) != 0 {
+	if !t.ValuesProvenance.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"values_provenance\":")
-		{
-			keys := make([]string, 0, len(t.ValuesProvenance))
-			for k := range t.ValuesProvenance {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.ValuesProvenance[k]
-				if enc, err := mv.MarshalJSON(); err != nil {
-					return nil, err
-				} else {
-					buf.Write(enc)
-				}
-			}
-			buf.WriteByte('}')
+		if enc, err := t.ValuesProvenance.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
-	if len(t.InfraProvenance) != 0 {
+	if !t.InfraProvenance.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"infra_provenance\":")
-		{
-			keys := make([]string, 0, len(t.InfraProvenance))
-			for k := range t.InfraProvenance {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.InfraProvenance[k]
-				if enc, err := mv.MarshalJSON(); err != nil {
-					return nil, err
-				} else {
-					buf.Write(enc)
-				}
-			}
-			buf.WriteByte('}')
+		if enc, err := t.InfraProvenance.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if t.Sensitive != false {
@@ -761,46 +700,20 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 				t.ResolvedVersion = s
 			}
 		case "labels":
-			t.Labels = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Labels.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.Labels[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "catalog_annotations":
-			t.CatalogAnnotations = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.CatalogAnnotations.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.CatalogAnnotations[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "binding":
 			if s, err := readString(dec); err != nil {
@@ -845,50 +758,20 @@ func (t *IRFeatureEntry) UnmarshalJSON(data []byte) error {
 				t.AnnotationSource = s
 			}
 		case "values_provenance":
-			t.ValuesProvenance = make(map[string]FieldProvenance)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.ValuesProvenance.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv FieldProvenance
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					if err := mv.UnmarshalJSON(raw); err != nil {
-						return err
-					}
-				}
-				t.ValuesProvenance[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "infra_provenance":
-			t.InfraProvenance = make(map[string]FieldProvenance)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.InfraProvenance.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv FieldProvenance
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					if err := mv.UnmarshalJSON(raw); err != nil {
-						return err
-					}
-				}
-				t.InfraProvenance[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "sensitive":
 			if v, err := readBool(dec); err != nil {
@@ -1264,23 +1147,10 @@ func (t IRNode) MarshalJSON() ([]byte, error) {
 	}
 	first = false
 	buf.WriteString("\"labels\":")
-	{
-		keys := make([]string, 0, len(t.Labels))
-		for k := range t.Labels {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Labels[k]
-			writeJSONString(&buf, mv)
-		}
-		buf.WriteByte('}')
+	if enc, err := t.Labels.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	if !first {
 		buf.WriteByte(',')
@@ -1354,79 +1224,40 @@ func (t IRNode) MarshalJSON() ([]byte, error) {
 			buf.Write(enc)
 		}
 	}
-	if len(t.CatalogAnnotations) != 0 {
+	if !t.CatalogAnnotations.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"catalog_annotations\":")
-		{
-			keys := make([]string, 0, len(t.CatalogAnnotations))
-			for k := range t.CatalogAnnotations {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.CatalogAnnotations[k]
-				writeJSONString(&buf, mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.CatalogAnnotations.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
-	if len(t.ReleaseAnnotations) != 0 {
+	if !t.ReleaseAnnotations.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"release_annotations\":")
-		{
-			keys := make([]string, 0, len(t.ReleaseAnnotations))
-			for k := range t.ReleaseAnnotations {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.ReleaseAnnotations[k]
-				writeJSONString(&buf, mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.ReleaseAnnotations.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
-	if len(t.AggregateAnnotations) != 0 {
+	if !t.AggregateAnnotations.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"aggregate_annotations\":")
-		{
-			keys := make([]string, 0, len(t.AggregateAnnotations))
-			for k := range t.AggregateAnnotations {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.AggregateAnnotations[k]
-				writeJSONString(&buf, mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.AggregateAnnotations.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if len(t.SelfInject) != 0 {
@@ -1494,25 +1325,12 @@ func (t *IRNode) UnmarshalJSON(data []byte) error {
 				t.Description = s
 			}
 		case "labels":
-			t.Labels = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Labels.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.Labels[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "component":
 			if s, err := readString(dec); err != nil {
@@ -1567,67 +1385,28 @@ func (t *IRNode) UnmarshalJSON(data []byte) error {
 				t.CatalogMetadata = v
 			}
 		case "catalog_annotations":
-			t.CatalogAnnotations = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.CatalogAnnotations.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.CatalogAnnotations[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "release_annotations":
-			t.ReleaseAnnotations = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.ReleaseAnnotations.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.ReleaseAnnotations[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "aggregate_annotations":
-			t.AggregateAnnotations = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.AggregateAnnotations.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.AggregateAnnotations[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "self_inject":
 			if raw, err := readRaw(dec, data); err != nil {
@@ -2102,27 +1881,10 @@ func (t IRSpec) MarshalJSON() ([]byte, error) {
 	}
 	first = false
 	buf.WriteString("\"nodes\":")
-	{
-		keys := make([]string, 0, len(t.Nodes))
-		for k := range t.Nodes {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Nodes[k]
-			if enc, err := mv.MarshalJSON(); err != nil {
-				return nil, err
-			} else {
-				buf.Write(enc)
-			}
-		}
-		buf.WriteByte('}')
+	if enc, err := t.Nodes.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	if !first {
 		buf.WriteByte(',')
@@ -2147,135 +1909,41 @@ func (t IRSpec) MarshalJSON() ([]byte, error) {
 	}
 	first = false
 	buf.WriteString("\"values_mapping\":")
-	{
-		keys := make([]string, 0, len(t.ValuesMapping))
-		for k := range t.ValuesMapping {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.ValuesMapping[k]
-			buf.Write(mv)
-		}
-		buf.WriteByte('}')
+	if enc, err := t.ValuesMapping.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	if !first {
 		buf.WriteByte(',')
 	}
 	first = false
 	buf.WriteString("\"infra_mapping\":")
-	{
-		keys := make([]string, 0, len(t.InfraMapping))
-		for k := range t.InfraMapping {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.InfraMapping[k]
-			buf.Write(mv)
-		}
-		buf.WriteByte('}')
+	if enc, err := t.InfraMapping.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	if !first {
 		buf.WriteByte(',')
 	}
 	first = false
 	buf.WriteString("\"feature_values_mapping\":")
-	{
-		keys := make([]string, 0, len(t.FeatureValuesMapping))
-		for k := range t.FeatureValuesMapping {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.FeatureValuesMapping[k]
-			{
-				keys := make([]string, 0, len(mv))
-				for k := range mv {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				buf.WriteByte('{')
-				for i, k := range keys {
-					if i > 0 {
-						buf.WriteByte(',')
-					}
-					writeJSONString(&buf, k)
-					buf.WriteByte(':')
-					mv := mv[k]
-					if enc, err := mv.MarshalJSON(); err != nil {
-						return nil, err
-					} else {
-						buf.Write(enc)
-					}
-				}
-				buf.WriteByte('}')
-			}
-		}
-		buf.WriteByte('}')
+	if enc, err := t.FeatureValuesMapping.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
-	if len(t.BoundaryFeatures) != 0 {
+	if !t.BoundaryFeatures.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"boundary_features\":")
-		{
-			keys := make([]string, 0, len(t.BoundaryFeatures))
-			for k := range t.BoundaryFeatures {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.BoundaryFeatures[k]
-				{
-					keys := make([]string, 0, len(mv))
-					for k := range mv {
-						keys = append(keys, k)
-					}
-					sort.Strings(keys)
-					buf.WriteByte('{')
-					for i, k := range keys {
-						if i > 0 {
-							buf.WriteByte(',')
-						}
-						writeJSONString(&buf, k)
-						buf.WriteByte(':')
-						mv := mv[k]
-						if enc, err := mv.MarshalJSON(); err != nil {
-							return nil, err
-						} else {
-							buf.Write(enc)
-						}
-					}
-					buf.WriteByte('}')
-				}
-			}
-			buf.WriteByte('}')
+		if enc, err := t.BoundaryFeatures.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if !first {
@@ -2307,27 +1975,12 @@ func (t *IRSpec) UnmarshalJSON(data []byte) error {
 		}
 		switch key {
 		case "nodes":
-			t.Nodes = make(map[string]IRNode)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Nodes.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv IRNode
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					if err := mv.UnmarshalJSON(raw); err != nil {
-						return err
-					}
-				}
-				t.Nodes[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "edges":
 			t.Edges = nil
@@ -2349,96 +2002,36 @@ func (t *IRSpec) UnmarshalJSON(data []byte) error {
 				return err
 			}
 		case "values_mapping":
-			t.ValuesMapping = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.ValuesMapping.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.ValuesMapping[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "infra_mapping":
-			t.InfraMapping = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.InfraMapping.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.InfraMapping[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "feature_values_mapping":
-			t.FeatureValuesMapping = make(map[string]map[string]IRFeatureEntry)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.FeatureValuesMapping.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv map[string]IRFeatureEntry
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					dec2 := json.NewDecoder(bytes.NewReader(raw))
-					dec2.UseNumber()
-					if err := dec2.Decode(&mv); err != nil {
-						return err
-					}
-				}
-				t.FeatureValuesMapping[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "boundary_features":
-			t.BoundaryFeatures = make(map[string]map[string]IRBoundaryFeature)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.BoundaryFeatures.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv map[string]IRBoundaryFeature
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					dec2 := json.NewDecoder(bytes.NewReader(raw))
-					dec2.UseNumber()
-					if err := dec2.Decode(&mv); err != nil {
-						return err
-					}
-				}
-				t.BoundaryFeatures[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "provenance":
 			if raw, err := readRaw(dec, data); err != nil {
@@ -2881,7 +2474,7 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Inject) != 0 {
 		n++
 	}
-	if len(t.Labels) != 0 {
+	if !t.Labels.IsZero() {
 		n++
 	}
 	if t.Origin != "" {
@@ -2905,7 +2498,7 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if t.AnnotationKey != "" {
 		n++
 	}
-	if len(t.InfraProvenance) != 0 {
+	if !t.InfraProvenance.IsZero() {
 		n++
 	}
 	if len(t.SensitiveInject) != 0 {
@@ -2914,10 +2507,10 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 	if t.AnnotationSource != "" {
 		n++
 	}
-	if len(t.ValuesProvenance) != 0 {
+	if !t.ValuesProvenance.IsZero() {
 		n++
 	}
-	if len(t.CatalogAnnotations) != 0 {
+	if !t.CatalogAnnotations.IsZero() {
 		n++
 	}
 	if len(t.SensitivePayloadLeaves) != 0 {
@@ -2935,20 +2528,13 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "inject")
 		dst = appendCBORByteString(dst, t.Inject)
 	}
-	if len(t.Labels) != 0 {
+	if !t.Labels.IsZero() {
 		dst = appendCBORTextString(dst, "labels")
-		{
-			keys := make([]string, 0, len(t.Labels))
-			for k := range t.Labels {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Labels[k]
-				dst = appendCBORTextString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Labels.Len()))
+		for k, mv := range t.Labels.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORTextString(dst, mv)
 		}
 	}
 	if t.Origin != "" {
@@ -2983,21 +2569,14 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "annotation_key")
 		dst = appendCBORTextString(dst, t.AnnotationKey)
 	}
-	if len(t.InfraProvenance) != 0 {
+	if !t.InfraProvenance.IsZero() {
 		dst = appendCBORTextString(dst, "infra_provenance")
-		{
-			keys := make([]string, 0, len(t.InfraProvenance))
-			for k := range t.InfraProvenance {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.InfraProvenance[k]
-				if dst, err = mv.appendCBOR(dst); err != nil {
-					return nil, err
-				}
+		dst = appendCBORHead(dst, 4, uint64(t.InfraProvenance.Len()))
+		for k, mv := range t.InfraProvenance.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			if dst, err = mv.appendCBOR(dst); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -3011,38 +2590,24 @@ func (t IRFeatureEntry) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORTextString(dst, "annotation_source")
 		dst = appendCBORTextString(dst, t.AnnotationSource)
 	}
-	if len(t.ValuesProvenance) != 0 {
+	if !t.ValuesProvenance.IsZero() {
 		dst = appendCBORTextString(dst, "values_provenance")
-		{
-			keys := make([]string, 0, len(t.ValuesProvenance))
-			for k := range t.ValuesProvenance {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.ValuesProvenance[k]
-				if dst, err = mv.appendCBOR(dst); err != nil {
-					return nil, err
-				}
+		dst = appendCBORHead(dst, 4, uint64(t.ValuesProvenance.Len()))
+		for k, mv := range t.ValuesProvenance.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			if dst, err = mv.appendCBOR(dst); err != nil {
+				return nil, err
 			}
 		}
 	}
-	if len(t.CatalogAnnotations) != 0 {
+	if !t.CatalogAnnotations.IsZero() {
 		dst = appendCBORTextString(dst, "catalog_annotations")
-		{
-			keys := make([]string, 0, len(t.CatalogAnnotations))
-			for k := range t.CatalogAnnotations {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.CatalogAnnotations[k]
-				dst = appendCBORTextString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.CatalogAnnotations.Len()))
+		for k, mv := range t.CatalogAnnotations.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORTextString(dst, mv)
 		}
 	}
 	if len(t.SensitivePayloadLeaves) != 0 {
@@ -3088,15 +2653,18 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 			}
 		case "labels":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -3104,21 +2672,24 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Labels = m
+				t.Labels = om
 			}
 		case "catalog_annotations":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -3126,9 +2697,9 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.CatalogAnnotations = m
+				t.CatalogAnnotations = om
 			}
 		case "binding":
 			if s, err := dec.readTextString(); err != nil {
@@ -3174,43 +2745,49 @@ func (t *IRFeatureEntry) decodeCBOR(dec *cborDec) error {
 			}
 		case "values_provenance":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]FieldProvenance, mn)
+				var om OrderedMap[FieldProvenance]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv FieldProvenance
 					if err := (&mv).decodeCBOR(dec); err != nil {
 						return err
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.ValuesProvenance = m
+				t.ValuesProvenance = om
 			}
 		case "infra_provenance":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]FieldProvenance, mn)
+				var om OrderedMap[FieldProvenance]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv FieldProvenance
 					if err := (&mv).decodeCBOR(dec); err != nil {
 						return err
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.InfraProvenance = m
+				t.InfraProvenance = om
 			}
 		case "sensitive":
 			if v, err := dec.readBool(); err != nil {
@@ -3584,16 +3161,16 @@ func (t IRNode) appendCBOR(dst []byte) ([]byte, error) {
 	if t.CatalogMetadata != nil {
 		n++
 	}
-	if len(t.CatalogAnnotations) != 0 {
+	if !t.CatalogAnnotations.IsZero() {
 		n++
 	}
-	if len(t.ReleaseAnnotations) != 0 {
+	if !t.ReleaseAnnotations.IsZero() {
 		n++
 	}
 	if t.SynthesizedBoundary != false {
 		n++
 	}
-	if len(t.AggregateAnnotations) != 0 {
+	if !t.AggregateAnnotations.IsZero() {
 		n++
 	}
 	if t.SynthesizedSubsystem != false {
@@ -3609,18 +3186,11 @@ func (t IRNode) appendCBOR(dst []byte) ([]byte, error) {
 		dst = appendCBORByteString(dst, t.Uses)
 	}
 	dst = appendCBORTextString(dst, "labels")
-	{
-		keys := make([]string, 0, len(t.Labels))
-		for k := range t.Labels {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.Labels[k]
-			dst = appendCBORTextString(dst, mv)
-		}
+	dst = appendCBORHead(dst, 4, uint64(t.Labels.Len()))
+	for k, mv := range t.Labels.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		dst = appendCBORTextString(dst, mv)
 	}
 	dst = appendCBORTextString(dst, "component")
 	dst = appendCBORTextString(dst, t.Component)
@@ -3658,56 +3228,35 @@ func (t IRNode) appendCBOR(dst []byte) ([]byte, error) {
 	}
 	dst = appendCBORTextString(dst, "resolved_version")
 	dst = appendCBORTextString(dst, t.ResolvedVersion)
-	if len(t.CatalogAnnotations) != 0 {
+	if !t.CatalogAnnotations.IsZero() {
 		dst = appendCBORTextString(dst, "catalog_annotations")
-		{
-			keys := make([]string, 0, len(t.CatalogAnnotations))
-			for k := range t.CatalogAnnotations {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.CatalogAnnotations[k]
-				dst = appendCBORTextString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.CatalogAnnotations.Len()))
+		for k, mv := range t.CatalogAnnotations.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORTextString(dst, mv)
 		}
 	}
-	if len(t.ReleaseAnnotations) != 0 {
+	if !t.ReleaseAnnotations.IsZero() {
 		dst = appendCBORTextString(dst, "release_annotations")
-		{
-			keys := make([]string, 0, len(t.ReleaseAnnotations))
-			for k := range t.ReleaseAnnotations {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.ReleaseAnnotations[k]
-				dst = appendCBORTextString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.ReleaseAnnotations.Len()))
+		for k, mv := range t.ReleaseAnnotations.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORTextString(dst, mv)
 		}
 	}
 	if t.SynthesizedBoundary != false {
 		dst = appendCBORTextString(dst, "synthesized_boundary")
 		dst = appendCBORBool(dst, t.SynthesizedBoundary)
 	}
-	if len(t.AggregateAnnotations) != 0 {
+	if !t.AggregateAnnotations.IsZero() {
 		dst = appendCBORTextString(dst, "aggregate_annotations")
-		{
-			keys := make([]string, 0, len(t.AggregateAnnotations))
-			for k := range t.AggregateAnnotations {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.AggregateAnnotations[k]
-				dst = appendCBORTextString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.AggregateAnnotations.Len()))
+		for k, mv := range t.AggregateAnnotations.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORTextString(dst, mv)
 		}
 	}
 	if t.SynthesizedSubsystem != false {
@@ -3751,15 +3300,18 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 			}
 		case "labels":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -3767,9 +3319,9 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Labels = m
+				t.Labels = om
 			}
 		case "component":
 			if s, err := dec.readTextString(); err != nil {
@@ -3823,15 +3375,18 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 			}
 		case "catalog_annotations":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -3839,21 +3394,24 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.CatalogAnnotations = m
+				t.CatalogAnnotations = om
 			}
 		case "release_annotations":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -3861,21 +3419,24 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.ReleaseAnnotations = m
+				t.ReleaseAnnotations = om
 			}
 		case "aggregate_annotations":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -3883,9 +3444,9 @@ func (t *IRNode) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.AggregateAnnotations = m
+				t.AggregateAnnotations = om
 			}
 		case "self_inject":
 			if v, err := dec.readByteString(); err != nil {
@@ -4321,7 +3882,7 @@ func (t IRSpec) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t IRSpec) appendCBOR(dst []byte) ([]byte, error) {
 	n := 6
-	if len(t.BoundaryFeatures) != 0 {
+	if !t.BoundaryFeatures.IsZero() {
 		n++
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
@@ -4335,19 +3896,12 @@ func (t IRSpec) appendCBOR(dst []byte) ([]byte, error) {
 		}
 	}
 	dst = appendCBORTextString(dst, "nodes")
-	{
-		keys := make([]string, 0, len(t.Nodes))
-		for k := range t.Nodes {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.Nodes[k]
-			if dst, err = mv.appendCBOR(dst); err != nil {
-				return nil, err
-			}
+	dst = appendCBORHead(dst, 4, uint64(t.Nodes.Len()))
+	for k, mv := range t.Nodes.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		if dst, err = mv.appendCBOR(dst); err != nil {
+			return nil, err
 		}
 	}
 	dst = appendCBORTextString(dst, "provenance")
@@ -4355,88 +3909,46 @@ func (t IRSpec) appendCBOR(dst []byte) ([]byte, error) {
 		return nil, err
 	}
 	dst = appendCBORTextString(dst, "infra_mapping")
-	{
-		keys := make([]string, 0, len(t.InfraMapping))
-		for k := range t.InfraMapping {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.InfraMapping[k]
-			dst = appendCBORByteString(dst, mv)
-		}
+	dst = appendCBORHead(dst, 4, uint64(t.InfraMapping.Len()))
+	for k, mv := range t.InfraMapping.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		dst = appendCBORByteString(dst, mv)
 	}
 	dst = appendCBORTextString(dst, "values_mapping")
-	{
-		keys := make([]string, 0, len(t.ValuesMapping))
-		for k := range t.ValuesMapping {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.ValuesMapping[k]
-			dst = appendCBORByteString(dst, mv)
-		}
+	dst = appendCBORHead(dst, 4, uint64(t.ValuesMapping.Len()))
+	for k, mv := range t.ValuesMapping.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		dst = appendCBORByteString(dst, mv)
 	}
-	if len(t.BoundaryFeatures) != 0 {
+	if !t.BoundaryFeatures.IsZero() {
 		dst = appendCBORTextString(dst, "boundary_features")
-		{
-			keys := make([]string, 0, len(t.BoundaryFeatures))
-			for k := range t.BoundaryFeatures {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
+		dst = appendCBORHead(dst, 4, uint64(t.BoundaryFeatures.Len()))
+		for k, mv := range t.BoundaryFeatures.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORHead(dst, 4, uint64(mv.Len()))
+			for k, mv := range mv.All() {
+				dst = appendCBORHead(dst, 4, 2)
 				dst = appendCBORTextString(dst, k)
-				mv := t.BoundaryFeatures[k]
-				{
-					keys := make([]string, 0, len(mv))
-					for k := range mv {
-						keys = append(keys, k)
-					}
-					sortCBORKeys(keys)
-					dst = appendCBORHead(dst, 5, uint64(len(keys)))
-					for _, k := range keys {
-						dst = appendCBORTextString(dst, k)
-						mv := mv[k]
-						if dst, err = mv.appendCBOR(dst); err != nil {
-							return nil, err
-						}
-					}
+				if dst, err = mv.appendCBOR(dst); err != nil {
+					return nil, err
 				}
 			}
 		}
 	}
 	dst = appendCBORTextString(dst, "feature_values_mapping")
-	{
-		keys := make([]string, 0, len(t.FeatureValuesMapping))
-		for k := range t.FeatureValuesMapping {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
+	dst = appendCBORHead(dst, 4, uint64(t.FeatureValuesMapping.Len()))
+	for k, mv := range t.FeatureValuesMapping.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		dst = appendCBORHead(dst, 4, uint64(mv.Len()))
+		for k, mv := range mv.All() {
+			dst = appendCBORHead(dst, 4, 2)
 			dst = appendCBORTextString(dst, k)
-			mv := t.FeatureValuesMapping[k]
-			{
-				keys := make([]string, 0, len(mv))
-				for k := range mv {
-					keys = append(keys, k)
-				}
-				sortCBORKeys(keys)
-				dst = appendCBORHead(dst, 5, uint64(len(keys)))
-				for _, k := range keys {
-					dst = appendCBORTextString(dst, k)
-					mv := mv[k]
-					if dst, err = mv.appendCBOR(dst); err != nil {
-						return nil, err
-					}
-				}
+			if dst, err = mv.appendCBOR(dst); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -4463,23 +3975,26 @@ func (t *IRSpec) decodeCBOR(dec *cborDec) error {
 		switch key {
 		case "nodes":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]IRNode, mn)
+				var om OrderedMap[IRNode]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv IRNode
 					if err := (&mv).decodeCBOR(dec); err != nil {
 						return err
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Nodes = m
+				t.Nodes = om
 			}
 		case "edges":
 			{
@@ -4499,15 +4014,18 @@ func (t *IRSpec) decodeCBOR(dec *cborDec) error {
 			}
 		case "values_mapping":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -4515,21 +4033,24 @@ func (t *IRSpec) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.ValuesMapping = m
+				t.ValuesMapping = om
 			}
 		case "infra_mapping":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -4537,81 +4058,93 @@ func (t *IRSpec) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.InfraMapping = m
+				t.InfraMapping = om
 			}
 		case "feature_values_mapping":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]map[string]IRFeatureEntry, mn)
+				var om OrderedMap[OrderedMap[IRFeatureEntry]]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
 					}
-					var mv map[string]IRFeatureEntry
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
+					}
+					var mv OrderedMap[IRFeatureEntry]
 					{
-						mn, err := dec.readMapHeader()
+						mn, err := dec.readArrayHeader()
 						if err != nil {
 							return err
 						}
-						m := make(map[string]IRFeatureEntry, mn)
+						var om OrderedMap[IRFeatureEntry]
 						for mi := 0; mi < mn; mi++ {
-							mk, err := dec.readTextString()
+							mk, err := dec.readEntryKey()
 							if err != nil {
 								return err
+							}
+							if _, dup := om.Get(mk); dup {
+								return duplicateKeyError(mk)
 							}
 							var mv IRFeatureEntry
 							if err := (&mv).decodeCBOR(dec); err != nil {
 								return err
 							}
-							m[mk] = mv
+							om.Set(mk, mv)
 						}
-						mv = m
+						mv = om
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.FeatureValuesMapping = m
+				t.FeatureValuesMapping = om
 			}
 		case "boundary_features":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]map[string]IRBoundaryFeature, mn)
+				var om OrderedMap[OrderedMap[IRBoundaryFeature]]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
 					}
-					var mv map[string]IRBoundaryFeature
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
+					}
+					var mv OrderedMap[IRBoundaryFeature]
 					{
-						mn, err := dec.readMapHeader()
+						mn, err := dec.readArrayHeader()
 						if err != nil {
 							return err
 						}
-						m := make(map[string]IRBoundaryFeature, mn)
+						var om OrderedMap[IRBoundaryFeature]
 						for mi := 0; mi < mn; mi++ {
-							mk, err := dec.readTextString()
+							mk, err := dec.readEntryKey()
 							if err != nil {
 								return err
+							}
+							if _, dup := om.Get(mk); dup {
+								return duplicateKeyError(mk)
 							}
 							var mv IRBoundaryFeature
 							if err := (&mv).decodeCBOR(dec); err != nil {
 								return err
 							}
-							m[mk] = mv
+							om.Set(mk, mv)
 						}
-						mv = m
+						mv = om
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.BoundaryFeatures = m
+				t.BoundaryFeatures = om
 			}
 		case "provenance":
 			if err := (&t.Provenance).decodeCBOR(dec); err != nil {

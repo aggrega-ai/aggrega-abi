@@ -19,14 +19,16 @@
 // make. It is the only one that feeds the CBOR decoder the committed canonical
 // bytes — the other CBOR legs decode this codec's own fresh output, so an encoder
 // and decoder that shared a compensating defect would agree with each other and
-// stay green. And it is the only one that can observe a map-key sort being lost
-// from the JSON encoder: the two wire forms order map keys by different rules —
-// JSON lexicographically, CBOR by the encoded key bytes, whose length head leads —
-// so a value arriving from the CBOR wire presents its keys in an order the JSON
-// wire must actively re-sort. A value decoded from the JSON golden instead arrives
-// already in JSON order, because JSON.parse preserves the key order of the
-// document it reads, which is why the first contract stays green whether the
-// encoder sorts or not.
+// stay green. And it is the only one that can observe a plain map's key sort being
+// lost from the JSON encoder: the two wire forms order a plain map's keys by
+// different rules — JSON lexicographically, CBOR by the encoded key bytes, whose
+// length head leads — so a value arriving from the CBOR wire presents its keys in
+// an order the JSON wire must actively re-sort. A value decoded from the JSON
+// golden instead arrives already in JSON order, which is why the first contract
+// stays green whether the encoder sorts or not. A map the schema marks
+// order-preserving is a Map here, read in member order and written in the order it
+// holds on both wires, so for it the same contract proves the order survives the
+// binary form.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -99,9 +101,9 @@ const vectors: Array<[string, string]> = [
   ["LinterInput", "LinterInput"],
   // The input of a rule that reads a whole Release, with the Release and the
   // Component map POPULATED: both are omitted when empty, so this is the vector
-  // where dropping either moves the bytes. The two instance names sort
-  // differently in the two wire forms ("agent" first in the JSON, "db" first in
-  // the canonical CBOR), and each document keeps its keys out of key order; this
+  // where dropping either moves the bytes. The Component map is order-preserving
+  // and holds "agent" before "db", which is not the length-first order a sorted
+  // binary map would take, and each document keeps its keys out of key order; this
   // package holds each document PARSED and re-serialises it, so the vector pins
   // that the re-serialisation keeps the order it was given.
   ["LinterInputRelease", "LinterInput"],
@@ -216,8 +218,8 @@ const vectors: Array<[string, string]> = [
   // rather than dropped), a binding-key list whose entries are NOT in sorted
   // order (pinning that a list is carried in author order rather than sorted),
   // and an opaque settings object with out-of-order keys (pinning the verbatim
-  // carry); the output omits the failure member. The annotation map's key sort is
-  // pinned here for CBOR but not for JSON — see the dedicated test below.
+  // carry); the output omits the failure member. The annotation map is
+  // order-preserving, so neither wire sorts it — see the dedicated test below.
   // MutatorInputSources is
   // the label-transform payload WITH its pinned sources and settings populated —
   // the mutator vector above leaves both absent, so the file list a governance
@@ -227,13 +229,17 @@ const vectors: Array<[string, string]> = [
   ["AnnotationTransformOutput", "AnnotationTransformOutput"],
   ["MutatorInputSources", "MutatorInput"],
   // The map-order probe vectors carry one golden pair per map-owning payload, with
-  // every map that payload declares populated by a probe key set whose lexicographic
-  // order is the exact reverse of its canonical CBOR order. Map-key ordering is a
-  // determinism contract — identical input must produce byte-identical output — and
-  // a map is the one container with no inherent order, so every encoder sorts before
-  // emitting. These vectors are what pins that sort on this side: the fourth contract
-  // sources the value from the committed CBOR bytes, so the JSON encoder receives the
-  // keys in the reverse of the order it must emit and has to re-sort to match. A
+  // every map that payload declares populated by a probe key set. Map-key ordering
+  // is a determinism contract — identical input must produce byte-identical output —
+  // and it reads differently for the two kinds of map. A plain map carries no order
+  // of its own, so every encoder sorts it, and its probe keys' lexicographic order is
+  // the exact reverse of their canonical CBOR order: the fourth contract sources the
+  // value from the committed CBOR bytes, so the JSON encoder receives the keys in
+  // the reverse of the order it must emit and has to re-sort to match. A map the
+  // schema marks order-preserving carries its order as content, so every encoder
+  // writes it in the order it holds, and its probe order is neither sorted order and
+  // holds "8080", a key a plain object would move to the front — so a decoder going
+  // through JSON.parse, or an encoder sorting in either wire's rule, fails it. A
   // constructed-value test cannot stand in for them here, because a TypeScript
   // interface is erased before it runs and the payload types cannot be walked.
   ["MapOrderAnnotationTarget", "AnnotationTarget"],
@@ -251,8 +257,10 @@ const vectors: Array<[string, string]> = [
   ["MapOrderLinkEdge", "LinkEdge"],
   ["MapOrderLinkPublishOutput", "LinkPublishOutput"],
   ["MapOrderLinkResolveInput", "LinkResolveInput"],
+  ["MapOrderLinterInput", "LinterInput"],
   ["MapOrderMutatorGraph", "MutatorGraph"],
   ["MapOrderMutatorNode", "MutatorNode"],
+  ["MapOrderRenderNodeOutput", "RenderNodeOutput"],
   ["MapOrderRenderedNode", "RenderedNode"],
   ["MapOrderSubChart", "SubChart"],
   ["MapOrderWorkloadProjection", "WorkloadProjection"],
@@ -330,37 +338,33 @@ for (const [file, type] of vectors) {
   });
 }
 
-// The annotation map's JSON key sort is pinned by ENCODING a constructed value,
-// the one path on which a lost sort is observable. A value decoded from a golden
-// already carries the golden's lexicographic order — JSON.parse preserves the key
-// order of the document it reads — so the vector round-trips green whether the
-// JSON encoder sorts or not. Constructing the object with its keys INSERTED out
-// of order is what makes that sort visible.
-//
-// The two wire forms order the same three keys differently, and the test asserts
-// both. JSON sorts lexicographically. CBOR sorts by the encoded key bytes, whose
-// length head leads, so a shorter key always precedes a longer one and the three
-// keys emit in the exact reverse of their JSON order. The CBOR half is already
-// pinned by the vector above — the golden's JSON carries the lexicographic order,
-// so the CBOR encoder has to re-sort actively — and is asserted again here
-// because a single constructed value makes both rules legible side by side.
-test("AnnotationTarget orders annotation map keys per wire form", () => {
-  const v = {
-    boundary_path: "prod/edge",
-    component_name: "web",
-    annotations: { tier: "frontend", "aggrega.ai/owner": "checkout", "cost-center": "42" },
-  };
+// The annotation map's order is pinned by ENCODING a constructed value whose order
+// is neither of the two sorted orders: not the lexicographic one a JSON map sort
+// would give, not the length-first one a CBOR map sort would give, and with a key
+// that is an array index, which a plain object would move to the front. The map is
+// order-preserving, so both wire forms carry the order it holds — the JSON form as
+// an object written in that order, the binary form as an array of entries in that
+// order — and the test asserts each, literally. Decoding each wire back is asserted
+// too, because a decoder going through JSON.parse would hoist "8080" on the way in.
+test("AnnotationTarget keeps the annotation order on both wire forms", () => {
+  const ordered = ["tier", "aggrega.ai/owner", "8080", "cost-center"];
+  const values: Record<string, string> = { tier: "frontend", "aggrega.ai/owner": "checkout", "8080": "port", "cost-center": "42" };
+  const annotations = new Map<string, string>();
+  for (const k of ordered) annotations.set(k, values[k]);
+  const v = { boundary_path: "prod/edge", component_name: "web", annotations };
 
+  const json = codec("encodeAnnotationTarget")(v) as string;
   assert.equal(
-    codec("encodeAnnotationTarget")(v),
+    json,
     '{"boundary_path":"prod/edge","component_name":"web",' +
-      '"annotations":{"aggrega.ai/owner":"checkout","cost-center":"42","tier":"frontend"}}',
-    "JSON annotation keys not in lexicographic order",
+      '"annotations":{"tier":"frontend","aggrega.ai/owner":"checkout","8080":"port","cost-center":"42"}}',
+    "JSON annotation keys not in the order the map holds",
   );
+  const fromJson = codec("decodeAnnotationTarget")(json) as { annotations: Map<string, string> };
+  assert.deepEqual([...fromJson.annotations.keys()], ordered, "the JSON decode did not keep the order");
 
-  // Shortest key first: "tier" (4), "cost-center" (11), "aggrega.ai/owner" (16).
-  const hex = toHex(codec("encodeCBORAnnotationTarget")(v) as Uint8Array);
-  const ordered = ["tier", "cost-center", "aggrega.ai/owner"];
+  const cbor = codec("encodeCBORAnnotationTarget")(v) as Uint8Array;
+  const hex = toHex(cbor);
   const at = ordered.map((k) => hex.indexOf(toHex(new TextEncoder().encode(k))));
   for (let i = 0; i < ordered.length; i++) {
     assert.ok(at[i] >= 0, `CBOR wire does not carry annotation key ${ordered[i]}: ${hex}`);
@@ -368,11 +372,83 @@ test("AnnotationTarget orders annotation map keys per wire form", () => {
   for (let i = 1; i < at.length; i++) {
     assert.ok(
       at[i - 1] < at[i],
-      `CBOR annotation keys not in canonical length-first order ` +
+      `CBOR annotation entries not in the order the map holds ` +
         `(${ordered[i]}@${at[i]} before ${ordered[i - 1]}@${at[i - 1]}): ${hex}`,
     );
   }
+  const fromCbor = codec("decodeCBORAnnotationTarget")(cbor) as { annotations: Map<string, string> };
+  assert.deepEqual([...fromCbor.annotations.keys()], ordered, "the binary decode did not keep the order");
 });
+
+// A non-required order-preserving field is omitted when it is empty and emitted
+// when it is populated, on both wires. The two fixtures are asserted together
+// because each hides the other's failure: an encoder emitting the key
+// unconditionally passes the populated one, and one dropping it unconditionally
+// passes the empty one. Each form's binary bytes are read back too, because the
+// map head declares the pair count and a head counting an omitted key fails there.
+test("an empty order-preserving field is omitted and a populated one is emitted", () => {
+  const encodeJson = codec("encodeRenderNodeOutput");
+  const encodeCbor = codec("encodeCBORRenderNodeOutput");
+  const decodeCbor = codec("decodeCBORRenderNodeOutput");
+  const derived = new TextEncoder().encode("derived_keys");
+  const carries = (b: Uint8Array): boolean => toHex(b).includes(toHex(derived));
+
+  for (const empty of [{ files: [] }, { files: [], derived_keys: new Map<string, string[]>() }]) {
+    const json = encodeJson(empty) as string;
+    assert.ok(!json.includes("derived_keys"), `an empty order-preserving field is on the JSON wire: ${json}`);
+    const cbor = encodeCbor(empty) as Uint8Array;
+    assert.ok(!carries(cbor), `an empty order-preserving field is on the binary wire: ${toHex(cbor)}`);
+    decodeCbor(cbor);
+  }
+
+  const populated = { files: [], derived_keys: new Map([["resource-names", ["web"]]]) };
+  const json = encodeJson(populated) as string;
+  assert.ok(
+    json.includes('"derived_keys":{"resource-names":["web"]}'),
+    `a populated order-preserving field is missing from the JSON wire: ${json}`,
+  );
+  const cbor = encodeCbor(populated) as Uint8Array;
+  assert.ok(carries(cbor), `a populated order-preserving field is missing from the binary wire: ${toHex(cbor)}`);
+  const back = decodeCbor(cbor) as { derived_keys: Map<string, string[]> };
+  assert.deepEqual([...back.derived_keys], [["resource-names", ["web"]]], "the populated field did not survive the binary form");
+});
+
+// A refused vector is canonical CBOR every decoder of its shape must REFUSE: a
+// document no encoder of the shape can write, malformed in exactly one way. A
+// vector pair holds the decoder to what it must read; a refused vector holds it to
+// what it must not, and the two cannot stand in for each other — a decoder that
+// kept one of two repeated keys would read every well-formed vector correctly.
+// These pin the order-preserving map's array form; the same vectors bind the Go and
+// Rust decoders, and the compiler's independent byte-parity oracle confirms each is
+// well-formed CBOR whose only fault is the one its name states.
+const refusedSuffix = ".refused-cbor.hex";
+
+// The refused vectors, each with the decoder that must refuse it and a fragment
+// the refusal must carry.
+const refusedVectors: Array<[string, string, string]> = [
+  ["MapOrderMutatorNodeRepeatedKey", "MutatorNode", 'duplicate key "a"'],
+  ["MapOrderMutatorNodeEntryArity", "MutatorNode", "holds 3 items, want 2"],
+  ["MapOrderMutatorNodeEntryKeyNotText", "MutatorNode", "expected text string"],
+];
+
+function refusedCbor(name: string): Uint8Array {
+  const raw = readFileSync(join(testdata, `${name}${refusedSuffix}`), "utf8");
+  if (!raw.endsWith("\n") || /[^0-9a-f]/.test(raw.slice(0, -1))) {
+    throw new Error(`refused vector ${name} is not lowercase hex followed by one newline: ${JSON.stringify(raw)}`);
+  }
+  return fromHex(raw.slice(0, -1));
+}
+
+for (const [file, type, want] of refusedVectors) {
+  test(`${file} is refused`, () => {
+    const decodeCbor = codec(`decodeCBOR${type}`);
+    assert.throws(
+      () => decodeCbor(refusedCbor(file)),
+      (err: unknown) => err instanceof Error && err.message.includes(want),
+      `${file} must be refused with an error carrying ${JSON.stringify(want)}`,
+    );
+  });
+}
 
 // The float-boundary suite carries values a JSON number cannot express (NaN,
 // ±Inf, −0.0) as the raw f64 bits, so the CBOR CDE §4.2 float rule is proven
@@ -439,6 +515,8 @@ function corpusVectors(): Set<string> {
   const cbor = new Set<string>();
   for (const name of readdirSync(testdata)) {
     if (standaloneFixtures.includes(name)) continue;
+    // A refused vector is a single file rather than a pair, held to its own census.
+    if (name.endsWith(refusedSuffix)) continue;
     if (name.endsWith(".golden.json")) json.add(name.slice(0, -".golden.json".length));
     else if (name.endsWith(".cbor.hex")) cbor.add(name.slice(0, -".cbor.hex".length));
     else {
@@ -472,5 +550,24 @@ test("every golden vector is exercised", () => {
     [...exercised].filter((name) => !corpus.has(name)).sort(),
     [],
     "these vectors are asserted by this harness but the shared corpus does not carry them",
+  );
+});
+
+test("every refused vector is asserted", () => {
+  const refused = readdirSync(testdata)
+    .filter((name) => name.endsWith(refusedSuffix))
+    .map((name) => name.slice(0, -refusedSuffix.length));
+  assert.ok(refused.length > 0, `found no ${refusedSuffix} vectors in the shared corpus, so this census certifies nothing`);
+  const asserted = new Set(refusedVectors.map(([file]) => file));
+  assert.deepEqual(
+    refused.filter((name) => !asserted.has(name)).sort(),
+    [],
+    "these refused vectors are committed to the shared corpus but no assertion in this harness reads them, so " +
+      "this language's decoder is not held to refusing them",
+  );
+  assert.deepEqual(
+    [...asserted].filter((name) => !refused.includes(name)).sort(),
+    [],
+    "these refused vectors are asserted by this harness but the shared corpus does not carry them",
   );
 });

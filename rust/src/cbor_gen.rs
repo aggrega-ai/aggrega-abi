@@ -349,6 +349,20 @@ impl<'a> CborDec<'a> {
         Ok(arg as usize)
     }
 
+    /// Reads the start of one entry of an order-preserving map's array form — a
+    /// two-element array whose first element is the text-string key — and returns
+    /// the key, leaving the value as the next item. An entry of any other shape
+    /// is refused.
+    pub(crate) fn read_entry_key(&mut self) -> Result<String, CborError> {
+        let n = self.read_array_header()?;
+        if n != 2 {
+            return Err(CborError(format!(
+                "cbor: an order-preserving map entry holds {n} items, want 2"
+            )));
+        }
+        self.read_text()
+    }
+
     pub fn read_text(&mut self) -> Result<String, CborError> {
         let (major, _, arg) = self.read_head()?;
         if major != 3 {

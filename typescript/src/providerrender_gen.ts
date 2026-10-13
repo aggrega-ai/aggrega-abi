@@ -7,9 +7,10 @@
 // aggrega-cli checkout.
 
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import { readJSONMembers, readOrderedObject, readJSONArray, readPlainObject, writeOrderedObject } from "./orderedmap_gen.ts";
 import {
   writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
-  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec, duplicateKeyError,
 } from "./cbor_gen.ts";
 import { appendCBORDiagnostic, decodeCBORDiagnosticFrom } from "./diagnostic_gen.ts";
 
@@ -48,15 +49,15 @@ export interface IRNodeProjection {
   // Declared and deliberately withheld: the host always emits this as the empty string. The bound Recipe's identity already reaches the guest as the recipe name and version it stamps into provenance, so the resolved URI adds nothing a guest renders from. A guest that needs to attribute output to a Recipe reads those provenance fields instead.
   resolved_recipe: string;
   // The node's rendered values dictionary, the key set the guest renders from. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself.
-  values?: Record<string, unknown>;
+  values?: Map<string, unknown>;
   // The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
-  features?: Record<string, unknown>;
+  features?: Map<string, unknown>;
   // Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here — whether such a payload was produced from a value declared sensitive is carried instead by sensitive_values, and by an artifact entry's own sensitive_content. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
   sensitive_rendered_keys?: Record<string, string>;
   // True when the values this payload carries were produced by a template that reads a value an author declared sensitive, or a value traced to one: a Recipe's or a FeatureRecipe's valuesMapping, a single template whose output keys and values are its own invention, so no key of that output can be traced back to the datum it came from and the whole map is marked instead. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from a value's content or a key's name. A guest composing text a person reads, a refusal or a warning, keeps every value of the node's values out of that text when this is true, and keeps out the value under any key sensitive_rendered_keys names whether or not it is: the two compose, one naming the keys whose identity is recovered exactly and this one covering the map where none can be. Absent when no such template read such a value, which includes values that are the declared leaves themselves, marked per key in sensitive_rendered_keys instead, and absent on a payload carrying no values. Absence never states that no value is sensitive.
   sensitive_values?: boolean;
   // Declared and deliberately withheld: the host never populates this, so the map is absent from every render payload. An outbound edge is consumed before dispatch — the edge's published values are rehydrated into the node's own inject pipe, which the Recipe has already evaluated into the values and workload the guest receives — and a guest assembling a boundary receives the edge list on its own input instead. Were it populated it would key the node's outbound uses edges by socket alias, each carrying that socket's ordered target node ids in author order.
-  uses?: Record<string, string[]>;
+  uses?: Map<string, string[]>;
   // The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
   boundary_path?: string;
   // The deployment wave this node inherited from its containing boundary (default 0; negative permitted), carrying the value the IR node holds as `sync_wave`. What a guest does with it is the guest's own choice, and recording the value and ordering on it are independent rather than alternatives — a guest may do either, both or neither. Among the standard-library providers: `helm` and `helm-chart` emit it as an `argocd.argoproj.io/sync-wave` annotation on every rendered resource, and additionally as `helm.sh/hook-weight` on a resource the chart already marks as a Helm hook; `compose` both records it as a service label and orders the services of the file it renders into, through `depends_on` between them; `cloudformation` orders provisioning of the assembled stack, declaring every resource in a wave to depend on the resources of the wave before it; `terraform` orders the module blocks of the root configuration a boundary assembles into, declaring every module in a wave to depend on the modules of the wave before it, and also records it with the node's build provenance.
@@ -94,7 +95,7 @@ export interface RenderNodeOutput {
   // The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
   files: RenderedFile[];
   // The names the guest derived while rendering this node, keyed by the key space it derived them into, each space carrying its names in derivation order. A guest that derives the name its output addresses a resource by has put that name inside the file bytes the host writes verbatim, where the host cannot see it; declaring it here is how the guest asks the host to confirm no two derivations landed on one name. The host compares declared names for equality within one declared space and does nothing else — it does not parse a name, does not learn what a space or a name means, and never derives one itself. Two contributors to the same assembled output that declare the same name in the same space halt the build, and the halt names the space, the name, and both contributors. Both the space names and the names within them are the guest's own vocabulary: a guest wanting uniqueness across a narrower or wider scope than one assembled output expresses that scope in the space name it declares. Preserves declaration order so the payload is byte-identical across runs of identical input. Absent when the guest derives no names it wants checked, which leaves the check inert for that guest.
-  derived_keys?: Record<string, string[]>;
+  derived_keys?: Map<string, string[]>;
   // Facts the guest reports about what it emitted for this node, in the order the guest lists them. Each fact pairs a name with a value, and both are the guest's own vocabulary: which facts a provider reports, what each name means and what its entries hold are part of that provider's documented contract, not of this socket's. Every fact's value is a list, even when it holds one entry: the host refuses a fact whose value is anything else, naming the provider and the fact, and halts the build. That is the one thing the host learns about a value. It keys facts by name and hands each list to the templates that read it, joining the lists of one name reported by more than one render of the same node in the order those renders ran, and it never learns what a name or an entry means or derives a fact itself — so a provider can report something only its own format knowledge can see, such as a property of the documents it wrote, without the host learning that format. Reporting facts never changes what is written: the files the host writes are the files the guest returned, whether or not facts accompany them. The guest lists its facts in a fixed order so the payload is byte-identical across runs of identical input. Absent when the guest reports nothing, which is a complete answer rather than a missing one.
   render_facts?: RenderFact[];
   // How many rendered units each entry of the input's omits matched: one count per entry the guest was handed, in the same order, each the number of units that entry matched whether or not another entry also matched them. A count of zero is a complete answer — the entry matched nothing the guest rendered. The counts are all the socket carries back about what was left out: the units themselves are simply absent from what the guest returned. Absent when the guest was handed no entries.
@@ -234,7 +235,7 @@ export interface WorkloadProjection {
   // True when the template that produced workload reads a value an author declared sensitive, or a value traced to one. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the content of any field. A rendered workload's fields carry no link back to the data its template read, so this marks the whole document: a guest composing text a person reads, a refusal or a warning, keeps every value the workload carries out of that text when this is true, while the document's shape — its keys and where a value sits — stays readable. The attachment entries the node projection's sensitive_rendered_keys names are marked there whether or not this is set. Absent when the template reads no such value; absence never states that no field is sensitive.
   sensitive_workload?: boolean;
   // Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced. Whether an attachment handles declared-sensitive material is not repeated here: it travels on the node projection's matching feature entry, which a guest reads by the same instance name.
-  attachment_provides?: Record<string, Record<string, string>>;
+  attachment_provides?: Record<string, Map<string, string>>;
 }
 
 // The pre-evaluated artifact set the host hands a Provider guest to place into the node's output. The host has already resolved each entry's source (inline content or an imported file it read), evaluated it as a Go template against the render context using the guest's declared artifact-template delimiter pair, and computed the build-provenance label and annotation key sets. The guest owns the format decision, the provenance placement, the on-disk path, and the final bytes. Entries preserve author order so the placed output is byte-identical across runs of identical input.
@@ -291,11 +292,11 @@ export interface RenderedNode {
   output_directory?: string;
   rendered: RenderNodeOutput;
   // The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
-  annotations?: Record<string, string>;
+  annotations?: Map<string, string>;
   // The deployment wave this node inherited from its containing boundary (default 0; negative permitted), so a boundary assembler can order the contributors it merges relative to one another. A dispatch group can merge contributors from several boundaries, each carrying its own wave, so the wave travels with every node here rather than once for the whole payload. An assembler whose output shape expresses no ordering ignores it.
   sync_wave?: number;
   // The values the compiler resolved for this node, present only for a node rendered from a source — the render_node call that produced its files carried a source_listing. That is the one case where the files came from elsewhere and the values could not be written into them, so a position outside them has to supply them: a boundary assembler places a present dictionary as that contributor's inputs in the assembled artifact itself, rather than beside the contributor's own files, and where the assembled artifact is the only position the target evaluates, that is the difference between an input the target reads and one it never reaches. A node rendered from a workload_projection or an artifacts_projection resolved these values into the files it produced, so it carries none here and the field is absent: supplying them a second time would offer the assembled artifact inputs that node's own files never declare, which the target is free to reject. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself. An assembler whose output shape carries no per-contributor inputs ignores the field.
-  values?: Record<string, unknown>;
+  values?: Map<string, unknown>;
 }
 
 export interface RenderEdge {
@@ -312,7 +313,7 @@ export interface SubChart {
   // The version the umbrella pins for the sub-chart. A sub-chart vendored from a chart source instead draws its dependency name and version from that chart's Chart.yaml file so the dependency binds; this value applies to a generative sub-chart that carries no vendored chart.
   version?: string;
   // The per-instance values the umbrella scopes under the sub-chart's alias in the umbrella values.yaml file. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself.
-  values?: Record<string, unknown>;
+  values?: Map<string, unknown>;
   // The pristine bytes of the vendored chart's Chart.yaml, read from the local source at compile time, from which the umbrella draws the sub-chart dependency's name and version. Empty for a generative sub-chart that carries no vendored chart. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the guest decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
   chart_yaml?: string;
 }
@@ -372,7 +373,7 @@ export interface BoundaryEnvOverridesInput {
   // The boundary's internal uses edges — the directed edges whose endpoints both live inside the boundary's subtree, each enriched with the producer's provides and the consumer's inject mapping. The guest reads them to decide which consumers need an env override and what value to write. Opaque at this schema layer; the guest reads the enriched-edge shape through the template-context wire contract.
   internal_uses_edges?: unknown[];
   // The driving feature's resolved infra, an author-ordered key set the guest reads for the channel's tunables (for a compose bridge, the listen-port base and the upstream host provides-field selector). Preserves author order so the payload is byte-identical across runs of identical input.
-  infra?: Record<string, unknown>;
+  infra?: Map<string, unknown>;
 }
 
 // The payload a Provider guest returns from its boundary_env_overrides export: the per-consumer environment overrides the host applies to each named consumer's injected env after the per-node render pass. The values are opaque strings the host carries without interpretation; a consumer absent from the map is left untouched.
@@ -462,9 +463,9 @@ export interface LinkEdge {
   // The socket alias the uses edge is bound under.
   socket: string;
   // The consumed endpoint's provides output, an author-ordered key set exposing the target's declared outputs. Preserves author order so the payload is byte-identical across runs of identical input.
-  provides: Record<string, string>;
+  provides: Map<string, string>;
   // The consuming endpoint's inject mapping, keyed by delivery mechanism to an author-ordered key set, describing how the consuming end receives the consumed endpoint's output. Preserves author order so the payload is byte-identical across runs of identical input.
-  inject: Record<string, Record<string, string>>;
+  inject: Map<string, Map<string, string>>;
 }
 
 // One per-file structural patch a provider returns as artifact wiring: the output file and the ordered structural operations to apply to it. A later host pass carves the named file, applies the operations, and reassembles it byte-faithfully. The operation shape is the shared pipeline patch-operation vocabulary; it is opaque at this schema layer, so a guest carries each operation verbatim while the host realizes the typed operation its pipeline applies.
@@ -531,7 +532,18 @@ export function encodeRenderNodeInput(v: RenderNodeInput): string {
 }
 
 export function decodeRenderNodeInput(data: string): RenderNodeInput {
-  return JSON.parse(data) as RenderNodeInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "node": o["node"] = decodeIRNodeProjection(raw); break;
+      case "context": o["context"] = JSON.parse(raw); break;
+      case "source_listing": o["source_listing"] = JSON.parse(raw); break;
+      case "workload_projection": o["workload_projection"] = (raw === "null" ? null : decodeWorkloadProjection(raw)); break;
+      case "artifacts_projection": o["artifacts_projection"] = JSON.parse(raw); break;
+      case "omits": o["omits"] = JSON.parse(raw); break;
+    }
+  });
+  return o as RenderNodeInput;
 }
 
 export function encodeIRNodeProjection(v: IRNodeProjection): string {
@@ -539,11 +551,11 @@ export function encodeIRNodeProjection(v: IRNodeProjection): string {
   parts.push(`${jstr("id")}:${jstr(v.id)}`);
   parts.push(`${jstr("type")}:${jstr(v.type)}`);
   parts.push(`${jstr("resolved_recipe")}:${jstr(v.resolved_recipe)}`);
-  if (v.values !== undefined && Object.keys(v.values).length > 0) parts.push(`${jstr("values")}:${`{${Object.keys(v.values!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values![k0])}`).join(",")}}`}`);
-  if (v.features !== undefined && Object.keys(v.features).length > 0) parts.push(`${jstr("features")}:${`{${Object.keys(v.features!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.features![k0])}`).join(",")}}`}`);
+  if (v.values !== undefined && v.values.size > 0) parts.push(`${jstr("values")}:${writeOrderedObject(v.values!, (v0) => encodeOpaque(v0))}`);
+  if (v.features !== undefined && v.features.size > 0) parts.push(`${jstr("features")}:${writeOrderedObject(v.features!, (v0) => encodeOpaque(v0))}`);
   if (v.sensitive_rendered_keys !== undefined && Object.keys(v.sensitive_rendered_keys).length > 0) parts.push(`${jstr("sensitive_rendered_keys")}:${`{${Object.keys(v.sensitive_rendered_keys!).sort().map((k0) => `${jstr(k0)}:${jstr(v.sensitive_rendered_keys![k0])}`).join(",")}}`}`);
   if (v.sensitive_values !== undefined && v.sensitive_values !== false) parts.push(`${jstr("sensitive_values")}:${String(v.sensitive_values)}`);
-  if (v.uses !== undefined && Object.keys(v.uses).length > 0) parts.push(`${jstr("uses")}:${`{${Object.keys(v.uses!).sort().map((k0) => `${jstr(k0)}:${`[${v.uses![k0]!.map((e1) => jstr(e1)).join(",")}]`}`).join(",")}}`}`);
+  if (v.uses !== undefined && v.uses.size > 0) parts.push(`${jstr("uses")}:${writeOrderedObject(v.uses!, (v0) => `[${v0!.map((e1) => jstr(e1)).join(",")}]`)}`);
   if (v.boundary_path !== undefined && v.boundary_path !== "") parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
   if (v.recipe_name !== undefined && v.recipe_name !== "") parts.push(`${jstr("recipe_name")}:${jstr(v.recipe_name)}`);
@@ -556,7 +568,28 @@ export function encodeIRNodeProjection(v: IRNodeProjection): string {
 }
 
 export function decodeIRNodeProjection(data: string): IRNodeProjection {
-  return JSON.parse(data) as IRNodeProjection;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "id": o["id"] = JSON.parse(raw); break;
+      case "type": o["type"] = JSON.parse(raw); break;
+      case "resolved_recipe": o["resolved_recipe"] = JSON.parse(raw); break;
+      case "values": o["values"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "features": o["features"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "sensitive_rendered_keys": o["sensitive_rendered_keys"] = JSON.parse(raw); break;
+      case "sensitive_values": o["sensitive_values"] = JSON.parse(raw); break;
+      case "uses": o["uses"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "boundary_path": o["boundary_path"] = JSON.parse(raw); break;
+      case "sync_wave": o["sync_wave"] = JSON.parse(raw); break;
+      case "recipe_name": o["recipe_name"] = JSON.parse(raw); break;
+      case "recipe_version": o["recipe_version"] = JSON.parse(raw); break;
+      case "label_component_id": o["label_component_id"] = JSON.parse(raw); break;
+      case "derived_name_basis": o["derived_name_basis"] = JSON.parse(raw); break;
+      case "output_labels": o["output_labels"] = JSON.parse(raw); break;
+      case "provenance": o["provenance"] = JSON.parse(raw); break;
+    }
+  });
+  return o as IRNodeProjection;
 }
 
 export function encodeNodeProvenance(v: NodeProvenance): string {
@@ -576,7 +609,7 @@ export function decodeNodeProvenance(data: string): NodeProvenance {
 export function encodeRenderNodeOutput(v: RenderNodeOutput): string {
   const parts: string[] = [];
   parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => encodeRenderedFile(e0)).join(",")}]`}`);
-  if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) parts.push(`${jstr("derived_keys")}:${`{${Object.keys(v.derived_keys!).sort().map((k0) => `${jstr(k0)}:${`[${v.derived_keys![k0]!.map((e1) => jstr(e1)).join(",")}]`}`).join(",")}}`}`);
+  if (v.derived_keys !== undefined && v.derived_keys.size > 0) parts.push(`${jstr("derived_keys")}:${writeOrderedObject(v.derived_keys!, (v0) => `[${v0!.map((e1) => jstr(e1)).join(",")}]`)}`);
   if (v.render_facts !== undefined && v.render_facts.length > 0) parts.push(`${jstr("render_facts")}:${`[${v.render_facts!.map((e0) => encodeRenderFact(e0)).join(",")}]`}`);
   if (v.omitted !== undefined && v.omitted.length > 0) parts.push(`${jstr("omitted")}:${`[${v.omitted!.map((e0) => String(e0)).join(",")}]`}`);
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
@@ -587,7 +620,20 @@ export function encodeRenderNodeOutput(v: RenderNodeOutput): string {
 }
 
 export function decodeRenderNodeOutput(data: string): RenderNodeOutput {
-  return JSON.parse(data) as RenderNodeOutput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "files": o["files"] = JSON.parse(raw); break;
+      case "derived_keys": o["derived_keys"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "render_facts": o["render_facts"] = JSON.parse(raw); break;
+      case "omitted": o["omitted"] = JSON.parse(raw); break;
+      case "diagnostics": o["diagnostics"] = JSON.parse(raw); break;
+      case "error": o["error"] = JSON.parse(raw); break;
+      case "condition_code": o["condition_code"] = JSON.parse(raw); break;
+      case "condition_short_code": o["condition_short_code"] = JSON.parse(raw); break;
+    }
+  });
+  return o as RenderNodeOutput;
 }
 
 export function encodeValidateNodeOutput(v: ValidateNodeOutput): string {
@@ -744,12 +790,20 @@ export function encodeWorkloadProjection(v: WorkloadProjection): string {
   const parts: string[] = [];
   parts.push(`${jstr("workload")}:${encodeOpaque(v.workload)}`);
   if (v.sensitive_workload !== undefined && v.sensitive_workload !== false) parts.push(`${jstr("sensitive_workload")}:${String(v.sensitive_workload)}`);
-  if (v.attachment_provides !== undefined && Object.keys(v.attachment_provides).length > 0) parts.push(`${jstr("attachment_provides")}:${`{${Object.keys(v.attachment_provides!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.attachment_provides![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.attachment_provides![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
+  if (v.attachment_provides !== undefined && Object.keys(v.attachment_provides).length > 0) parts.push(`${jstr("attachment_provides")}:${`{${Object.keys(v.attachment_provides!).sort().map((k0) => `${jstr(k0)}:${writeOrderedObject(v.attachment_provides![k0]!, (v1) => jstr(v1))}`).join(",")}}`}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeWorkloadProjection(data: string): WorkloadProjection {
-  return JSON.parse(data) as WorkloadProjection;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "workload": o["workload"] = JSON.parse(raw); break;
+      case "sensitive_workload": o["sensitive_workload"] = JSON.parse(raw); break;
+      case "attachment_provides": o["attachment_provides"] = readPlainObject(raw, (r0) => readOrderedObject(r0, (r1) => JSON.parse(r1))); break;
+    }
+  });
+  return o as WorkloadProjection;
 }
 
 export function encodeArtifactsProjection(v: ArtifactsProjection): string {
@@ -791,7 +845,20 @@ export function encodeAssembleBoundaryInput(v: AssembleBoundaryInput): string {
 }
 
 export function decodeAssembleBoundaryInput(data: string): AssembleBoundaryInput {
-  return JSON.parse(data) as AssembleBoundaryInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "boundary": o["boundary"] = JSON.parse(raw); break;
+      case "rendered_nodes": o["rendered_nodes"] = readJSONArray(raw, (r0) => decodeRenderedNode(r0)); break;
+      case "context": o["context"] = JSON.parse(raw); break;
+      case "boundary_path": o["boundary_path"] = JSON.parse(raw); break;
+      case "edges": o["edges"] = JSON.parse(raw); break;
+      case "sub_charts": o["sub_charts"] = readJSONArray(raw, (r0) => decodeSubChart(r0)); break;
+      case "chart_name": o["chart_name"] = JSON.parse(raw); break;
+      case "aggregate_name": o["aggregate_name"] = JSON.parse(raw); break;
+    }
+  });
+  return o as AssembleBoundaryInput;
 }
 
 export function encodeRenderedNode(v: RenderedNode): string {
@@ -801,14 +868,27 @@ export function encodeRenderedNode(v: RenderedNode): string {
   if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") parts.push(`${jstr("derived_name_basis")}:${jstr(v.derived_name_basis)}`);
   if (v.output_directory !== undefined && v.output_directory !== "") parts.push(`${jstr("output_directory")}:${jstr(v.output_directory)}`);
   parts.push(`${jstr("rendered")}:${encodeRenderNodeOutput(v.rendered)}`);
-  if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) parts.push(`${jstr("annotations")}:${`{${Object.keys(v.annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.annotations![k0])}`).join(",")}}`}`);
+  if (v.annotations !== undefined && v.annotations.size > 0) parts.push(`${jstr("annotations")}:${writeOrderedObject(v.annotations!, (v0) => jstr(v0))}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
-  if (v.values !== undefined && Object.keys(v.values).length > 0) parts.push(`${jstr("values")}:${`{${Object.keys(v.values!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values![k0])}`).join(",")}}`}`);
+  if (v.values !== undefined && v.values.size > 0) parts.push(`${jstr("values")}:${writeOrderedObject(v.values!, (v0) => encodeOpaque(v0))}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeRenderedNode(data: string): RenderedNode {
-  return JSON.parse(data) as RenderedNode;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "id": o["id"] = JSON.parse(raw); break;
+      case "type": o["type"] = JSON.parse(raw); break;
+      case "derived_name_basis": o["derived_name_basis"] = JSON.parse(raw); break;
+      case "output_directory": o["output_directory"] = JSON.parse(raw); break;
+      case "rendered": o["rendered"] = decodeRenderNodeOutput(raw); break;
+      case "annotations": o["annotations"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "sync_wave": o["sync_wave"] = JSON.parse(raw); break;
+      case "values": o["values"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+    }
+  });
+  return o as RenderedNode;
 }
 
 export function encodeRenderEdge(v: RenderEdge): string {
@@ -826,13 +906,22 @@ export function encodeSubChart(v: SubChart): string {
   const parts: string[] = [];
   parts.push(`${jstr("instance_id")}:${jstr(v.instance_id)}`);
   if (v.version !== undefined && v.version !== "") parts.push(`${jstr("version")}:${jstr(v.version)}`);
-  if (v.values !== undefined && Object.keys(v.values).length > 0) parts.push(`${jstr("values")}:${`{${Object.keys(v.values!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.values![k0])}`).join(",")}}`}`);
+  if (v.values !== undefined && v.values.size > 0) parts.push(`${jstr("values")}:${writeOrderedObject(v.values!, (v0) => encodeOpaque(v0))}`);
   if (v.chart_yaml !== undefined && v.chart_yaml !== "") parts.push(`${jstr("chart_yaml")}:${jstr(v.chart_yaml)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeSubChart(data: string): SubChart {
-  return JSON.parse(data) as SubChart;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "instance_id": o["instance_id"] = JSON.parse(raw); break;
+      case "version": o["version"] = JSON.parse(raw); break;
+      case "values": o["values"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "chart_yaml": o["chart_yaml"] = JSON.parse(raw); break;
+    }
+  });
+  return o as SubChart;
 }
 
 export function encodeAssembleBoundaryOutput(v: AssembleBoundaryOutput): string {
@@ -898,12 +987,19 @@ export function decodeReassembleOutput(data: string): ReassembleOutput {
 export function encodeBoundaryEnvOverridesInput(v: BoundaryEnvOverridesInput): string {
   const parts: string[] = [];
   if (v.internal_uses_edges !== undefined && v.internal_uses_edges.length > 0) parts.push(`${jstr("internal_uses_edges")}:${`[${v.internal_uses_edges!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
-  if (v.infra !== undefined && Object.keys(v.infra).length > 0) parts.push(`${jstr("infra")}:${`{${Object.keys(v.infra!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.infra![k0])}`).join(",")}}`}`);
+  if (v.infra !== undefined && v.infra.size > 0) parts.push(`${jstr("infra")}:${writeOrderedObject(v.infra!, (v0) => encodeOpaque(v0))}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeBoundaryEnvOverridesInput(data: string): BoundaryEnvOverridesInput {
-  return JSON.parse(data) as BoundaryEnvOverridesInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "internal_uses_edges": o["internal_uses_edges"] = JSON.parse(raw); break;
+      case "infra": o["infra"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+    }
+  });
+  return o as BoundaryEnvOverridesInput;
 }
 
 export function encodeBoundaryEnvOverridesOutput(v: BoundaryEnvOverridesOutput): string {
@@ -999,13 +1095,25 @@ export function encodeLinkEdge(v: LinkEdge): string {
   if (v.target_annotations !== undefined && Object.keys(v.target_annotations).length > 0) parts.push(`${jstr("target_annotations")}:${`{${Object.keys(v.target_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.target_annotations![k0])}`).join(",")}}`}`);
   if (v.source_annotations !== undefined && Object.keys(v.source_annotations).length > 0) parts.push(`${jstr("source_annotations")}:${`{${Object.keys(v.source_annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.source_annotations![k0])}`).join(",")}}`}`);
   parts.push(`${jstr("socket")}:${jstr(v.socket)}`);
-  parts.push(`${jstr("provides")}:${`{${Object.keys(v.provides!).sort().map((k0) => `${jstr(k0)}:${jstr(v.provides![k0])}`).join(",")}}`}`);
-  parts.push(`${jstr("inject")}:${`{${Object.keys(v.inject!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.inject![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.inject![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
+  parts.push(`${jstr("provides")}:${writeOrderedObject(v.provides!, (v0) => jstr(v0))}`);
+  parts.push(`${jstr("inject")}:${writeOrderedObject(v.inject!, (v0) => writeOrderedObject(v0!, (v1) => jstr(v1)))}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeLinkEdge(data: string): LinkEdge {
-  return JSON.parse(data) as LinkEdge;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "source": o["source"] = JSON.parse(raw); break;
+      case "target": o["target"] = JSON.parse(raw); break;
+      case "target_annotations": o["target_annotations"] = JSON.parse(raw); break;
+      case "source_annotations": o["source_annotations"] = JSON.parse(raw); break;
+      case "socket": o["socket"] = JSON.parse(raw); break;
+      case "provides": o["provides"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "inject": o["inject"] = readOrderedObject(raw, (r0) => readOrderedObject(r0, (r1) => JSON.parse(r1))); break;
+    }
+  });
+  return o as LinkEdge;
 }
 
 export function encodeLinkPatch(v: LinkPatch): string {
@@ -1027,7 +1135,14 @@ export function encodeLinkPublishInput(v: LinkPublishInput): string {
 }
 
 export function decodeLinkPublishInput(data: string): LinkPublishInput {
-  return JSON.parse(data) as LinkPublishInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "edge": o["edge"] = decodeLinkEdge(raw); break;
+      case "producer_files": o["producer_files"] = JSON.parse(raw); break;
+    }
+  });
+  return o as LinkPublishInput;
 }
 
 export function encodeLinkPublishOutput(v: LinkPublishOutput): string {
@@ -1053,7 +1168,15 @@ export function encodeLinkResolveInput(v: LinkResolveInput): string {
 }
 
 export function decodeLinkResolveInput(data: string): LinkResolveInput {
-  return JSON.parse(data) as LinkResolveInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "edge": o["edge"] = decodeLinkEdge(raw); break;
+      case "handle": o["handle"] = JSON.parse(raw); break;
+      case "consumer_files": o["consumer_files"] = JSON.parse(raw); break;
+    }
+  });
+  return o as LinkResolveInput;
 }
 
 export function encodeLinkResolveOutput(v: LinkResolveOutput): string {
@@ -1141,9 +1264,9 @@ export function encodeCBORIRNodeProjection(v: IRNodeProjection): Uint8Array {
 
 export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): void {
   let n = 4;
-  if (v.uses !== undefined && Object.keys(v.uses).length > 0) n++;
-  if (v.values !== undefined && Object.keys(v.values).length > 0) n++;
-  if (v.features !== undefined && Object.keys(v.features).length > 0) n++;
+  if (v.uses !== undefined && v.uses.size > 0) n++;
+  if (v.values !== undefined && v.values.size > 0) n++;
+  if (v.features !== undefined && v.features.size > 0) n++;
   if (v.sync_wave !== undefined && v.sync_wave !== 0) n++;
   if (v.recipe_name !== undefined && v.recipe_name !== "") n++;
   if (v.boundary_path !== undefined && v.boundary_path !== "") n++;
@@ -1158,16 +1281,16 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
   writeText(out, v.id);
   writeText(out, "type");
   writeText(out, v.type);
-  if (v.uses !== undefined && Object.keys(v.uses).length > 0) {
+  if (v.uses !== undefined && v.uses.size > 0) {
     writeText(out, "uses");
     {
       const m0 = v.uses;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
         {
-          const a1 = m0[kk0];
+          const a1 = vv0;
           writeHead(out, 4, a1.length);
           for (const ee1 of a1) {
             writeText(out, ee1);
@@ -1176,27 +1299,27 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
       }
     }
   }
-  if (v.values !== undefined && Object.keys(v.values).length > 0) {
+  if (v.values !== undefined && v.values.size > 0) {
     writeText(out, "values");
     {
       const m0 = v.values;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
       }
     }
   }
-  if (v.features !== undefined && Object.keys(v.features).length > 0) {
+  if (v.features !== undefined && v.features.size > 0) {
     writeText(out, "features");
     {
       const m0 = v.features;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
       }
     }
   }
@@ -1272,11 +1395,11 @@ export function decodeCBORIRNodeProjectionFrom(dec: CborDec): IRNodeProjection {
       case "id": o["id"] = dec.readText(); break;
       case "type": o["type"] = dec.readText(); break;
       case "resolved_recipe": o["resolved_recipe"] = dec.readText(); break;
-      case "values": o["values"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
-      case "features": o["features"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "values": o["values"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
+      case "features": o["features"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       case "sensitive_rendered_keys": o["sensitive_rendered_keys"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "sensitive_values": o["sensitive_values"] = dec.readBool(); break;
-      case "uses": o["uses"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); } return m; })(); break;
+      case "uses": o["uses"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })()); } return m; })(); break;
       case "boundary_path": o["boundary_path"] = dec.readText(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;
       case "recipe_name": o["recipe_name"] = dec.readText(); break;
@@ -1360,7 +1483,7 @@ export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): 
   if (v.error !== undefined && v.error !== "") n++;
   if (v.omitted !== undefined && v.omitted.length > 0) n++;
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
-  if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) n++;
+  if (v.derived_keys !== undefined && v.derived_keys.size > 0) n++;
   if (v.render_facts !== undefined && v.render_facts.length > 0) n++;
   if (v.condition_code !== undefined && v.condition_code !== "") n++;
   if (v.condition_short_code !== undefined && v.condition_short_code !== "") n++;
@@ -1397,16 +1520,16 @@ export function appendCBORRenderNodeOutput(out: number[], v: RenderNodeOutput): 
       }
     }
   }
-  if (v.derived_keys !== undefined && Object.keys(v.derived_keys).length > 0) {
+  if (v.derived_keys !== undefined && v.derived_keys.size > 0) {
     writeText(out, "derived_keys");
     {
       const m0 = v.derived_keys;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
         {
-          const a1 = m0[kk0];
+          const a1 = vv0;
           writeHead(out, 4, a1.length);
           for (const ee1 of a1) {
             writeText(out, ee1);
@@ -1447,7 +1570,7 @@ export function decodeCBORRenderNodeOutputFrom(dec: CborDec): RenderNodeOutput {
     const k = dec.readText();
     switch (k) {
       case "files": o["files"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORRenderedFileFrom(dec)); } return a; })(); break;
-      case "derived_keys": o["derived_keys"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); } return m; })(); break;
+      case "derived_keys": o["derived_keys"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })()); } return m; })(); break;
       case "render_facts": o["render_facts"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORRenderFactFrom(dec)); } return a; })(); break;
       case "omitted": o["omitted"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readInt()); } return a; })(); break;
       case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
@@ -2019,11 +2142,11 @@ export function appendCBORWorkloadProjection(out: number[], v: WorkloadProjectio
         writeText(out, kk0);
         {
           const m1 = m0[kk0];
-          const ks1 = Object.keys(m1); sortKeys(ks1);
-          writeHead(out, 5, ks1.length);
-          for (const kk1 of ks1) {
+          writeHead(out, 4, m1.size);
+          for (const [kk1, vv1] of m1) {
+            writeHead(out, 4, 2);
             writeText(out, kk1);
-            writeText(out, m1[kk1]);
+            writeText(out, vv1);
           }
         }
       }
@@ -2044,7 +2167,7 @@ export function decodeCBORWorkloadProjectionFrom(dec: CborDec): WorkloadProjecti
     switch (k) {
       case "workload": o["workload"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "sensitive_workload": o["sensitive_workload"] = dec.readBool(); break;
-      case "attachment_provides": o["attachment_provides"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); } return m; })(); break;
+      case "attachment_provides": o["attachment_provides"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); } return m; })(); break;
       default: dec.skip();
     }
   }
@@ -2252,9 +2375,9 @@ export function encodeCBORRenderedNode(v: RenderedNode): Uint8Array {
 
 export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
   let n = 3;
-  if (v.values !== undefined && Object.keys(v.values).length > 0) n++;
+  if (v.values !== undefined && v.values.size > 0) n++;
   if (v.sync_wave !== undefined && v.sync_wave !== 0) n++;
-  if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) n++;
+  if (v.annotations !== undefined && v.annotations.size > 0) n++;
   if (v.output_directory !== undefined && v.output_directory !== "") n++;
   if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") n++;
   writeHead(out, 5, n);
@@ -2262,15 +2385,15 @@ export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
   writeText(out, v.id);
   writeText(out, "type");
   writeText(out, v.type);
-  if (v.values !== undefined && Object.keys(v.values).length > 0) {
+  if (v.values !== undefined && v.values.size > 0) {
     writeText(out, "values");
     {
       const m0 = v.values;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
       }
     }
   }
@@ -2280,15 +2403,15 @@ export function appendCBORRenderedNode(out: number[], v: RenderedNode): void {
     writeText(out, "sync_wave");
     writeInt(out, v.sync_wave);
   }
-  if (v.annotations !== undefined && Object.keys(v.annotations).length > 0) {
+  if (v.annotations !== undefined && v.annotations.size > 0) {
     writeText(out, "annotations");
     {
       const m0 = v.annotations;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeText(out, m0[kk0]);
+        writeText(out, vv0);
       }
     }
   }
@@ -2318,9 +2441,9 @@ export function decodeCBORRenderedNodeFrom(dec: CborDec): RenderedNode {
       case "derived_name_basis": o["derived_name_basis"] = dec.readText(); break;
       case "output_directory": o["output_directory"] = dec.readText(); break;
       case "rendered": o["rendered"] = decodeCBORRenderNodeOutputFrom(dec); break;
-      case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "annotations": o["annotations"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;
-      case "values": o["values"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "values": o["values"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       default: dec.skip();
     }
   }
@@ -2369,19 +2492,19 @@ export function encodeCBORSubChart(v: SubChart): Uint8Array {
 
 export function appendCBORSubChart(out: number[], v: SubChart): void {
   let n = 1;
-  if (v.values !== undefined && Object.keys(v.values).length > 0) n++;
+  if (v.values !== undefined && v.values.size > 0) n++;
   if (v.version !== undefined && v.version !== "") n++;
   if (v.chart_yaml !== undefined && v.chart_yaml !== "") n++;
   writeHead(out, 5, n);
-  if (v.values !== undefined && Object.keys(v.values).length > 0) {
+  if (v.values !== undefined && v.values.size > 0) {
     writeText(out, "values");
     {
       const m0 = v.values;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
       }
     }
   }
@@ -2410,7 +2533,7 @@ export function decodeCBORSubChartFrom(dec: CborDec): SubChart {
     switch (k) {
       case "instance_id": o["instance_id"] = dec.readText(); break;
       case "version": o["version"] = dec.readText(); break;
-      case "values": o["values"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "values": o["values"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       case "chart_yaml": o["chart_yaml"] = b64encode(dec.readBytes()); break;
       default: dec.skip();
     }
@@ -2665,18 +2788,18 @@ export function encodeCBORBoundaryEnvOverridesInput(v: BoundaryEnvOverridesInput
 
 export function appendCBORBoundaryEnvOverridesInput(out: number[], v: BoundaryEnvOverridesInput): void {
   let n = 0;
-  if (v.infra !== undefined && Object.keys(v.infra).length > 0) n++;
+  if (v.infra !== undefined && v.infra.size > 0) n++;
   if (v.internal_uses_edges !== undefined && v.internal_uses_edges.length > 0) n++;
   writeHead(out, 5, n);
-  if (v.infra !== undefined && Object.keys(v.infra).length > 0) {
+  if (v.infra !== undefined && v.infra.size > 0) {
     writeText(out, "infra");
     {
       const m0 = v.infra;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
       }
     }
   }
@@ -2704,7 +2827,7 @@ export function decodeCBORBoundaryEnvOverridesInputFrom(dec: CborDec): BoundaryE
     const k = dec.readText();
     switch (k) {
       case "internal_uses_edges": o["internal_uses_edges"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(JSON.parse(utf8Decode(dec.readBytes()))); } return a; })(); break;
-      case "infra": o["infra"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "infra": o["infra"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       default: dec.skip();
     }
   }
@@ -3060,17 +3183,17 @@ export function appendCBORLinkEdge(out: number[], v: LinkEdge): void {
   writeText(out, "inject");
   {
     const m0 = v.inject;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
       {
-        const m1 = m0[kk0];
-        const ks1 = Object.keys(m1); sortKeys(ks1);
-        writeHead(out, 5, ks1.length);
-        for (const kk1 of ks1) {
+        const m1 = vv0;
+        writeHead(out, 4, m1.size);
+        for (const [kk1, vv1] of m1) {
+          writeHead(out, 4, 2);
           writeText(out, kk1);
-          writeText(out, m1[kk1]);
+          writeText(out, vv1);
         }
       }
     }
@@ -3084,11 +3207,11 @@ export function appendCBORLinkEdge(out: number[], v: LinkEdge): void {
   writeText(out, "provides");
   {
     const m0 = v.provides;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      writeText(out, m0[kk0]);
+      writeText(out, vv0);
     }
   }
   if (v.source_annotations !== undefined && Object.keys(v.source_annotations).length > 0) {
@@ -3133,8 +3256,8 @@ export function decodeCBORLinkEdgeFrom(dec: CborDec): LinkEdge {
       case "target_annotations": o["target_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "source_annotations": o["source_annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "socket": o["socket"] = dec.readText(); break;
-      case "provides": o["provides"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
-      case "inject": o["inject"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); } return m; })(); break;
+      case "provides": o["provides"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
+      case "inject": o["inject"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })()); } return m; })(); break;
       default: dec.skip();
     }
   }

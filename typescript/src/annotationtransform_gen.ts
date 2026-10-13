@@ -6,9 +6,10 @@
 // Regenerate with `go generate ./internal/tools/typegen` from the
 // aggrega-cli checkout.
 
+import { readJSONMembers, readOrderedObject, readJSONArray, writeOrderedObject } from "./orderedmap_gen.ts";
 import {
   writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
-  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec, duplicateKeyError,
 } from "./cbor_gen.ts";
 
 function jstr(s: string): string {
@@ -49,7 +50,7 @@ export interface AnnotationTarget {
   // The component's name within its boundary.
   component_name: string;
   // The component's current scalar annotation set, keyed by annotation key.
-  annotations: Record<string, string>;
+  annotations: Map<string, string>;
 }
 
 // One annotation to inject onto a target: the target coordinate plus the annotation key and its string value.
@@ -82,7 +83,16 @@ export function encodeAnnotationTransformInput(v: AnnotationTransformInput): str
 }
 
 export function decodeAnnotationTransformInput(data: string): AnnotationTransformInput {
-  return JSON.parse(data) as AnnotationTransformInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "targets": o["targets"] = readJSONArray(raw, (r0) => decodeAnnotationTarget(r0)); break;
+      case "binding_keys": o["binding_keys"] = JSON.parse(raw); break;
+      case "sources": o["sources"] = JSON.parse(raw); break;
+      case "settings": o["settings"] = JSON.parse(raw); break;
+    }
+  });
+  return o as AnnotationTransformInput;
 }
 
 export function encodeAnnotationTransformOutput(v: AnnotationTransformOutput): string {
@@ -100,12 +110,20 @@ export function encodeAnnotationTarget(v: AnnotationTarget): string {
   const parts: string[] = [];
   parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
   parts.push(`${jstr("component_name")}:${jstr(v.component_name)}`);
-  parts.push(`${jstr("annotations")}:${`{${Object.keys(v.annotations!).sort().map((k0) => `${jstr(k0)}:${jstr(v.annotations![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("annotations")}:${writeOrderedObject(v.annotations!, (v0) => jstr(v0))}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeAnnotationTarget(data: string): AnnotationTarget {
-  return JSON.parse(data) as AnnotationTarget;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "boundary_path": o["boundary_path"] = JSON.parse(raw); break;
+      case "component_name": o["component_name"] = JSON.parse(raw); break;
+      case "annotations": o["annotations"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+    }
+  });
+  return o as AnnotationTarget;
 }
 
 export function encodeAnnotationInjection(v: AnnotationInjection): string {
@@ -251,11 +269,11 @@ export function appendCBORAnnotationTarget(out: number[], v: AnnotationTarget): 
   writeText(out, "annotations");
   {
     const m0 = v.annotations;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      writeText(out, m0[kk0]);
+      writeText(out, vv0);
     }
   }
   writeText(out, "boundary_path");
@@ -277,7 +295,7 @@ export function decodeCBORAnnotationTargetFrom(dec: CborDec): AnnotationTarget {
     switch (k) {
       case "boundary_path": o["boundary_path"] = dec.readText(); break;
       case "component_name": o["component_name"] = dec.readText(); break;
-      case "annotations": o["annotations"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "annotations": o["annotations"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
       default: dec.skip();
     }
   }

@@ -7,9 +7,10 @@
 // aggrega-cli checkout.
 
 import { type Diagnostic, encodeDiagnostic } from "./diagnostic_gen.ts";
+import { readJSONMembers, readOrderedObject, writeOrderedObject } from "./orderedmap_gen.ts";
 import {
   writeHead, writeInt, writeText, writeBytes, writeBool, writeFloat,
-  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec,
+  sortKeys, b64decode, b64encode, utf8Encode, utf8Decode, CborDec, duplicateKeyError,
 } from "./cbor_gen.ts";
 import { appendCBORDiagnostic, decodeCBORDiagnosticFrom } from "./diagnostic_gen.ts";
 
@@ -28,7 +29,7 @@ function encodeOpaque(v: unknown): string {
 export interface FRPStepInput {
   documents: DocumentSet;
   // The step's rendered `with` block, an author-ordered key set the guest reads as its step-local input. Preserves author order so the payload is byte-identical across runs of identical input.
-  step_input?: Record<string, unknown>;
+  step_input?: Map<string, unknown>;
   // The render-time context the host hands the step. The step carries it through; the schema does not interpret its internal shape (an opaque passthrough), so the FRP socket schema does not bind to the cross-boundary render-context shape. The render context's own contract is the render-context wire shape; a guest that reads it consults that contract.
   context: unknown;
   // This step's zero-based position in the pipeline.
@@ -46,7 +47,7 @@ export interface FRPStepOutput {
   // Diagnostics the guest raised. Each element is the shared Wasm-plugin diagnostic shape.
   diagnostics?: Diagnostic[];
   // The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
-  outputs?: Record<string, unknown>;
+  outputs?: Map<string, unknown>;
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
   error?: string;
 }
@@ -54,9 +55,9 @@ export interface FRPStepOutput {
 // The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and is blind to its content; the guest selects the documents it targets by content and addresses its patches by key.
 export interface DocumentSet {
   // The node's own rendered output, keyed by unit token. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
-  own: Record<string, Unit>;
+  own: Map<string, Unit>;
   // The rendered output of the component a component-scope FeatureRecipe is attached to — the cross-entity surface. Absent for Recipe steps and boundary-scope FeatureRecipe steps, which have no host component. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
-  host?: Record<string, Unit>;
+  host?: Map<string, Unit>;
 }
 
 // One addressable piece a provider's emitted output carves into — the hybrid view of one piece of output. A structured unit carries a tree (an RFC-6902-addressable view) and is a PATCH target; an opaque unit carries only its media type and bytes (no tree) and is a SELECT and EMIT target but not a PATCH target.
@@ -119,7 +120,7 @@ export interface PrecedingStep {
 export function encodeFRPStepInput(v: FRPStepInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("documents")}:${encodeDocumentSet(v.documents)}`);
-  if (v.step_input !== undefined && Object.keys(v.step_input).length > 0) parts.push(`${jstr("step_input")}:${`{${Object.keys(v.step_input!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.step_input![k0])}`).join(",")}}`}`);
+  if (v.step_input !== undefined && v.step_input.size > 0) parts.push(`${jstr("step_input")}:${writeOrderedObject(v.step_input!, (v0) => encodeOpaque(v0))}`);
   parts.push(`${jstr("context")}:${encodeOpaque(v.context)}`);
   parts.push(`${jstr("step_index")}:${String(v.step_index)}`);
   if (v.preceding_steps !== undefined && v.preceding_steps.length > 0) parts.push(`${jstr("preceding_steps")}:${`[${v.preceding_steps!.map((e0) => encodePrecedingStep(e0)).join(",")}]`}`);
@@ -127,7 +128,17 @@ export function encodeFRPStepInput(v: FRPStepInput): string {
 }
 
 export function decodeFRPStepInput(data: string): FRPStepInput {
-  return JSON.parse(data) as FRPStepInput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "documents": o["documents"] = decodeDocumentSet(raw); break;
+      case "step_input": o["step_input"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "context": o["context"] = JSON.parse(raw); break;
+      case "step_index": o["step_index"] = JSON.parse(raw); break;
+      case "preceding_steps": o["preceding_steps"] = JSON.parse(raw); break;
+    }
+  });
+  return o as FRPStepInput;
 }
 
 export function encodeFRPStepOutput(v: FRPStepOutput): string {
@@ -135,24 +146,41 @@ export function encodeFRPStepOutput(v: FRPStepOutput): string {
   if (v.patches !== undefined && v.patches.length > 0) parts.push(`${jstr("patches")}:${`[${v.patches!.map((e0) => encodeJSONPatchOp(e0)).join(",")}]`}`);
   if (v.side_effects !== undefined && v.side_effects.length > 0) parts.push(`${jstr("side_effects")}:${`[${v.side_effects!.map((e0) => encodeSideEffect(e0)).join(",")}]`}`);
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) parts.push(`${jstr("diagnostics")}:${`[${v.diagnostics!.map((e0) => encodeDiagnostic(e0)).join(",")}]`}`);
-  if (v.outputs !== undefined && Object.keys(v.outputs).length > 0) parts.push(`${jstr("outputs")}:${`{${Object.keys(v.outputs!).sort().map((k0) => `${jstr(k0)}:${encodeOpaque(v.outputs![k0])}`).join(",")}}`}`);
+  if (v.outputs !== undefined && v.outputs.size > 0) parts.push(`${jstr("outputs")}:${writeOrderedObject(v.outputs!, (v0) => encodeOpaque(v0))}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeFRPStepOutput(data: string): FRPStepOutput {
-  return JSON.parse(data) as FRPStepOutput;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "patches": o["patches"] = JSON.parse(raw); break;
+      case "side_effects": o["side_effects"] = JSON.parse(raw); break;
+      case "diagnostics": o["diagnostics"] = JSON.parse(raw); break;
+      case "outputs": o["outputs"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "error": o["error"] = JSON.parse(raw); break;
+    }
+  });
+  return o as FRPStepOutput;
 }
 
 export function encodeDocumentSet(v: DocumentSet): string {
   const parts: string[] = [];
-  parts.push(`${jstr("own")}:${`{${Object.keys(v.own!).sort().map((k0) => `${jstr(k0)}:${encodeUnit(v.own![k0])}`).join(",")}}`}`);
-  if (v.host !== undefined && Object.keys(v.host).length > 0) parts.push(`${jstr("host")}:${`{${Object.keys(v.host!).sort().map((k0) => `${jstr(k0)}:${encodeUnit(v.host![k0])}`).join(",")}}`}`);
+  parts.push(`${jstr("own")}:${writeOrderedObject(v.own!, (v0) => encodeUnit(v0))}`);
+  if (v.host !== undefined && v.host.size > 0) parts.push(`${jstr("host")}:${writeOrderedObject(v.host!, (v0) => encodeUnit(v0))}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeDocumentSet(data: string): DocumentSet {
-  return JSON.parse(data) as DocumentSet;
+  const o: any = {};
+  readJSONMembers(data, (k, raw) => {
+    switch (k) {
+      case "own": o["own"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "host": o["host"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+    }
+  });
+  return o as DocumentSet;
 }
 
 export function encodeUnit(v: Unit): string {
@@ -227,7 +255,7 @@ export function encodeCBORFRPStepInput(v: FRPStepInput): Uint8Array {
 
 export function appendCBORFRPStepInput(out: number[], v: FRPStepInput): void {
   let n = 3;
-  if (v.step_input !== undefined && Object.keys(v.step_input).length > 0) n++;
+  if (v.step_input !== undefined && v.step_input.size > 0) n++;
   if (v.preceding_steps !== undefined && v.preceding_steps.length > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "context");
@@ -236,15 +264,15 @@ export function appendCBORFRPStepInput(out: number[], v: FRPStepInput): void {
   appendCBORDocumentSet(out, v.documents);
   writeText(out, "step_index");
   writeInt(out, v.step_index);
-  if (v.step_input !== undefined && Object.keys(v.step_input).length > 0) {
+  if (v.step_input !== undefined && v.step_input.size > 0) {
     writeText(out, "step_input");
     {
       const m0 = v.step_input;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
       }
     }
   }
@@ -272,7 +300,7 @@ export function decodeCBORFRPStepInputFrom(dec: CborDec): FRPStepInput {
     const k = dec.readText();
     switch (k) {
       case "documents": o["documents"] = decodeCBORDocumentSetFrom(dec); break;
-      case "step_input": o["step_input"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "step_input": o["step_input"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       case "context": o["context"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "step_index": o["step_index"] = dec.readInt(); break;
       case "preceding_steps": o["preceding_steps"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPrecedingStepFrom(dec)); } return a; })(); break;
@@ -291,7 +319,7 @@ export function encodeCBORFRPStepOutput(v: FRPStepOutput): Uint8Array {
 export function appendCBORFRPStepOutput(out: number[], v: FRPStepOutput): void {
   let n = 0;
   if (v.error !== undefined && v.error !== "") n++;
-  if (v.outputs !== undefined && Object.keys(v.outputs).length > 0) n++;
+  if (v.outputs !== undefined && v.outputs.size > 0) n++;
   if (v.patches !== undefined && v.patches.length > 0) n++;
   if (v.diagnostics !== undefined && v.diagnostics.length > 0) n++;
   if (v.side_effects !== undefined && v.side_effects.length > 0) n++;
@@ -300,15 +328,15 @@ export function appendCBORFRPStepOutput(out: number[], v: FRPStepOutput): void {
     writeText(out, "error");
     writeText(out, v.error);
   }
-  if (v.outputs !== undefined && Object.keys(v.outputs).length > 0) {
+  if (v.outputs !== undefined && v.outputs.size > 0) {
     writeText(out, "outputs");
     {
       const m0 = v.outputs;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(m0[kk0])));
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
       }
     }
   }
@@ -358,7 +386,7 @@ export function decodeCBORFRPStepOutputFrom(dec: CborDec): FRPStepOutput {
       case "patches": o["patches"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORJSONPatchOpFrom(dec)); } return a; })(); break;
       case "side_effects": o["side_effects"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORSideEffectFrom(dec)); } return a; })(); break;
       case "diagnostics": o["diagnostics"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDiagnosticFrom(dec)); } return a; })(); break;
-      case "outputs": o["outputs"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = JSON.parse(utf8Decode(dec.readBytes())); } return m; })(); break;
+      case "outputs": o["outputs"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       case "error": o["error"] = dec.readText(); break;
       default: dec.skip();
     }
@@ -374,27 +402,27 @@ export function encodeCBORDocumentSet(v: DocumentSet): Uint8Array {
 
 export function appendCBORDocumentSet(out: number[], v: DocumentSet): void {
   let n = 1;
-  if (v.host !== undefined && Object.keys(v.host).length > 0) n++;
+  if (v.host !== undefined && v.host.size > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "own");
   {
     const m0 = v.own;
-    const ks0 = Object.keys(m0); sortKeys(ks0);
-    writeHead(out, 5, ks0.length);
-    for (const kk0 of ks0) {
+    writeHead(out, 4, m0.size);
+    for (const [kk0, vv0] of m0) {
+      writeHead(out, 4, 2);
       writeText(out, kk0);
-      appendCBORUnit(out, m0[kk0]);
+      appendCBORUnit(out, vv0);
     }
   }
-  if (v.host !== undefined && Object.keys(v.host).length > 0) {
+  if (v.host !== undefined && v.host.size > 0) {
     writeText(out, "host");
     {
       const m0 = v.host;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
         writeText(out, kk0);
-        appendCBORUnit(out, m0[kk0]);
+        appendCBORUnit(out, vv0);
       }
     }
   }
@@ -411,8 +439,8 @@ export function decodeCBORDocumentSetFrom(dec: CborDec): DocumentSet {
   for (let i = 0; i < n; i++) {
     const k = dec.readText();
     switch (k) {
-      case "own": o["own"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORUnitFrom(dec); } return m; })(); break;
-      case "host": o["host"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = decodeCBORUnitFrom(dec); } return m; })(); break;
+      case "own": o["own"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, decodeCBORUnitFrom(dec)); } return m; })(); break;
+      case "host": o["host"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, decodeCBORUnitFrom(dec)); } return m; })(); break;
       default: dec.skip();
     }
   }

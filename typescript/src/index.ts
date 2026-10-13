@@ -7,9 +7,13 @@
  * Portable codec for the Aggrega Wasm plugin ABI. The socket codec — the
  * typed payloads that cross the host/guest boundary plus their JSON
  * encode/decode — is generated into this package from the canonical
- * schemas. The encoders write object fields in schema order, sort map
- * keys, and carry opaque values verbatim, so the wire is byte-identical
- * to the Go and Rust codecs generated from the same schema. The codec is
+ * schemas. The encoders write object fields in schema order, sort a plain
+ * map's keys, write a map the schema marks order-preserving — a Map — in
+ * the order it holds, and carry opaque values verbatim, so the wire is
+ * byte-identical to the Go and Rust codecs generated from the same schema.
+ * A type holding such a Map decodes its JSON member by member, so a key
+ * such as "8080", which JSON.parse would move to the front, keeps its
+ * place. The codec is
  * consumable directly by plugin authors working against the raw Extism
  * runtime, and is re-exported by the TypeScript Plugin Development Kit.
  *

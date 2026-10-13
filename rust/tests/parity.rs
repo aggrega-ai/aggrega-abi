@@ -104,12 +104,14 @@ fn json_parity<T: Serialize + DeserializeOwned>(name: &str) -> T {
 /// encoder and decoder sharing a compensating defect would agree with each other
 /// and stay green.
 ///
-/// It carries no additional power over map-key ordering in THIS crate, and the
-/// reason is the container type rather than the assertion: the generated map
-/// fields are `BTreeMap` (see `AnnotationTarget::annotations` and
-/// `IRNode::labels`), so serde walks them in key order and there is no sort call
-/// in the JSON path that could regress. The Go and TypeScript codecs, whose map
-/// types carry no such guarantee, need the ordering pinned explicitly.
+/// Its power over map-key ordering in THIS crate depends on the container type.
+/// A plain map field is a `BTreeMap` (see `LinkEdge::target_annotations`), which
+/// serde walks in key order, so there is no sort call in the JSON path that could
+/// regress. A map the schema marks order-preserving is the crate's `OrderedMap`
+/// (see `AnnotationTarget::annotations` and `IRNode::labels`), which serde walks
+/// in the order it holds, so a value decoded from the committed CBOR bytes carries
+/// the binary wire's order into the JSON encoder — and this is the assertion that
+/// proves the order survives the binary form.
 fn cross_parity<T: Serialize>(name: &str, v: &T) {
     let want = golden_json(name);
     let got = serde_json::to_string(v).expect("serialize from committed CBOR");
@@ -183,9 +185,10 @@ cbor_case!(linter_output, aggrega_abi::LinterOutput, "LinterOutput");
 // binding for this type is declared by the vector above. This one carries the
 // input of a rule that reads a whole Release, with the Release and the Component
 // map POPULATED — both are elided when empty, so the vector above carries the same
-// bytes whether the codec handles them or drops them. The two instance names sort
-// differently in the two wire forms ("agent" first in the JSON, "db" first in the
-// canonical CBOR), and each opaque document keeps its keys out of key order.
+// bytes whether the codec handles them or drops them. The Component map is
+// order-preserving and holds "agent" before "db", which is not the length-first
+// order a sorted binary map would take, and each opaque document keeps its keys out
+// of key order.
 cbor_vector!(linter_input_release, aggrega_abi::LinterInput, "LinterInputRelease");
 cbor_case!(ir_graph, aggrega_abi::IRGraph, "IRGraph");
 cbor_case!(policy_input, aggrega_abi::PolicyInput, "PolicyInput");
@@ -319,36 +322,37 @@ cbor_vector!(source_file_response, aggrega_abi::SourceFileResponse, "SourceFileR
 // settings object with out-of-order keys (pinning the verbatim carry); the
 // output omits the failure member.
 //
-// The annotation map's key sort needs no separate assertion in this crate. Its
-// CBOR half is already pinned by the vector: CBOR orders map keys by their
-// encoded bytes, whose length head leads, so a short key precedes a long one —
-// an order that differs from the lexicographic order the golden's JSON carries,
-// so the encoder has to re-sort actively and dropping that sort changes the
-// bytes. Its JSON half is structural rather than encoder logic, because the
-// generated map field is declared `BTreeMap<String, String>` and serialization
-// walks it in key order; there is no sort call in the JSON path that could
-// regress. The Go and TypeScript harnesses, whose map types carry neither
-// guarantee, each pin the ordering with a dedicated constructed-value test.
+// The annotation map is order-preserving, so neither wire form sorts it. Its
+// field is the crate's `OrderedMap`, whose serde form and whose array form are
+// both written in the order it holds; the map-order probe vector below, whose
+// order is neither sorted order, is what fails if either half sorted it. The Go
+// and TypeScript harnesses each pin the same order a third way, from a
+// constructed value.
 cbor_case!(render_policy_input, aggrega_abi::RenderPolicyInput, "RenderPolicyInput");
 cbor_case!(annotation_transform_input, aggrega_abi::AnnotationTransformInput, "AnnotationTransformInput");
 cbor_case!(annotation_transform_output, aggrega_abi::AnnotationTransformOutput, "AnnotationTransformOutput");
 
 // The map-order probe vectors carry one golden pair per map-owning payload, with
-// every map that payload declares populated by a probe key set whose lexicographic
-// order is the exact reverse of its canonical CBOR order. Map-key ordering is a
-// determinism contract — identical input must produce byte-identical output — and a
-// map is the one container with no inherent order.
+// every map that payload declares populated by a probe key set. Map-key ordering
+// is a determinism contract — identical input must produce byte-identical output —
+// and it reads differently for the two kinds of map. A plain map carries no order
+// of its own, so it is populated by keys whose lexicographic order is the exact
+// reverse of their canonical CBOR order, and every encoder sorts it. A map the
+// schema marks order-preserving carries its order as content, so it is populated
+// in an order that is neither sorted order and holds a key that is an array index,
+// and every encoder writes it in that order.
 //
-// In this crate the JSON half of that ordering is structural rather than encoder
-// logic, because every generated map field is declared `BTreeMap`, so serialization
-// walks it in key order and there is no sort call in the JSON path that could
-// regress. These vectors still earn their place here: they pin the CBOR ordering,
-// whose length-led rule is NOT the BTreeMap order and so is produced by a real sort
-// call, and they keep the three languages reading one shared corpus.
+// In this crate the JSON half of a plain map's ordering is structural rather than
+// encoder logic, because a plain map field is declared `BTreeMap`, so
+// serialization walks it in key order; its CBOR ordering, whose length-led rule is
+// NOT the BTreeMap order, is produced by a real sort call these vectors pin. An
+// order-preserving field is declared `OrderedMap` and both its halves are written
+// in the order it holds, which these vectors pin on both wires.
 //
-// FRPStepInput, FRPStepOutput, LinkPublishOutput and LinkResolveInput already carry
-// a harness binding from their socket vectors above, so they take cbor_vector alone
-// — a second impl_cbor_case for the same type would not compile.
+// FRPStepInput, FRPStepOutput, LinkPublishOutput, LinkResolveInput, LinterInput and
+// RenderNodeOutput already carry a harness binding from their socket vectors above,
+// so they take cbor_vector alone — a second impl_cbor_case for the same type would
+// not compile.
 cbor_case!(map_order_annotation_target, aggrega_abi::AnnotationTarget, "MapOrderAnnotationTarget");
 cbor_case!(map_order_artifact_projection_entry, aggrega_abi::ArtifactProjectionEntry, "MapOrderArtifactProjectionEntry");
 cbor_case!(map_order_boundary_env_overrides_input, aggrega_abi::BoundaryEnvOverridesInput, "MapOrderBoundaryEnvOverridesInput");
@@ -364,8 +368,10 @@ cbor_case!(map_order_ir_spec, aggrega_abi::IRSpec, "MapOrderIRSpec");
 cbor_case!(map_order_link_edge, aggrega_abi::LinkEdge, "MapOrderLinkEdge");
 cbor_vector!(map_order_link_publish_output, aggrega_abi::LinkPublishOutput, "MapOrderLinkPublishOutput");
 cbor_vector!(map_order_link_resolve_input, aggrega_abi::LinkResolveInput, "MapOrderLinkResolveInput");
+cbor_vector!(map_order_linter_input, aggrega_abi::LinterInput, "MapOrderLinterInput");
 cbor_case!(map_order_mutator_graph, aggrega_abi::MutatorGraph, "MapOrderMutatorGraph");
 cbor_case!(map_order_mutator_node, aggrega_abi::MutatorNode, "MapOrderMutatorNode");
+cbor_vector!(map_order_render_node_output, aggrega_abi::RenderNodeOutput, "MapOrderRenderNodeOutput");
 cbor_case!(map_order_rendered_node, aggrega_abi::RenderedNode, "MapOrderRenderedNode");
 cbor_case!(map_order_sub_chart, aggrega_abi::SubChart, "MapOrderSubChart");
 cbor_case!(map_order_workload_projection, aggrega_abi::WorkloadProjection, "MapOrderWorkloadProjection");
@@ -404,6 +410,100 @@ cbor_case!(error_envelope_rendered_name_output, aggrega_abi::RenderedNameOutput,
 cbor_case!(error_envelope_source_file_response, aggrega_abi::SourceFileResponse, "ErrorEnvelopeSourceFileResponse");
 cbor_case!(error_envelope_source_pack_response, aggrega_abi::SourcePackResponse, "ErrorEnvelopeSourcePackResponse");
 cbor_case!(error_envelope_validate_node_output, aggrega_abi::ValidateNodeOutput, "ErrorEnvelopeValidateNodeOutput");
+
+// A refused vector is canonical CBOR every decoder of its shape must REFUSE: a
+// document no encoder of the shape can write, malformed in exactly one way. A
+// vector pair holds the decoder to what it must read; a refused vector holds it to
+// what it must not, and the two cannot stand in for each other — a decoder that
+// kept one of two repeated keys would read every well-formed vector correctly.
+//
+// These pin the order-preserving map's array form: a key the array repeats, named
+// in the refusal; an entry holding three items; and an entry whose key is not a
+// text string. The same vectors bind the Go and TypeScript decoders, and the
+// compiler's independent byte-parity oracle confirms each is well-formed CBOR whose
+// only fault is the one its name states.
+
+/// REFUSED_SUFFIX is the file a refused vector is. It does not end in the vector
+/// pair's CBOR suffix, so the pair census never counts it as half of one.
+const REFUSED_SUFFIX: &str = ".refused-cbor.hex";
+
+/// refused_cbor reads a refused vector, holding it to the hex golden shape.
+fn refused_cbor(name: &str) -> Vec<u8> {
+    let p = testdata().join(format!("{name}{REFUSED_SUFFIX}"));
+    let raw = fs::read_to_string(&p).unwrap_or_else(|e| panic!("read refused vector {}: {}", p.display(), e));
+    let body = raw.strip_suffix('\n').unwrap_or_else(|| {
+        panic!("refused vector {name} does not end in a newline, so its committed shape is not the canonical one: {raw:?}")
+    });
+    assert!(
+        body.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)),
+        "refused vector {name} is not lowercase hex followed by one newline: {raw:?}"
+    );
+    hex_decode(body)
+}
+
+macro_rules! refused_vector {
+    ($fn:ident, $ty:ty, $name:literal, $want:literal) => {
+        #[test]
+        fn $fn() {
+            match <$ty>::decode_cbor(&refused_cbor($name)) {
+                Ok(v) => panic!("{} decoded a vector every decoder must refuse, to {:?}", $name, v),
+                Err(e) => assert!(
+                    e.0.contains($want),
+                    "{} was refused, but the error does not name the fault: got {:?}, want it to contain {:?}",
+                    $name,
+                    e.0,
+                    $want
+                ),
+            }
+        }
+    };
+}
+
+refused_vector!(refused_repeated_key, aggrega_abi::MutatorNode, "MapOrderMutatorNodeRepeatedKey", "duplicate key \"a\"");
+refused_vector!(refused_entry_arity, aggrega_abi::MutatorNode, "MapOrderMutatorNodeEntryArity", "holds 3 items, want 2");
+refused_vector!(refused_entry_key_not_text, aggrega_abi::MutatorNode, "MapOrderMutatorNodeEntryKeyNotText", "expected text string");
+
+/// contains_bytes reports whether needle occurs in haystack.
+fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+// A non-required order-preserving field is omitted when it is empty and emitted
+// when it is populated, on both wires. The two fixtures are asserted together
+// because each hides the other's failure: an encoder emitting the key
+// unconditionally passes the populated one, and one dropping it unconditionally
+// passes the empty one. The binary form's map head declares its pair count, so the
+// empty form's bytes are also read back, which a head counting the omitted key
+// would make fail.
+#[test]
+fn an_empty_order_preserving_field_is_omitted_and_a_populated_one_is_emitted() {
+    let empty = aggrega_abi::RenderNodeOutput::default();
+    let json = serde_json::to_string(&empty).expect("serialize the empty form");
+    assert!(!json.contains("derived_keys"), "an empty order-preserving field is on the JSON wire: {json}");
+    let cbor = empty.encode_cbor().expect("encode the empty form");
+    assert!(
+        !contains_bytes(&cbor, b"derived_keys"),
+        "an empty order-preserving field is on the binary wire: {}",
+        hex_encode(&cbor)
+    );
+    aggrega_abi::RenderNodeOutput::decode_cbor(&cbor).expect("the empty form's bytes read back");
+
+    let mut populated = aggrega_abi::RenderNodeOutput::default();
+    populated.derived_keys.insert("resource-names".to_string(), vec!["web".to_string()]);
+    let json = serde_json::to_string(&populated).expect("serialize the populated form");
+    assert!(
+        json.contains("\"derived_keys\":{\"resource-names\":[\"web\"]}"),
+        "a populated order-preserving field is missing from the JSON wire: {json}"
+    );
+    let cbor = populated.encode_cbor().expect("encode the populated form");
+    assert!(
+        contains_bytes(&cbor, b"derived_keys"),
+        "a populated order-preserving field is missing from the binary wire: {}",
+        hex_encode(&cbor)
+    );
+    let back = aggrega_abi::RenderNodeOutput::decode_cbor(&cbor).expect("the populated form's bytes read back");
+    assert_eq!(back.derived_keys, populated.derived_keys, "the populated field did not survive the binary form");
+}
 
 // PluginDescriptor and a few types recur across several vectors; each vector is
 // its own JSON+CBOR assertion, so they are spelled out rather than macro-bound to
@@ -573,6 +673,11 @@ fn corpus_vectors() -> std::collections::BTreeSet<String> {
         if STANDALONE_FIXTURES.contains(&name.as_str()) {
             continue;
         }
+        // A refused vector is a single file rather than a pair, held to its own
+        // census below.
+        if name.ends_with(REFUSED_SUFFIX) {
+            continue;
+        }
         if let Some(base) = name.strip_suffix(".golden.json") {
             json.insert(base.to_string());
         } else if let Some(base) = name.strip_suffix(".cbor.hex") {
@@ -632,5 +737,47 @@ fn every_golden_vector_is_exercised() {
         missing.is_empty(),
         "these vectors are committed to the shared corpus but no assertion in this harness reads them, \
          so this language's codec is unpinned on a wire the others prove: {missing:?}"
+    );
+}
+
+/// refused_corpus returns the refused-vector names committed to the shared tree.
+fn refused_corpus() -> std::collections::BTreeSet<String> {
+    let dir = testdata();
+    let mut refused = std::collections::BTreeSet::new();
+    let entries = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("read the shared vector corpus {}: {}", dir.display(), e));
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|e| panic!("read a corpus entry: {e}"));
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(base) = name.strip_suffix(REFUSED_SUFFIX) {
+            refused.insert(base.to_string());
+        }
+    }
+    assert!(
+        !refused.is_empty(),
+        "found no {REFUSED_SUFFIX} vectors in the shared corpus, so this census certifies nothing"
+    );
+    refused
+}
+
+#[test]
+fn every_refused_vector_is_asserted() {
+    let refused = refused_corpus();
+    let declared = declarations();
+
+    // Calibration, as for the pair census above.
+    assert!(
+        declared.contains("refused_vector!("),
+        "found no refused-vector declarations in this harness's own text, so the census certifies nothing"
+    );
+
+    let missing: Vec<&String> = refused
+        .iter()
+        .filter(|name| !declared.contains(&format!("\"{name}\"")))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "these refused vectors are committed to the shared corpus but no assertion in this harness reads \
+         them, so this language's decoder is not held to refusing them: {missing:?}"
     );
 }

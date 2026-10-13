@@ -11,7 +11,6 @@ package abi
 import (
 	"bytes"
 	"encoding/json"
-	"sort"
 )
 
 // LinterInput The payload the host hands the publishing-linter plugin on each invocation. rule_id selects which rule the plugin dispatches to. entity_kind identifies the entity kind being linted (Component, Feature, Recipe, FeatureRecipe, SchemaLibrary, MappingLibrary, Aggregate). proposed carries the parsed entity structure being classified (the host parses YAML to JSON before sending; the plugin never sees raw bytes). previous carries the parsed previous-version entity for the schema-evolution rule; omitted when not applicable. implemented_component carries a related entity of a different kind — the Component a linted Recipe realizes — for rules that compare an entity against a contract another entity declares; omitted when not applicable. release and components carry the rest of a Release for a rule that reads one whole — proposed is then the Aggregate the Release deploys, release that Release, and components the Component each of the Aggregate's component instances is an instance of; both are omitted on every other input. policies carries the per-workspace publishing-discipline configuration the rule consults.
@@ -29,7 +28,7 @@ type LinterInput struct {
 	// Release Parsed structure of the Release a release-scoped lint names, with its extends chain folded in, so a child Release carries what it inherits from its base. The host converts it from YAML to JSON as it does proposed. Its spec.parameters block holds the values that fulfil the Aggregate's parameters, so it is removed whole before the Release is handed over: a parameter's value can be the credential itself, no rule reads the block, and so no parameter value reaches a linter plugin through this field. Present only on the input of a rule that reads a whole Release, where proposed is the Aggregate this Release deploys, with its parameter values removed as proposed describes; omitted on every other input.
 	Release json.RawMessage `json:"release,omitempty" yaml:"release,omitempty" cbor:"release,omitempty"`
 	// Components The Component each component instance of the Aggregate is an instance of, keyed by the instance name the Aggregate gives it, which is the same key the Aggregate's and the Release's own components maps use. Each value is the Component the instance's type resolves to, with any extends chain folded in, converted to JSON as implemented_component is. An instance whose Component is not reachable in the workspace's catalog directories is absent, and a rule reads that absence as unavailable rather than as a Component declaring nothing. Present only beside release, on the input of a rule that reads a whole Release; omitted on every other input.
-	Components map[string]json.RawMessage `json:"components,omitempty" yaml:"components,omitempty" cbor:"components,omitempty"`
+	Components OrderedMap[json.RawMessage] `json:"components,omitempty,omitzero" yaml:"components,omitempty" cbor:"components,omitempty"`
 	// SourcePath Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
 	SourcePath string `json:"source_path,omitempty" yaml:"source_path,omitempty" cbor:"source_path,omitempty"`
 	// Policies The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
@@ -112,29 +111,16 @@ func (t LinterInput) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"release\":")
 		buf.Write(t.Release)
 	}
-	if len(t.Components) != 0 {
+	if !t.Components.IsZero() {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
 		buf.WriteString("\"components\":")
-		{
-			keys := make([]string, 0, len(t.Components))
-			for k := range t.Components {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			buf.WriteByte('{')
-			for i, k := range keys {
-				if i > 0 {
-					buf.WriteByte(',')
-				}
-				writeJSONString(&buf, k)
-				buf.WriteByte(':')
-				mv := t.Components[k]
-				buf.Write(mv)
-			}
-			buf.WriteByte('}')
+		if enc, err := t.Components.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
 		}
 	}
 	if t.SourcePath != "" {
@@ -210,25 +196,12 @@ func (t *LinterInput) UnmarshalJSON(data []byte) error {
 				t.Release = raw
 			}
 		case "components":
-			t.Components = make(map[string]json.RawMessage)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Components.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv json.RawMessage
-				if raw, err := readRaw(dec, data); err != nil {
-					return err
-				} else {
-					mv = raw
-				}
-				t.Components[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		case "source_path":
 			if s, err := readString(dec); err != nil {
@@ -579,7 +552,7 @@ func (t LinterInput) appendCBOR(dst []byte) ([]byte, error) {
 	if len(t.Previous) != 0 {
 		n++
 	}
-	if len(t.Components) != 0 {
+	if !t.Components.IsZero() {
 		n++
 	}
 	if t.SourcePath != "" {
@@ -606,20 +579,13 @@ func (t LinterInput) appendCBOR(dst []byte) ([]byte, error) {
 	}
 	dst = appendCBORTextString(dst, "proposed")
 	dst = appendCBORByteString(dst, t.Proposed)
-	if len(t.Components) != 0 {
+	if !t.Components.IsZero() {
 		dst = appendCBORTextString(dst, "components")
-		{
-			keys := make([]string, 0, len(t.Components))
-			for k := range t.Components {
-				keys = append(keys, k)
-			}
-			sortCBORKeys(keys)
-			dst = appendCBORHead(dst, 5, uint64(len(keys)))
-			for _, k := range keys {
-				dst = appendCBORTextString(dst, k)
-				mv := t.Components[k]
-				dst = appendCBORByteString(dst, mv)
-			}
+		dst = appendCBORHead(dst, 4, uint64(t.Components.Len()))
+		for k, mv := range t.Components.All() {
+			dst = appendCBORHead(dst, 4, 2)
+			dst = appendCBORTextString(dst, k)
+			dst = appendCBORByteString(dst, mv)
 		}
 	}
 	dst = appendCBORTextString(dst, "entity_kind")
@@ -691,15 +657,18 @@ func (t *LinterInput) decodeCBOR(dec *cborDec) error {
 			}
 		case "components":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]json.RawMessage, mn)
+				var om OrderedMap[json.RawMessage]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv json.RawMessage
 					if v, err := dec.readByteString(); err != nil {
@@ -707,9 +676,9 @@ func (t *LinterInput) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = json.RawMessage(v)
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Components = m
+				t.Components = om
 			}
 		case "source_path":
 			if s, err := dec.readTextString(); err != nil {

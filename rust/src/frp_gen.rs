@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::collections::BTreeMap;
+use crate::OrderedMap;
 use crate::Diagnostic;
 
 /// The payload a feature-recipe-pipeline guest receives for one pipeline step: the keyed document set the host hands whole, the step-local input the Recipe declared for this step, the render-time context, the step's position in the pipeline, and a record of the steps that already ran.
@@ -16,8 +16,8 @@ use crate::Diagnostic;
 pub struct FRPStepInput {
     pub documents: DocumentSet,
     /// The step's rendered `with` block, an author-ordered key set the guest reads as its step-local input. Preserves author order so the payload is byte-identical across runs of identical input.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub step_input: BTreeMap<String, Box<RawValue>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub step_input: OrderedMap<Box<RawValue>>,
     /// The render-time context the host hands the step. The step carries it through; the schema does not interpret its internal shape (an opaque passthrough), so the FRP socket schema does not bind to the cross-boundary render-context shape. The render context's own contract is the render-context wire shape; a guest that reads it consults that contract.
     pub context: Box<RawValue>,
     /// This step's zero-based position in the pipeline.
@@ -40,8 +40,8 @@ pub struct FRPStepOutput {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
     /// The addressable outputs the guest returns for this step, an author-ordered key set that populates the step's outputs for a later step or a template to read. Preserves author order so the payload is byte-identical across runs of identical input. Absent when the step returns no outputs.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub outputs: BTreeMap<String, Box<RawValue>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub outputs: OrderedMap<Box<RawValue>>,
     /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
@@ -51,10 +51,10 @@ pub struct FRPStepOutput {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DocumentSet {
     /// The node's own rendered output, keyed by unit token. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
-    pub own: BTreeMap<String, Unit>,
+    pub own: OrderedMap<Unit>,
     /// The rendered output of the component a component-scope FeatureRecipe is attached to — the cross-entity surface. Absent for Recipe steps and boundary-scope FeatureRecipe steps, which have no host component. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub host: BTreeMap<String, Unit>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub host: OrderedMap<Unit>,
 }
 
 /// One addressable piece a provider's emitted output carves into — the hybrid view of one piece of output. A structured unit carries a tree (an RFC-6902-addressable view) and is a PATCH target; an opaque unit carries only its media type and bytes (no tree) and is a SELECT and EMIT target but not a PATCH target.
@@ -153,12 +153,10 @@ impl FRPStepInput {
             crate::cbor_gen::write_text(out, "step_input");
             {
                 let c = &self.step_input;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
                 }
             }
@@ -185,7 +183,7 @@ impl FRPStepInput {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_documents: Option<DocumentSet> = None;
-        let mut f_step_input: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_step_input: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let mut f_context: Option<Box<RawValue>> = None;
         let mut f_step_index: Option<i64> = None;
         let mut f_preceding_steps: Vec<PrecedingStep> = Vec::new();
@@ -194,7 +192,7 @@ impl FRPStepInput {
             let k = dec.read_text()?;
             match k.as_str() {
                 "documents" => f_documents = Some(DocumentSet::decode_cbor_from(dec)?),
-                "step_input" => f_step_input = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "step_input" => f_step_input = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "context" => f_context = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "step_index" => f_step_index = Some(dec.read_int()?),
                 "preceding_steps" => f_preceding_steps = { let sn = dec.read_array_header()?; let mut sv: Vec<PrecedingStep> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(PrecedingStep::decode_cbor_from(dec)?); } sv },
@@ -236,12 +234,10 @@ impl FRPStepOutput {
             crate::cbor_gen::write_text(out, "outputs");
             {
                 let c = &self.outputs;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
                 }
             }
@@ -290,7 +286,7 @@ impl FRPStepOutput {
         let mut f_patches: Vec<JSONPatchOp> = Vec::new();
         let mut f_side_effects: Vec<SideEffect> = Vec::new();
         let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
-        let mut f_outputs: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_outputs: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let mut f_error: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
@@ -299,7 +295,7 @@ impl FRPStepOutput {
                 "patches" => f_patches = { let sn = dec.read_array_header()?; let mut sv: Vec<JSONPatchOp> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(JSONPatchOp::decode_cbor_from(dec)?); } sv },
                 "side_effects" => f_side_effects = { let sn = dec.read_array_header()?; let mut sv: Vec<SideEffect> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(SideEffect::decode_cbor_from(dec)?); } sv },
                 "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
-                "outputs" => f_outputs = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "outputs" => f_outputs = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "error" => f_error = dec.read_text()?,
                 _ => dec.skip()?,
             }
@@ -330,12 +326,10 @@ impl DocumentSet {
         crate::cbor_gen::write_text(out, "own");
         {
             let c = &self.own;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 mv.append_cbor(out)?;
             }
         }
@@ -343,12 +337,10 @@ impl DocumentSet {
             crate::cbor_gen::write_text(out, "host");
             {
                 let c = &self.host;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     mv.append_cbor(out)?;
                 }
             }
@@ -364,14 +356,14 @@ impl DocumentSet {
     }
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_own: Option<BTreeMap<String, Unit>> = None;
-        let mut f_host: BTreeMap<String, Unit> = BTreeMap::new();
+        let mut f_own: Option<OrderedMap<Unit>> = None;
+        let mut f_host: OrderedMap<Unit> = OrderedMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
-                "own" => f_own = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Unit> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = Unit::decode_cbor_from(dec)?; m.insert(mk, mv); } m }),
-                "host" => f_host = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Unit> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = Unit::decode_cbor_from(dec)?; m.insert(mk, mv); } m },
+                "own" => f_own = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<Unit> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = Unit::decode_cbor_from(dec)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
+                "host" => f_host = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Unit> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = Unit::decode_cbor_from(dec)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 _ => dec.skip()?,
             }
         }

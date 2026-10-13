@@ -61,15 +61,20 @@ var standaloneFixtures = []string{"float_vectors.json"}
 // the vector name it asserts.
 var parityCallSite = regexp.MustCompile(`roundTripBothGolden\[[^\]]*\]\(\s*t,\s*"([^"]+)"\s*\)`)
 
+// refusalCallSite matches an invocation of the refused-vector helper and captures
+// the vector name it asserts.
+var refusalCallSite = regexp.MustCompile(`refuseCBORGolden\[[^\]]*\]\(\s*t,\s*"([^"]+)"`)
+
 func testdataDir() string {
 	return filepath.Join("..", "..", "..", "testdata")
 }
 
 // goldenCorpus returns the vector names committed to testdata/, having first
 // asserted that every name carries BOTH halves of its pair and that every file in
-// the directory is either half of a pair or a named standalone fixture. An
-// unrecognized file is a failure rather than something to skip, because a fixture
-// nothing consumes is the same coverage hole this file exists to close.
+// the directory is either half of a pair, a refused vector, or a named standalone
+// fixture. An unrecognized file is a failure rather than something to skip,
+// because a fixture nothing consumes is the same coverage hole this file exists to
+// close.
 func goldenCorpus(t *testing.T) []string {
 	t.Helper()
 
@@ -86,6 +91,11 @@ func goldenCorpus(t *testing.T) []string {
 		}
 		name := e.Name()
 		if slices.Contains(standaloneFixtures, name) {
+			continue
+		}
+		// A refused vector is a single file rather than a pair, and refusedCorpus
+		// holds it to its own census.
+		if strings.HasSuffix(name, refusedSuffix) {
 			continue
 		}
 		matched := false
@@ -172,5 +182,70 @@ func TestEveryGoldenVectorIsExercised(t *testing.T) {
 	slices.Sort(orphans)
 	for _, name := range orphans {
 		t.Errorf("a parity assertion reads vector %q, which the shared corpus does not carry", name)
+	}
+}
+
+// refusedCorpus returns the refused-vector names committed to testdata/. Finding
+// none is a failure rather than a clean census: the corpus carries refused vectors,
+// so a census that finds none has stopped reading them.
+func refusedCorpus(t *testing.T) []string {
+	t.Helper()
+	entries, err := os.ReadDir(testdataDir())
+	if err != nil {
+		t.Fatalf("read the shared vector corpus: %v", err)
+	}
+	var refused []string
+	for _, e := range entries {
+		if base, ok := strings.CutSuffix(e.Name(), refusedSuffix); ok && !e.IsDir() {
+			refused = append(refused, base)
+		}
+	}
+	if len(refused) == 0 {
+		t.Fatalf("found no %s vectors in the shared corpus, so this census certifies nothing", refusedSuffix)
+	}
+	return refused
+}
+
+// TestEveryRefusedVectorIsAsserted asserts that the refused vectors this harness
+// asserts are exactly the ones committed to the shared corpus, read from the
+// refusal call sites in this package's test sources for the same reason the pair
+// census reads the parity call sites.
+func TestEveryRefusedVectorIsAsserted(t *testing.T) {
+	t.Parallel()
+
+	refused := refusedCorpus(t)
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read package directory: %v", err)
+	}
+	asserted := map[string]bool{}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		for _, m := range refusalCallSite.FindAllStringSubmatch(string(b), -1) {
+			asserted[m[1]] = true
+		}
+	}
+	if len(asserted) == 0 {
+		t.Fatal("found no refusal assertions in the package's test sources, so the census certifies nothing — " +
+			"the call-site pattern has stopped matching the code it reads")
+	}
+	for _, name := range refused {
+		if !asserted[name] {
+			t.Errorf("refused vector %q is committed to the shared corpus but no refusal assertion in this harness "+
+				"reads it, so this language's decoder is not held to refusing it", name)
+		}
+	}
+	for name := range asserted {
+		if !slices.Contains(refused, name) {
+			t.Errorf("a refusal assertion reads refused vector %q, which the shared corpus does not carry", name)
+		}
 	}
 }

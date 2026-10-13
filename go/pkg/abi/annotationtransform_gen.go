@@ -11,7 +11,6 @@ package abi
 import (
 	"bytes"
 	"encoding/json"
-	"sort"
 )
 
 // AnnotationTransformInput The payload the host hands the annotation-transform plugin on each invocation: the resolved injection targets with their current annotations, the Manifest's registered annotation-binding keys, and the attachment's own pinned sources and settings.
@@ -41,7 +40,7 @@ type AnnotationTarget struct {
 	// ComponentName The component's name within its boundary.
 	ComponentName string `json:"component_name" yaml:"component_name" cbor:"component_name"`
 	// Annotations The component's current scalar annotation set, keyed by annotation key.
-	Annotations map[string]string `json:"annotations" yaml:"annotations" cbor:"annotations"`
+	Annotations OrderedMap[string] `json:"annotations" yaml:"annotations" cbor:"annotations"`
 }
 
 // AnnotationInjection One annotation to inject onto a target: the target coordinate plus the annotation key and its string value.
@@ -357,23 +356,10 @@ func (t AnnotationTarget) MarshalJSON() ([]byte, error) {
 	}
 	first = false
 	buf.WriteString("\"annotations\":")
-	{
-		keys := make([]string, 0, len(t.Annotations))
-		for k := range t.Annotations {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			writeJSONString(&buf, k)
-			buf.WriteByte(':')
-			mv := t.Annotations[k]
-			writeJSONString(&buf, mv)
-		}
-		buf.WriteByte('}')
+	if enc, err := t.Annotations.MarshalJSON(); err != nil {
+		return nil, err
+	} else {
+		buf.Write(enc)
 	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
@@ -406,25 +392,12 @@ func (t *AnnotationTarget) UnmarshalJSON(data []byte) error {
 				t.ComponentName = s
 			}
 		case "annotations":
-			t.Annotations = make(map[string]string)
-			if err := expectDelim(dec, '{'); err != nil {
+			if raw, err := readRaw(dec, data); err != nil {
 				return err
-			}
-			for dec.More() {
-				mk, err := readKey(dec)
-				if err != nil {
+			} else {
+				if err := t.Annotations.UnmarshalJSON(raw); err != nil {
 					return err
 				}
-				var mv string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					mv = s
-				}
-				t.Annotations[mk] = mv
-			}
-			if err := expectDelim(dec, '}'); err != nil {
-				return err
 			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
@@ -873,18 +846,11 @@ func (t AnnotationTarget) appendCBOR(dst []byte) ([]byte, error) {
 	n := 3
 	dst = appendCBORHead(dst, 5, uint64(n))
 	dst = appendCBORTextString(dst, "annotations")
-	{
-		keys := make([]string, 0, len(t.Annotations))
-		for k := range t.Annotations {
-			keys = append(keys, k)
-		}
-		sortCBORKeys(keys)
-		dst = appendCBORHead(dst, 5, uint64(len(keys)))
-		for _, k := range keys {
-			dst = appendCBORTextString(dst, k)
-			mv := t.Annotations[k]
-			dst = appendCBORTextString(dst, mv)
-		}
+	dst = appendCBORHead(dst, 4, uint64(t.Annotations.Len()))
+	for k, mv := range t.Annotations.All() {
+		dst = appendCBORHead(dst, 4, 2)
+		dst = appendCBORTextString(dst, k)
+		dst = appendCBORTextString(dst, mv)
 	}
 	dst = appendCBORTextString(dst, "boundary_path")
 	dst = appendCBORTextString(dst, t.BoundaryPath)
@@ -925,15 +891,18 @@ func (t *AnnotationTarget) decodeCBOR(dec *cborDec) error {
 			}
 		case "annotations":
 			{
-				mn, err := dec.readMapHeader()
+				mn, err := dec.readArrayHeader()
 				if err != nil {
 					return err
 				}
-				m := make(map[string]string, mn)
+				var om OrderedMap[string]
 				for mi := 0; mi < mn; mi++ {
-					mk, err := dec.readTextString()
+					mk, err := dec.readEntryKey()
 					if err != nil {
 						return err
+					}
+					if _, dup := om.Get(mk); dup {
+						return duplicateKeyError(mk)
 					}
 					var mv string
 					if s, err := dec.readTextString(); err != nil {
@@ -941,9 +910,9 @@ func (t *AnnotationTarget) decodeCBOR(dec *cborDec) error {
 					} else {
 						mv = s
 					}
-					m[mk] = mv
+					om.Set(mk, mv)
 				}
-				t.Annotations = m
+				t.Annotations = om
 			}
 		default:
 			if err := dec.skip(); err != nil {

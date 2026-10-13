@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::collections::BTreeMap;
+use crate::OrderedMap;
 use crate::Diagnostic;
 
 fn is_default<T: Default + PartialEq>(v: &T) -> bool {
@@ -46,11 +47,11 @@ pub struct IRNodeProjection {
     /// Declared and deliberately withheld: the host always emits this as the empty string. The bound Recipe's identity already reaches the guest as the recipe name and version it stamps into provenance, so the resolved URI adds nothing a guest renders from. A guest that needs to attribute output to a Recipe reads those provenance fields instead.
     pub resolved_recipe: String,
     /// The node's rendered values dictionary, the key set the guest renders from. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub values: BTreeMap<String, Box<RawValue>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub values: OrderedMap<Box<RawValue>>,
     /// The node's feature attachments keyed by feature alias, carrying the same per-node feature-attachment shape the IR carries. Each entry carries the attachment's values, infra and inject mapping alongside its derived sensitivity marking, so a guest reads whether an attachment handles declared-sensitive material from the payload alone. Preserves author order so the payload is byte-identical across runs of identical input. Opaque at this schema layer; the guest reads the feature-entry shape through the IR wire contract.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub features: BTreeMap<String, Box<RawValue>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub features: OrderedMap<Box<RawValue>>,
     /// Rendered keys whose identity is recovered from a datum an author declared sensitive, each mapped to the declaration it inherited that sensitivity from. Travels host to guest on the render input — the opposite direction from the names a guest declares on the render output. What a key names follows the shape this payload carries: on a payload carrying the node's values it is one of that map's keys; on a payload carrying a workload it names an entry in the workload's own attachment maps, where the node's values are empty. A key is present only where the recovery is exact, joining a declaration to a rendered identity with nothing read out of the key's own text and no per-node or per-attachment marking spread across individual keys. A key a template invented is therefore absent, because no declaration names it: the output keys of a recipe's valuesMapping, and the content of an artifact, are template-authored, so neither yields a key here — whether such a payload was produced from a value declared sensitive is carried instead by sensitive_values, and by an artifact entry's own sensitive_content. Absence therefore states that no key's identity could be recovered, never that nothing on this payload carries sensitive material — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Keys arrive in sorted order, which is what makes the payload byte-identical across runs of identical input.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub sensitive_rendered_keys: BTreeMap<String, String>,
@@ -58,8 +59,8 @@ pub struct IRNodeProjection {
     #[serde(default, skip_serializing_if = "is_default")]
     pub sensitive_values: bool,
     /// Declared and deliberately withheld: the host never populates this, so the map is absent from every render payload. An outbound edge is consumed before dispatch — the edge's published values are rehydrated into the node's own inject pipe, which the Recipe has already evaluated into the values and workload the guest receives — and a guest assembling a boundary receives the edge list on its own input instead. Were it populated it would key the node's outbound uses edges by socket alias, each carrying that socket's ordered target node ids in author order.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub uses: BTreeMap<String, Vec<String>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub uses: OrderedMap<Vec<String>>,
     /// The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub boundary_path: String,
@@ -111,8 +112,8 @@ pub struct RenderNodeOutput {
     /// The output files the guest emitted, in emission order. Each names its on-disk path and carries the serialized bytes the host writes verbatim.
     pub files: Vec<RenderedFile>,
     /// The names the guest derived while rendering this node, keyed by the key space it derived them into, each space carrying its names in derivation order. A guest that derives the name its output addresses a resource by has put that name inside the file bytes the host writes verbatim, where the host cannot see it; declaring it here is how the guest asks the host to confirm no two derivations landed on one name. The host compares declared names for equality within one declared space and does nothing else — it does not parse a name, does not learn what a space or a name means, and never derives one itself. Two contributors to the same assembled output that declare the same name in the same space halt the build, and the halt names the space, the name, and both contributors. Both the space names and the names within them are the guest's own vocabulary: a guest wanting uniqueness across a narrower or wider scope than one assembled output expresses that scope in the space name it declares. Preserves declaration order so the payload is byte-identical across runs of identical input. Absent when the guest derives no names it wants checked, which leaves the check inert for that guest.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub derived_keys: BTreeMap<String, Vec<String>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub derived_keys: OrderedMap<Vec<String>>,
     /// Facts the guest reports about what it emitted for this node, in the order the guest lists them. Each fact pairs a name with a value, and both are the guest's own vocabulary: which facts a provider reports, what each name means and what its entries hold are part of that provider's documented contract, not of this socket's. Every fact's value is a list, even when it holds one entry: the host refuses a fact whose value is anything else, naming the provider and the fact, and halts the build. That is the one thing the host learns about a value. It keys facts by name and hands each list to the templates that read it, joining the lists of one name reported by more than one render of the same node in the order those renders ran, and it never learns what a name or an entry means or derives a fact itself — so a provider can report something only its own format knowledge can see, such as a property of the documents it wrote, without the host learning that format. Reporting facts never changes what is written: the files the host writes are the files the guest returned, whether or not facts accompany them. The guest lists its facts in a fixed order so the payload is byte-identical across runs of identical input. Absent when the guest reports nothing, which is a complete answer rather than a missing one.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub render_facts: Vec<RenderFact>,
@@ -291,7 +292,7 @@ pub struct WorkloadProjection {
     pub sensitive_workload: bool,
     /// Every attachment on the node, projected to its resolved provides and keyed by the attachment instance name a workload attachment reference carries; absent when the node carries no attachments. The host copies the strings through without interpreting them, so the guest reads whichever entries of an attachment's provides it needs to resolve a reference to the resource that attachment produced. Whether an attachment handles declared-sensitive material is not repeated here: it travels on the node projection's matching feature entry, which a guest reads by the same instance name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub attachment_provides: BTreeMap<String, BTreeMap<String, String>>,
+    pub attachment_provides: BTreeMap<String, OrderedMap<String>>,
 }
 
 /// The pre-evaluated artifact set the host hands a Provider guest to place into the node's output. The host has already resolved each entry's source (inline content or an imported file it read), evaluated it as a Go template against the render context using the guest's declared artifact-template delimiter pair, and computed the build-provenance label and annotation key sets. The guest owns the format decision, the provenance placement, the on-disk path, and the final bytes. Entries preserve author order so the placed output is byte-identical across runs of identical input.
@@ -363,14 +364,14 @@ pub struct RenderedNode {
     pub output_directory: String,
     pub rendered: RenderNodeOutput,
     /// The node's merged annotations, so a boundary assembler can attribute per-node placement (e.g. the compose network derived from the aggrega.ai/namespace annotation).
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub annotations: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub annotations: OrderedMap<String>,
     /// The deployment wave this node inherited from its containing boundary (default 0; negative permitted), so a boundary assembler can order the contributors it merges relative to one another. A dispatch group can merge contributors from several boundaries, each carrying its own wave, so the wave travels with every node here rather than once for the whole payload. An assembler whose output shape expresses no ordering ignores it.
     #[serde(default, skip_serializing_if = "is_default")]
     pub sync_wave: i64,
     /// The values the compiler resolved for this node, present only for a node rendered from a source — the render_node call that produced its files carried a source_listing. That is the one case where the files came from elsewhere and the values could not be written into them, so a position outside them has to supply them: a boundary assembler places a present dictionary as that contributor's inputs in the assembled artifact itself, rather than beside the contributor's own files, and where the assembled artifact is the only position the target evaluates, that is the difference between an input the target reads and one it never reaches. A node rendered from a workload_projection or an artifacts_projection resolved these values into the files it produced, so it carries none here and the field is absent: supplying them a second time would offer the assembled artifact inputs that node's own files never declare, which the target is free to reject. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself. An assembler whose output shape carries no per-contributor inputs ignores the field.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub values: BTreeMap<String, Box<RawValue>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub values: OrderedMap<Box<RawValue>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -390,8 +391,8 @@ pub struct SubChart {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub version: String,
     /// The per-instance values the umbrella scopes under the sub-chart's alias in the umbrella values.yaml file. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub values: BTreeMap<String, Box<RawValue>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub values: OrderedMap<Box<RawValue>>,
     /// The pristine bytes of the vendored chart's Chart.yaml, read from the local source at compile time, from which the umbrella draws the sub-chart dependency's name and version. Empty for a generative sub-chart that carries no vendored chart. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the guest decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub chart_yaml: String,
@@ -467,8 +468,8 @@ pub struct BoundaryEnvOverridesInput {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub internal_uses_edges: Vec<Box<RawValue>>,
     /// The driving feature's resolved infra, an author-ordered key set the guest reads for the channel's tunables (for a compose bridge, the listen-port base and the upstream host provides-field selector). Preserves author order so the payload is byte-identical across runs of identical input.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub infra: BTreeMap<String, Box<RawValue>>,
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub infra: OrderedMap<Box<RawValue>>,
 }
 
 /// The payload a Provider guest returns from its boundary_env_overrides export: the per-consumer environment overrides the host applies to each named consumer's injected env after the per-node render pass. The values are opaque strings the host carries without interpretation; a consumer absent from the map is left untouched.
@@ -584,9 +585,9 @@ pub struct LinkEdge {
     /// The socket alias the uses edge is bound under.
     pub socket: String,
     /// The consumed endpoint's provides output, an author-ordered key set exposing the target's declared outputs. Preserves author order so the payload is byte-identical across runs of identical input.
-    pub provides: BTreeMap<String, String>,
+    pub provides: OrderedMap<String>,
     /// The consuming endpoint's inject mapping, keyed by delivery mechanism to an author-ordered key set, describing how the consuming end receives the consumed endpoint's output. Preserves author order so the payload is byte-identical across runs of identical input.
-    pub inject: BTreeMap<String, BTreeMap<String, String>>,
+    pub inject: OrderedMap<OrderedMap<String>>,
 }
 
 /// One per-file structural patch a provider returns as artifact wiring: the output file and the ordered structural operations to apply to it. A later host pass carves the named file, applies the operations, and reassembles it byte-faithfully. The operation shape is the shared pipeline patch-operation vocabulary; it is opaque at this schema layer, so a guest carries each operation verbatim while the host realizes the typed operation its pipeline applies.
@@ -771,12 +772,10 @@ impl IRNodeProjection {
             crate::cbor_gen::write_text(out, "uses");
             {
                 let c = &self.uses;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     {
                         let c = mv;
                         crate::cbor_gen::write_head(out, 4, c.len() as u64);
@@ -791,12 +790,10 @@ impl IRNodeProjection {
             crate::cbor_gen::write_text(out, "values");
             {
                 let c = &self.values;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
                 }
             }
@@ -805,12 +802,10 @@ impl IRNodeProjection {
             crate::cbor_gen::write_text(out, "features");
             {
                 let c = &self.features;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
                 }
             }
@@ -889,11 +884,11 @@ impl IRNodeProjection {
         let mut f_id: Option<String> = None;
         let mut f_type: Option<String> = None;
         let mut f_resolved_recipe: Option<String> = None;
-        let mut f_values: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
-        let mut f_features: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_values: OrderedMap<Box<RawValue>> = OrderedMap::new();
+        let mut f_features: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let mut f_sensitive_rendered_keys: BTreeMap<String, String> = BTreeMap::new();
         let mut f_sensitive_values: bool = false;
-        let mut f_uses: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut f_uses: OrderedMap<Vec<String>> = OrderedMap::new();
         let mut f_boundary_path: String = String::new();
         let mut f_sync_wave: i64 = 0;
         let mut f_recipe_name: String = String::new();
@@ -909,11 +904,11 @@ impl IRNodeProjection {
                 "id" => f_id = Some(dec.read_text()?),
                 "type" => f_type = Some(dec.read_text()?),
                 "resolved_recipe" => f_resolved_recipe = Some(dec.read_text()?),
-                "values" => f_values = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
-                "features" => f_features = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "values" => f_values = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
+                "features" => f_features = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "sensitive_rendered_keys" => f_sensitive_rendered_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "sensitive_values" => f_sensitive_values = dec.read_bool()?,
-                "uses" => f_uses = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
+                "uses" => f_uses = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Vec<String>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "boundary_path" => f_boundary_path = dec.read_text()?,
                 "sync_wave" => f_sync_wave = dec.read_int()?,
                 "recipe_name" => f_recipe_name = dec.read_text()?,
@@ -1076,12 +1071,10 @@ impl RenderNodeOutput {
             crate::cbor_gen::write_text(out, "derived_keys");
             {
                 let c = &self.derived_keys;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     {
                         let c = mv;
                         crate::cbor_gen::write_head(out, 4, c.len() as u64);
@@ -1122,7 +1115,7 @@ impl RenderNodeOutput {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_files: Option<Vec<RenderedFile>> = None;
-        let mut f_derived_keys: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut f_derived_keys: OrderedMap<Vec<String>> = OrderedMap::new();
         let mut f_render_facts: Vec<RenderFact> = Vec::new();
         let mut f_omitted: Vec<i64> = Vec::new();
         let mut f_diagnostics: Vec<Diagnostic> = Vec::new();
@@ -1134,7 +1127,7 @@ impl RenderNodeOutput {
             let k = dec.read_text()?;
             match k.as_str() {
                 "files" => f_files = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedFile> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedFile::decode_cbor_from(dec)?); } sv }),
-                "derived_keys" => f_derived_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert(mk, mv); } m },
+                "derived_keys" => f_derived_keys = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Vec<String>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "render_facts" => f_render_facts = { let sn = dec.read_array_header()?; let mut sv: Vec<RenderFact> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderFact::decode_cbor_from(dec)?); } sv },
                 "omitted" => f_omitted = { let sn = dec.read_array_header()?; let mut sv: Vec<i64> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_int()?); } sv },
                 "diagnostics" => f_diagnostics = { let sn = dec.read_array_header()?; let mut sv: Vec<Diagnostic> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(Diagnostic::decode_cbor_from(dec)?); } sv },
@@ -1878,12 +1871,10 @@ impl WorkloadProjection {
                     let mv = &c[k];
                     {
                         let c = mv;
-                        let mut ks: Vec<&String> = c.keys().collect();
-                        crate::cbor_gen::sort_keys(&mut ks);
-                        crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                        for k in ks {
+                        crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                        for (k, mv) in c.iter() {
+                            crate::cbor_gen::write_head(out, 4, 2);
                             crate::cbor_gen::write_text(out, k);
-                            let mv = &c[k];
                             crate::cbor_gen::write_text(out, mv);
                         }
                     }
@@ -1903,14 +1894,14 @@ impl WorkloadProjection {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_workload: Option<Box<RawValue>> = None;
         let mut f_sensitive_workload: bool = false;
-        let mut f_attachment_provides: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+        let mut f_attachment_provides: BTreeMap<String, OrderedMap<String>> = BTreeMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "workload" => f_workload = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "sensitive_workload" => f_sensitive_workload = dec.read_bool()?,
-                "attachment_provides" => f_attachment_provides = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m },
+                "attachment_provides" => f_attachment_provides = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, OrderedMap<String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }; m.insert(mk, mv); } m },
                 _ => dec.skip()?,
             }
         }
@@ -2195,12 +2186,10 @@ impl RenderedNode {
             crate::cbor_gen::write_text(out, "values");
             {
                 let c = &self.values;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
                 }
             }
@@ -2215,12 +2204,10 @@ impl RenderedNode {
             crate::cbor_gen::write_text(out, "annotations");
             {
                 let c = &self.annotations;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_text(out, mv);
                 }
             }
@@ -2249,9 +2236,9 @@ impl RenderedNode {
         let mut f_derived_name_basis: String = String::new();
         let mut f_output_directory: String = String::new();
         let mut f_rendered: Option<RenderNodeOutput> = None;
-        let mut f_annotations: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_annotations: OrderedMap<String> = OrderedMap::new();
         let mut f_sync_wave: i64 = 0;
-        let mut f_values: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_values: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -2261,9 +2248,9 @@ impl RenderedNode {
                 "derived_name_basis" => f_derived_name_basis = dec.read_text()?,
                 "output_directory" => f_output_directory = dec.read_text()?,
                 "rendered" => f_rendered = Some(RenderNodeOutput::decode_cbor_from(dec)?),
-                "annotations" => f_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "annotations" => f_annotations = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "sync_wave" => f_sync_wave = dec.read_int()?,
-                "values" => f_values = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "values" => f_values = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 _ => dec.skip()?,
             }
         }
@@ -2344,12 +2331,10 @@ impl SubChart {
             crate::cbor_gen::write_text(out, "values");
             {
                 let c = &self.values;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
                 }
             }
@@ -2377,7 +2362,7 @@ impl SubChart {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_instance_id: Option<String> = None;
         let mut f_version: String = String::new();
-        let mut f_values: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_values: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let mut f_chart_yaml: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
@@ -2385,7 +2370,7 @@ impl SubChart {
             match k.as_str() {
                 "instance_id" => f_instance_id = Some(dec.read_text()?),
                 "version" => f_version = dec.read_text()?,
-                "values" => f_values = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "values" => f_values = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "chart_yaml" => f_chart_yaml = crate::cbor_gen::b64_encode(&dec.read_bytes()?),
                 _ => dec.skip()?,
             }
@@ -2721,12 +2706,10 @@ impl BoundaryEnvOverridesInput {
             crate::cbor_gen::write_text(out, "infra");
             {
                 let c = &self.infra;
-                let mut ks: Vec<&String> = c.keys().collect();
-                crate::cbor_gen::sort_keys(&mut ks);
-                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                for k in ks {
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
                     crate::cbor_gen::write_text(out, k);
-                    let mv = &c[k];
                     crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
                 }
             }
@@ -2753,13 +2736,13 @@ impl BoundaryEnvOverridesInput {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_internal_uses_edges: Vec<Box<RawValue>> = Vec::new();
-        let mut f_infra: BTreeMap<String, Box<RawValue>> = BTreeMap::new();
+        let mut f_infra: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "internal_uses_edges" => f_internal_uses_edges = { let sn = dec.read_array_header()?; let mut sv: Vec<Box<RawValue>> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?); } sv },
-                "infra" => f_infra = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, Box<RawValue>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert(mk, mv); } m },
+                "infra" => f_infra = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 _ => dec.skip()?,
             }
         }
@@ -3221,20 +3204,16 @@ impl LinkEdge {
         crate::cbor_gen::write_text(out, "inject");
         {
             let c = &self.inject;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 {
                     let c = mv;
-                    let mut ks: Vec<&String> = c.keys().collect();
-                    crate::cbor_gen::sort_keys(&mut ks);
-                    crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-                    for k in ks {
+                    crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                    for (k, mv) in c.iter() {
+                        crate::cbor_gen::write_head(out, 4, 2);
                         crate::cbor_gen::write_text(out, k);
-                        let mv = &c[k];
                         crate::cbor_gen::write_text(out, mv);
                     }
                 }
@@ -3249,12 +3228,10 @@ impl LinkEdge {
         crate::cbor_gen::write_text(out, "provides");
         {
             let c = &self.provides;
-            let mut ks: Vec<&String> = c.keys().collect();
-            crate::cbor_gen::sort_keys(&mut ks);
-            crate::cbor_gen::write_head(out, 5, ks.len() as u64);
-            for k in ks {
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for (k, mv) in c.iter() {
+                crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                let mv = &c[k];
                 crate::cbor_gen::write_text(out, mv);
             }
         }
@@ -3302,8 +3279,8 @@ impl LinkEdge {
         let mut f_target_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_source_annotations: BTreeMap<String, String> = BTreeMap::new();
         let mut f_socket: Option<String> = None;
-        let mut f_provides: Option<BTreeMap<String, String>> = None;
-        let mut f_inject: Option<BTreeMap<String, BTreeMap<String, String>>> = None;
+        let mut f_provides: Option<OrderedMap<String>> = None;
+        let mut f_inject: Option<OrderedMap<OrderedMap<String>>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -3313,8 +3290,8 @@ impl LinkEdge {
                 "target_annotations" => f_target_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "source_annotations" => f_source_annotations = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "socket" => f_socket = Some(dec.read_text()?),
-                "provides" => f_provides = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }),
-                "inject" => f_inject = Some({ let mn = dec.read_map_header()?; let mut m: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m }; m.insert(mk, mv); } m }),
+                "provides" => f_provides = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
+                "inject" => f_inject = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<OrderedMap<String>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
                 _ => dec.skip()?,
             }
         }

@@ -35,7 +35,9 @@ import (
 // value whose type carries its own JSON codec, as every payload type in this
 // package does, and a string, boolean or number, are read and written directly;
 // a value of any other type is handed to encoding/json, which reads a number as
-// a json.Number.
+// a json.Number. On the binary encoding a generated codec writes a field of this
+// type as a list of key and value entries in the map's order, and refuses one
+// that repeats a key, naming the key.
 type OrderedMap[V any] struct {
 	entries *orderedEntries[V]
 }
@@ -195,7 +197,7 @@ func (m *OrderedMap[V]) UnmarshalJSON(data []byte) error {
 // a key is malformed rather than an update.
 func (m *OrderedMap[V]) setNew(k string, v V) error {
 	if _, ok := m.Get(k); ok {
-		return fmt.Errorf("abi: duplicate key %q", k)
+		return duplicateKeyError(k)
 	}
 	m.Set(k, v)
 	return nil
@@ -234,8 +236,11 @@ func writeOrderedValueJSON(buf *bytes.Buffer, v any) error {
 
 // readOrderedValueJSON reads the next JSON value from dec into dst, a pointer to
 // one value of an OrderedMap. A type carrying its own JSON codec is read through
-// it, and a scalar from its one token, so neither goes through encoding/json's
-// reflective decoder; any other type does, with numbers kept as json.Number.
+// it, and a scalar from its own text, so neither goes through encoding/json's
+// reflective decoder; any other type does, with numbers kept as json.Number. An
+// integer is parsed from the number's text rather than through a float, so every
+// value of its type reads back exactly, and a number with a fraction or an
+// exponent is refused rather than truncated.
 func readOrderedValueJSON(dec *json.Decoder, data []byte, dst any) error {
 	switch p := dst.(type) {
 	case json.Unmarshaler:
@@ -257,17 +262,17 @@ func readOrderedValueJSON(dec *json.Decoder, data []byte, dst any) error {
 		}
 		*p = b
 	case *int:
-		n, err := readInt(dec)
+		n, err := readOrderedIntJSON(dec, data, strconv.IntSize)
+		if err != nil {
+			return err
+		}
+		*p = int(n)
+	case *int64:
+		n, err := readOrderedIntJSON(dec, data, 64)
 		if err != nil {
 			return err
 		}
 		*p = n
-	case *int64:
-		f, err := readFloat(dec)
-		if err != nil {
-			return err
-		}
-		*p = int64(f)
 	case *float64:
 		f, err := readFloat(dec)
 		if err != nil {
@@ -284,4 +289,18 @@ func readOrderedValueJSON(dec *json.Decoder, data []byte, dst any) error {
 		return vdec.Decode(dst)
 	}
 	return nil
+}
+
+// readOrderedIntJSON reads the next JSON value from dec as an integer of the
+// given bit size, parsed from the number's own text.
+func readOrderedIntJSON(dec *json.Decoder, data []byte, bitSize int) (int64, error) {
+	raw, err := readRaw(dec, data)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.ParseInt(string(raw), 10, bitSize)
+	if err != nil {
+		return 0, fmt.Errorf("abi: expected an integer, got %s", raw)
+	}
+	return n, nil
 }
