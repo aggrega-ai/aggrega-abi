@@ -22,7 +22,7 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// A plugin's complete self-declaration, returned from describe() and read once at load. It carries the ABI-compatibility handshake, the plugin type, the offered exports, and the optional per-type surfaces (a provider's render-behavior contract, a CLI plugin's commands, a settings schema, authorship metadata).
+// A plugin's complete self-declaration, returned from describe() and read once at load. It carries the ABI-compatibility handshake, the plugin type, the offered exports, and the optional per-type surfaces (a provider's render-behavior contract, an importer's recognition contract, a CLI plugin's commands, a settings schema, authorship metadata).
 export interface PluginDescriptor {
   // The plugin ABI the guest binds against. The host accepts exactly this version; a guest built against any other ABI is refused at load rather than mis-invoked at dispatch.
   abi_version: string;
@@ -34,6 +34,8 @@ export interface PluginDescriptor {
   exports: PluginExport[];
   // The provider's render-behavior self-report — the input kinds it renders, how it assembles a dispatch group's per-node output, and the artifact-template delimiter pair it applies. It describes the provider as a whole rather than any one export. Absent for a plugin that declares no render-behavior contract.
   contract?: ProviderContract;
+  // An importer's self-report of how a source of the formats it advertises is recognised when an import names no format. Only a plugin whose plugin_type is importer may declare it; any other plugin declaring it is refused at load. Absent for an importer that declares no way to recognise its formats, whose formats are then reached only by naming them.
+  importer?: ImporterContract;
   // The plugin's own one-line human-readable description of what it does, distinct from a per-export description and from the entity's metadata description. It is informational; the host neither validates nor acts on it.
   description?: string;
   // The top-level aggrega command verbs a CLI plugin contributes, each with its own short-help line. One CLI plugin may contribute several commands; the host registers one command per entry and routes the resolved command name to the guest at invocation. A non-CLI plugin leaves it empty.
@@ -162,6 +164,34 @@ export interface AssemblyNameAnnotation {
   require_unique?: boolean;
 }
 
+// What an importer declares about its formats beyond advertising them: the signatures a source of those formats is recognised by. When an import names no format, the host reads the signatures every importer in the workspace's catalog records, matches each against the source without knowing what any format is, and reads the source as the format of the one importer whose signature matches. A source no signature matches is refused asking for the format, and a source signatures of more than one format match is refused naming them. The Plugin entity records the same list, and the host refuses an importer whose describe() report differs from the record.
+export interface ImporterContract {
+  // The signatures that recognise a source of this importer's formats, in declared order; a source is recognised when any one of them matches it. A source recognised by an importer is recognised as every format the importer advertises, so an importer advertising more than one format has every match refused as ambiguous, and an importer whose sources must be recognised advertises one format. Absent or empty declares no signature, and the importer's formats are reached only by naming them.
+  detect?: DetectSignature[];
+}
+
+// One way a source is recognised: the syntax the source is read in, the file names the signature applies to, and the predicates the parsed tree must satisfy. It matches a source whose name matches one of its file patterns, or any name where it declares none, whose bytes parse in its syntax, and whose parsed tree satisfies every one of its predicates.
+export interface DetectSignature {
+  // The syntactic format the source is parsed as — json or yaml, for example — which is the format a parser plugin advertises as parse:<syntax>. The host parses the source through that parser at most once whatever number of signatures name the syntax, and a source that does not parse in it matches no signature naming it. A syntax no parser in the workspace's catalog advertises stops the recognition with that parser's absence named, rather than being passed over.
+  syntax: string;
+  // The file-name patterns the signature applies to, matched against the end of the source's name with its separators read as forward slashes: a pattern of one segment is matched against the file's own name, and a pattern of several slash-separated segments against that many trailing segments of its path, so .vscode/mcp.json matches a file named mcp.json in a directory named .vscode. Within a segment, * matches any run of characters, ? matches one character, and [...] matches one character of a class. The signature applies when any pattern matches. A pattern that is not well formed is refused at load. Absent or empty applies the signature to a source of any name.
+  files?: string[];
+  // The predicates the parsed tree must satisfy, all of them, in declared order. Absent or empty asks nothing of the tree beyond parsing in the syntax.
+  match?: PathMatch[];
+}
+
+// One predicate over the parsed tree: the value a path reaches, the kind of value it must be, and optionally a string it must equal or begin with.
+export interface PathMatch {
+  // Where in the tree the predicate looks, written as keys joined by dots from the top of the tree: data.nodes names the nodes member of the top-level data object. A segment written as a whole number, 0 or greater, selects that position of an array counting from zero, so nodes.0.type names the type of the first node; every other segment selects a member of an object. A key that itself contains a dot cannot be named.
+  path: string;
+  // What the path must reach: present holds when it reaches a value of any kind, null included; absent holds when it reaches nothing; object, array, string, number and boolean each hold when it reaches a value of that kind.
+  is: string;
+  // A string the value the path reaches must equal exactly. A value that is not a string never equals it. At most one of equals and prefix is declared on one predicate, and a predicate declaring both is refused at load.
+  equals?: string;
+  // A string the value the path reaches must begin with. A value that is not a string never begins with it. At most one of equals and prefix is declared on one predicate, and a predicate declaring both is refused at load.
+  prefix?: string;
+}
+
 export function encodePluginDescriptor(v: PluginDescriptor): string {
   const parts: string[] = [];
   parts.push(`${jstr("abi_version")}:${jstr(v.abi_version)}`);
@@ -169,6 +199,7 @@ export function encodePluginDescriptor(v: PluginDescriptor): string {
   if (v.capabilities !== undefined && v.capabilities.length > 0) parts.push(`${jstr("capabilities")}:${`[${v.capabilities!.map((e0) => jstr(e0)).join(",")}]`}`);
   parts.push(`${jstr("exports")}:${`[${v.exports!.map((e0) => encodePluginExport(e0)).join(",")}]`}`);
   if (v.contract !== undefined && v.contract !== null) parts.push(`${jstr("contract")}:${encodeProviderContract(v.contract)}`);
+  if (v.importer !== undefined && v.importer !== null) parts.push(`${jstr("importer")}:${encodeImporterContract(v.importer)}`);
   if (v.description !== undefined && v.description !== "") parts.push(`${jstr("description")}:${jstr(v.description)}`);
   if (v.commands !== undefined && v.commands.length > 0) parts.push(`${jstr("commands")}:${`[${v.commands!.map((e0) => encodePluginCLICommand(e0)).join(",")}]`}`);
   if (v.settings_schema !== undefined && v.settings_schema !== null) parts.push(`${jstr("settings_schema")}:${encodeOpaque(v.settings_schema)}`);
@@ -302,6 +333,41 @@ export function decodeAssemblyNameAnnotation(data: string): AssemblyNameAnnotati
   return JSON.parse(data) as AssemblyNameAnnotation;
 }
 
+export function encodeImporterContract(v: ImporterContract): string {
+  const parts: string[] = [];
+  if (v.detect !== undefined && v.detect.length > 0) parts.push(`${jstr("detect")}:${`[${v.detect!.map((e0) => encodeDetectSignature(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeImporterContract(data: string): ImporterContract {
+  return JSON.parse(data) as ImporterContract;
+}
+
+export function encodeDetectSignature(v: DetectSignature): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("syntax")}:${jstr(v.syntax)}`);
+  if (v.files !== undefined && v.files.length > 0) parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => jstr(e0)).join(",")}]`}`);
+  if (v.match !== undefined && v.match.length > 0) parts.push(`${jstr("match")}:${`[${v.match!.map((e0) => encodePathMatch(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeDetectSignature(data: string): DetectSignature {
+  return JSON.parse(data) as DetectSignature;
+}
+
+export function encodePathMatch(v: PathMatch): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("path")}:${jstr(v.path)}`);
+  parts.push(`${jstr("is")}:${jstr(v.is)}`);
+  if (v.equals !== undefined && v.equals !== "") parts.push(`${jstr("equals")}:${jstr(v.equals)}`);
+  if (v.prefix !== undefined && v.prefix !== "") parts.push(`${jstr("prefix")}:${jstr(v.prefix)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodePathMatch(data: string): PathMatch {
+  return JSON.parse(data) as PathMatch;
+}
+
 export function encodeCBORPluginDescriptor(v: PluginDescriptor): Uint8Array {
   const out: number[] = [];
   appendCBORPluginDescriptor(out, v);
@@ -312,6 +378,7 @@ export function appendCBORPluginDescriptor(out: number[], v: PluginDescriptor): 
   let n = 3;
   if (v.commands !== undefined && v.commands.length > 0) n++;
   if (v.contract !== undefined && v.contract !== null) n++;
+  if (v.importer !== undefined && v.importer !== null) n++;
   if (v.metadata !== undefined && v.metadata !== null) n++;
   if (v.description !== undefined && v.description !== "") n++;
   if (v.capabilities !== undefined && v.capabilities.length > 0) n++;
@@ -338,6 +405,10 @@ export function appendCBORPluginDescriptor(out: number[], v: PluginDescriptor): 
   if (v.contract !== undefined && v.contract !== null) {
     writeText(out, "contract");
     appendCBORProviderContract(out, v.contract);
+  }
+  if (v.importer !== undefined && v.importer !== null) {
+    writeText(out, "importer");
+    appendCBORImporterContract(out, v.importer);
   }
   if (v.metadata !== undefined && v.metadata !== null) {
     writeText(out, "metadata");
@@ -383,6 +454,7 @@ export function decodeCBORPluginDescriptorFrom(dec: CborDec): PluginDescriptor {
       case "capabilities": o["capabilities"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       case "exports": o["exports"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPluginExportFrom(dec)); } return a; })(); break;
       case "contract": o["contract"] = decodeCBORProviderContractFrom(dec); break;
+      case "importer": o["importer"] = decodeCBORImporterContractFrom(dec); break;
       case "description": o["description"] = dec.readText(); break;
       case "commands": o["commands"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPluginCLICommandFrom(dec)); } return a; })(); break;
       case "settings_schema": o["settings_schema"] = JSON.parse(utf8Decode(dec.readBytes())); break;
@@ -880,5 +952,146 @@ export function decodeCBORAssemblyNameAnnotationFrom(dec: CborDec): AssemblyName
     }
   }
   return o as AssemblyNameAnnotation;
+}
+
+export function encodeCBORImporterContract(v: ImporterContract): Uint8Array {
+  const out: number[] = [];
+  appendCBORImporterContract(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORImporterContract(out: number[], v: ImporterContract): void {
+  let n = 0;
+  if (v.detect !== undefined && v.detect.length > 0) n++;
+  writeHead(out, 5, n);
+  if (v.detect !== undefined && v.detect.length > 0) {
+    writeText(out, "detect");
+    {
+      const a0 = v.detect;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORDetectSignature(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORImporterContract(data: Uint8Array): ImporterContract {
+  const dec = new CborDec(data);
+  return decodeCBORImporterContractFrom(dec);
+}
+
+export function decodeCBORImporterContractFrom(dec: CborDec): ImporterContract {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "detect": o["detect"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDetectSignatureFrom(dec)); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as ImporterContract;
+}
+
+export function encodeCBORDetectSignature(v: DetectSignature): Uint8Array {
+  const out: number[] = [];
+  appendCBORDetectSignature(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORDetectSignature(out: number[], v: DetectSignature): void {
+  let n = 1;
+  if (v.files !== undefined && v.files.length > 0) n++;
+  if (v.match !== undefined && v.match.length > 0) n++;
+  writeHead(out, 5, n);
+  if (v.files !== undefined && v.files.length > 0) {
+    writeText(out, "files");
+    {
+      const a0 = v.files;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+  if (v.match !== undefined && v.match.length > 0) {
+    writeText(out, "match");
+    {
+      const a0 = v.match;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORPathMatch(out, ee0);
+      }
+    }
+  }
+  writeText(out, "syntax");
+  writeText(out, v.syntax);
+}
+
+export function decodeCBORDetectSignature(data: Uint8Array): DetectSignature {
+  const dec = new CborDec(data);
+  return decodeCBORDetectSignatureFrom(dec);
+}
+
+export function decodeCBORDetectSignatureFrom(dec: CborDec): DetectSignature {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "syntax": o["syntax"] = dec.readText(); break;
+      case "files": o["files"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "match": o["match"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORPathMatchFrom(dec)); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as DetectSignature;
+}
+
+export function encodeCBORPathMatch(v: PathMatch): Uint8Array {
+  const out: number[] = [];
+  appendCBORPathMatch(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORPathMatch(out: number[], v: PathMatch): void {
+  let n = 2;
+  if (v.equals !== undefined && v.equals !== "") n++;
+  if (v.prefix !== undefined && v.prefix !== "") n++;
+  writeHead(out, 5, n);
+  writeText(out, "is");
+  writeText(out, v.is);
+  writeText(out, "path");
+  writeText(out, v.path);
+  if (v.equals !== undefined && v.equals !== "") {
+    writeText(out, "equals");
+    writeText(out, v.equals);
+  }
+  if (v.prefix !== undefined && v.prefix !== "") {
+    writeText(out, "prefix");
+    writeText(out, v.prefix);
+  }
+}
+
+export function decodeCBORPathMatch(data: Uint8Array): PathMatch {
+  const dec = new CborDec(data);
+  return decodeCBORPathMatchFrom(dec);
+}
+
+export function decodeCBORPathMatchFrom(dec: CborDec): PathMatch {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "path": o["path"] = dec.readText(); break;
+      case "is": o["is"] = dec.readText(); break;
+      case "equals": o["equals"] = dec.readText(); break;
+      case "prefix": o["prefix"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as PathMatch;
 }
 

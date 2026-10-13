@@ -13,7 +13,7 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
     *v == T::default()
 }
 
-/// A plugin's complete self-declaration, returned from describe() and read once at load. It carries the ABI-compatibility handshake, the plugin type, the offered exports, and the optional per-type surfaces (a provider's render-behavior contract, a CLI plugin's commands, a settings schema, authorship metadata).
+/// A plugin's complete self-declaration, returned from describe() and read once at load. It carries the ABI-compatibility handshake, the plugin type, the offered exports, and the optional per-type surfaces (a provider's render-behavior contract, an importer's recognition contract, a CLI plugin's commands, a settings schema, authorship metadata).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PluginDescriptor {
     /// The plugin ABI the guest binds against. The host accepts exactly this version; a guest built against any other ABI is refused at load rather than mis-invoked at dispatch.
@@ -28,6 +28,9 @@ pub struct PluginDescriptor {
     /// The provider's render-behavior self-report — the input kinds it renders, how it assembles a dispatch group's per-node output, and the artifact-template delimiter pair it applies. It describes the provider as a whole rather than any one export. Absent for a plugin that declares no render-behavior contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contract: Option<Box<ProviderContract>>,
+    /// An importer's self-report of how a source of the formats it advertises is recognised when an import names no format. Only a plugin whose plugin_type is importer may declare it; any other plugin declaring it is refused at load. Absent for an importer that declares no way to recognise its formats, whose formats are then reached only by naming them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importer: Option<Box<ImporterContract>>,
     /// The plugin's own one-line human-readable description of what it does, distinct from a per-export description and from the entity's metadata description. It is informational; the host neither validates nor acts on it.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
@@ -199,6 +202,42 @@ pub struct AssemblyNameAnnotation {
     pub require_unique: bool,
 }
 
+/// What an importer declares about its formats beyond advertising them: the signatures a source of those formats is recognised by. When an import names no format, the host reads the signatures every importer in the workspace's catalog records, matches each against the source without knowing what any format is, and reads the source as the format of the one importer whose signature matches. A source no signature matches is refused asking for the format, and a source signatures of more than one format match is refused naming them. The Plugin entity records the same list, and the host refuses an importer whose describe() report differs from the record.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ImporterContract {
+    /// The signatures that recognise a source of this importer's formats, in declared order; a source is recognised when any one of them matches it. A source recognised by an importer is recognised as every format the importer advertises, so an importer advertising more than one format has every match refused as ambiguous, and an importer whose sources must be recognised advertises one format. Absent or empty declares no signature, and the importer's formats are reached only by naming them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detect: Vec<DetectSignature>,
+}
+
+/// One way a source is recognised: the syntax the source is read in, the file names the signature applies to, and the predicates the parsed tree must satisfy. It matches a source whose name matches one of its file patterns, or any name where it declares none, whose bytes parse in its syntax, and whose parsed tree satisfies every one of its predicates.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DetectSignature {
+    /// The syntactic format the source is parsed as — json or yaml, for example — which is the format a parser plugin advertises as parse:<syntax>. The host parses the source through that parser at most once whatever number of signatures name the syntax, and a source that does not parse in it matches no signature naming it. A syntax no parser in the workspace's catalog advertises stops the recognition with that parser's absence named, rather than being passed over.
+    pub syntax: String,
+    /// The file-name patterns the signature applies to, matched against the end of the source's name with its separators read as forward slashes: a pattern of one segment is matched against the file's own name, and a pattern of several slash-separated segments against that many trailing segments of its path, so .vscode/mcp.json matches a file named mcp.json in a directory named .vscode. Within a segment, * matches any run of characters, ? matches one character, and [...] matches one character of a class. The signature applies when any pattern matches. A pattern that is not well formed is refused at load. Absent or empty applies the signature to a source of any name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
+    /// The predicates the parsed tree must satisfy, all of them, in declared order. Absent or empty asks nothing of the tree beyond parsing in the syntax.
+    #[serde(rename = "match", default, skip_serializing_if = "Vec::is_empty")]
+    pub r#match: Vec<PathMatch>,
+}
+
+/// One predicate over the parsed tree: the value a path reaches, the kind of value it must be, and optionally a string it must equal or begin with.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PathMatch {
+    /// Where in the tree the predicate looks, written as keys joined by dots from the top of the tree: data.nodes names the nodes member of the top-level data object. A segment written as a whole number, 0 or greater, selects that position of an array counting from zero, so nodes.0.type names the type of the first node; every other segment selects a member of an object. A key that itself contains a dot cannot be named.
+    pub path: String,
+    /// What the path must reach: present holds when it reaches a value of any kind, null included; absent holds when it reaches nothing; object, array, string, number and boolean each hold when it reaches a value of that kind.
+    pub is: String,
+    /// A string the value the path reaches must equal exactly. A value that is not a string never equals it. At most one of equals and prefix is declared on one predicate, and a predicate declaring both is refused at load.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub equals: String,
+    /// A string the value the path reaches must begin with. A value that is not a string never begins with it. At most one of equals and prefix is declared on one predicate, and a predicate declaring both is refused at load.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub prefix: String,
+}
+
 
 impl PluginDescriptor {
     /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
@@ -213,6 +252,7 @@ impl PluginDescriptor {
         let mut n: u64 = 3;
         if !self.commands.is_empty() { n += 1; }
         if self.contract.is_some() { n += 1; }
+        if self.importer.is_some() { n += 1; }
         if self.metadata.is_some() { n += 1; }
         if !self.description.is_empty() { n += 1; }
         if !self.capabilities.is_empty() { n += 1; }
@@ -238,6 +278,10 @@ impl PluginDescriptor {
         }
         if let Some(ref x) = self.contract {
             crate::cbor_gen::write_text(out, "contract");
+            x.append_cbor(out)?;
+        }
+        if let Some(ref x) = self.importer {
+            crate::cbor_gen::write_text(out, "importer");
             x.append_cbor(out)?;
         }
         if let Some(ref x) = self.metadata {
@@ -282,6 +326,7 @@ impl PluginDescriptor {
         let mut f_capabilities: Vec<String> = Vec::new();
         let mut f_exports: Option<Vec<PluginExport>> = None;
         let mut f_contract: Option<Box<ProviderContract>> = None;
+        let mut f_importer: Option<Box<ImporterContract>> = None;
         let mut f_description: String = String::new();
         let mut f_commands: Vec<PluginCLICommand> = Vec::new();
         let mut f_settings_schema: Option<Box<RawValue>> = None;
@@ -295,6 +340,7 @@ impl PluginDescriptor {
                 "capabilities" => f_capabilities = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
                 "exports" => f_exports = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<PluginExport> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(PluginExport::decode_cbor_from(dec)?); } sv }),
                 "contract" => f_contract = Some(Box::new(ProviderContract::decode_cbor_from(dec)?)),
+                "importer" => f_importer = Some(Box::new(ImporterContract::decode_cbor_from(dec)?)),
                 "description" => f_description = dec.read_text()?,
                 "commands" => f_commands = { let sn = dec.read_array_header()?; let mut sv: Vec<PluginCLICommand> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(PluginCLICommand::decode_cbor_from(dec)?); } sv },
                 "settings_schema" => f_settings_schema = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
@@ -308,6 +354,7 @@ impl PluginDescriptor {
             capabilities: f_capabilities,
             exports: f_exports.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field exports".to_string()))?,
             contract: f_contract,
+            importer: f_importer,
             description: f_description,
             commands: f_commands,
             settings_schema: f_settings_schema,
@@ -946,6 +993,184 @@ impl AssemblyNameAnnotation {
         Ok(Self {
             annotation: f_annotation.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field annotation".to_string()))?,
             require_unique: f_require_unique,
+        })
+    }
+}
+
+impl ImporterContract {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 0;
+        if !self.detect.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.detect.is_empty() {
+            crate::cbor_gen::write_text(out, "detect");
+            {
+                let c = &self.detect;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_detect: Vec<DetectSignature> = Vec::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "detect" => f_detect = { let sn = dec.read_array_header()?; let mut sv: Vec<DetectSignature> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(DetectSignature::decode_cbor_from(dec)?); } sv },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            detect: f_detect,
+        })
+    }
+}
+
+impl DetectSignature {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 1;
+        if !self.files.is_empty() { n += 1; }
+        if !self.r#match.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        if !self.files.is_empty() {
+            crate::cbor_gen::write_text(out, "files");
+            {
+                let c = &self.files;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
+        if !self.r#match.is_empty() {
+            crate::cbor_gen::write_text(out, "match");
+            {
+                let c = &self.r#match;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        crate::cbor_gen::write_text(out, "syntax");
+        crate::cbor_gen::write_text(out, &self.syntax);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_syntax: Option<String> = None;
+        let mut f_files: Vec<String> = Vec::new();
+        let mut f_match: Vec<PathMatch> = Vec::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "syntax" => f_syntax = Some(dec.read_text()?),
+                "files" => f_files = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
+                "match" => f_match = { let sn = dec.read_array_header()?; let mut sv: Vec<PathMatch> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(PathMatch::decode_cbor_from(dec)?); } sv },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            syntax: f_syntax.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field syntax".to_string()))?,
+            files: f_files,
+            r#match: f_match,
+        })
+    }
+}
+
+impl PathMatch {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if !self.equals.is_empty() { n += 1; }
+        if !self.prefix.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "is");
+        crate::cbor_gen::write_text(out, &self.is);
+        crate::cbor_gen::write_text(out, "path");
+        crate::cbor_gen::write_text(out, &self.path);
+        if !self.equals.is_empty() {
+            crate::cbor_gen::write_text(out, "equals");
+            crate::cbor_gen::write_text(out, &self.equals);
+        }
+        if !self.prefix.is_empty() {
+            crate::cbor_gen::write_text(out, "prefix");
+            crate::cbor_gen::write_text(out, &self.prefix);
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_path: Option<String> = None;
+        let mut f_is: Option<String> = None;
+        let mut f_equals: String = String::new();
+        let mut f_prefix: String = String::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "path" => f_path = Some(dec.read_text()?),
+                "is" => f_is = Some(dec.read_text()?),
+                "equals" => f_equals = dec.read_text()?,
+                "prefix" => f_prefix = dec.read_text()?,
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            path: f_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field path".to_string()))?,
+            is: f_is.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field is".to_string()))?,
+            equals: f_equals,
+            prefix: f_prefix,
         })
     }
 }

@@ -539,6 +539,19 @@ func TestSocketParity_PluginDescriptorProviderOmits(t *testing.T) {
 	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorProviderOmits")
 }
 
+// TestSocketParity_PluginDescriptorImporter pins an importer's recognition
+// contract populated in every field: two signatures in two syntaxes, file
+// patterns, and predicates of four kinds carrying an equals and a prefix. The
+// contract is omitted when absent, so every other descriptor vector carries the
+// same bytes whether the codec handles it or drops it; this one does not. The
+// description after it pins the contract's declared position in the JSON wire,
+// and the predicates' order is part of what the signature declares, so a codec
+// that reordered a list would move the bytes.
+func TestSocketParity_PluginDescriptorImporter(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorImporter")
+}
+
 // PluginDescriptorMinimal is a descriptor that declares none of the optional
 // nested objects — no render-behavior contract, no authorship metadata, and so
 // (transitively) no artifact-delimiter pair and no assembly-name annotation.

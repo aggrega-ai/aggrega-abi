@@ -549,6 +549,10 @@ fn plugin_descriptor_variants() {
         "PluginDescriptorCLI",
         "PluginDescriptorProvider",
         "PluginDescriptorProviderOmits",
+        // An importer's recognition contract populated in every field; omitted
+        // when absent, so this is the descriptor vector where dropping it, or
+        // reordering a list it carries, moves the bytes.
+        "PluginDescriptorImporter",
         "PluginDescriptorMinimal",
         "PluginDescriptorMoo",
     ] {

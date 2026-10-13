@@ -174,6 +174,10 @@ const vectors: Array<[string, string]> = [
   // A provider contract claiming to honour omit entries: the claim is omitted
   // when false, so this is the descriptor vector where dropping it moves the bytes.
   ["PluginDescriptorProviderOmits", "PluginDescriptor"],
+  // An importer's recognition contract populated in every field: omitted when
+  // absent, so this is the descriptor vector where dropping it, or reordering a
+  // list it carries, moves the bytes.
+  ["PluginDescriptorImporter", "PluginDescriptor"],
   ["PluginDescriptorMinimal", "PluginDescriptor"],
   ["PluginDescriptorMoo", "PluginDescriptor"],
   ["ParseInput", "ParseInput"],
