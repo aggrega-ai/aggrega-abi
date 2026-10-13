@@ -1375,6 +1375,63 @@ export interface ImportDiagnostic {
   code?: string;
 }
 
+// How a conversion mapped one source node: the catalog Components the importer weighed, the one it chose, why, and how to swap the choice.
+export interface ImportDecision {
+  sourceNode: DecisionSourceNode;
+  // The catalog Components the importer weighed for the node, each with its score. Absent where it weighed none.
+  candidates?: ImportCandidate[];
+  chosen?: DecisionChoice;
+  // Why the importer made the choice, in its own words. Absent where it wrote none.
+  rationale?: string;
+  // How to swap the choice for an alternative, in the importer's own words. Absent where it wrote none.
+  swapHint?: string;
+}
+
+// The source node a mapping decision is about.
+export interface DecisionSourceNode {
+  // The node's identifier in the source.
+  id: string;
+  // The node's type, as the source names it.
+  type: string;
+  // A summary of the node's parameters, for showing beside the decision.
+  paramsSummary: string;
+}
+
+// One catalog Component the importer weighed for a source node.
+export interface ImportCandidate {
+  // The Component's name.
+  componentName: string;
+  // How well the Component matches the node, as the importer scored it.
+  score: number;
+  // The match tier the score falls in.
+  tier: string;
+  signals: CandidateSignals;
+}
+
+// What each of the importer's signals contributed to a candidate's score.
+export interface CandidateSignals {
+  // The contribution of the mapping-table signal.
+  table: number;
+  // The contribution of the category signal.
+  category: number;
+  // The contribution of the domain-labels signal.
+  domainLabels: number;
+  // The contribution of the shape signal.
+  shape: number;
+  // The contribution of the name signal.
+  name: number;
+}
+
+// What the importer chose for a source node. Absent from a decision where it made no choice.
+export interface DecisionChoice {
+  // The name of the Component chosen: an existing catalog Component, or the one drafted for the node.
+  target: string;
+  // How the choice is written: as a reference to an existing Component, or as a newly drafted one.
+  mode: string;
+  // The match tier of the choice.
+  tier: string;
+}
+
 // What a convention check found in one document.
 export interface LintFileFindings {
   // The document.
@@ -2062,6 +2119,8 @@ export interface ImportResult {
   files: ImportedFile[] | null;
   // What could not be converted.
   diagnostics: ImportDiagnostic[] | null;
+  // How the importer mapped each source node, in the importer's order and exactly as it reported it: what tells you where the conversion guessed. Carried under both deliveries and whether or not the conversion stopped, and an empty list for an importer that reports none.
+  decisions: ImportDecision[];
   // Whether the conversion stopped rather than finishing with findings.
   halted: boolean;
 }
@@ -3734,6 +3793,71 @@ export function decodeImportDiagnostic(data: string): ImportDiagnostic {
   return JSON.parse(data) as ImportDiagnostic;
 }
 
+export function encodeImportDecision(v: ImportDecision): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("sourceNode")}:${encodeDecisionSourceNode(v.sourceNode)}`);
+  if (v.candidates !== undefined && v.candidates.length > 0) parts.push(`${jstr("candidates")}:${`[${v.candidates!.map((e0) => encodeImportCandidate(e0)).join(",")}]`}`);
+  if (v.chosen !== undefined) parts.push(`${jstr("chosen")}:${encodeDecisionChoice(v.chosen)}`);
+  if (v.rationale !== undefined && v.rationale !== "") parts.push(`${jstr("rationale")}:${jstr(v.rationale)}`);
+  if (v.swapHint !== undefined && v.swapHint !== "") parts.push(`${jstr("swapHint")}:${jstr(v.swapHint)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeImportDecision(data: string): ImportDecision {
+  return JSON.parse(data) as ImportDecision;
+}
+
+export function encodeDecisionSourceNode(v: DecisionSourceNode): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("id")}:${jstr(v.id)}`);
+  parts.push(`${jstr("type")}:${jstr(v.type)}`);
+  parts.push(`${jstr("paramsSummary")}:${jstr(v.paramsSummary)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeDecisionSourceNode(data: string): DecisionSourceNode {
+  return JSON.parse(data) as DecisionSourceNode;
+}
+
+export function encodeImportCandidate(v: ImportCandidate): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("componentName")}:${jstr(v.componentName)}`);
+  parts.push(`${jstr("score")}:${String(v.score)}`);
+  parts.push(`${jstr("tier")}:${jstr(v.tier)}`);
+  parts.push(`${jstr("signals")}:${encodeCandidateSignals(v.signals)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeImportCandidate(data: string): ImportCandidate {
+  return JSON.parse(data) as ImportCandidate;
+}
+
+export function encodeCandidateSignals(v: CandidateSignals): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("table")}:${String(v.table)}`);
+  parts.push(`${jstr("category")}:${String(v.category)}`);
+  parts.push(`${jstr("domainLabels")}:${String(v.domainLabels)}`);
+  parts.push(`${jstr("shape")}:${String(v.shape)}`);
+  parts.push(`${jstr("name")}:${String(v.name)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeCandidateSignals(data: string): CandidateSignals {
+  return JSON.parse(data) as CandidateSignals;
+}
+
+export function encodeDecisionChoice(v: DecisionChoice): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("target")}:${jstr(v.target)}`);
+  parts.push(`${jstr("mode")}:${jstr(v.mode)}`);
+  parts.push(`${jstr("tier")}:${jstr(v.tier)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeDecisionChoice(data: string): DecisionChoice {
+  return JSON.parse(data) as DecisionChoice;
+}
+
 export function encodeLintFileFindings(v: LintFileFindings): string {
   const parts: string[] = [];
   parts.push(`${jstr("file")}:${jstr(v.file)}`);
@@ -4481,6 +4605,7 @@ export function encodeImportResult(v: ImportResult): string {
   parts.push(`${jstr("written")}:${v.written === null ? "null" : `[${v.written!.map((e0) => jstr(e0)).join(",")}]`}`);
   parts.push(`${jstr("files")}:${v.files === null ? "null" : `[${v.files!.map((e0) => encodeImportedFile(e0)).join(",")}]`}`);
   parts.push(`${jstr("diagnostics")}:${v.diagnostics === null ? "null" : `[${v.diagnostics!.map((e0) => encodeImportDiagnostic(e0)).join(",")}]`}`);
+  parts.push(`${jstr("decisions")}:${`[${v.decisions!.map((e0) => encodeImportDecision(e0)).join(",")}]`}`);
   parts.push(`${jstr("halted")}:${String(v.halted)}`);
   return `{${parts.join(",")}}`;
 }
