@@ -39,7 +39,7 @@ pub struct LinterInput {
     /// Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_path: String,
-    /// The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
+    /// The per-workspace publishing-discipline configuration the rule consults, carried as a Policies object the host assembles from the workspace configuration and any command-line overrides.
     #[serde(default)]
     pub policies: Policies,
 }

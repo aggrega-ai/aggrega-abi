@@ -31,7 +31,7 @@ type LinterInput struct {
 	Components OrderedMap[json.RawMessage] `json:"components,omitempty,omitzero" yaml:"components,omitempty" cbor:"components,omitempty"`
 	// SourcePath Filesystem path the entity was loaded from. Populated by host callers walking the catalog filesystem; consumed by path-aware rules (e.g., category-matches-directory). Omitted when the caller has no path context.
 	SourcePath string `json:"source_path,omitempty" yaml:"source_path,omitempty" cbor:"source_path,omitempty"`
-	// Policies The per-workspace publishing-discipline configuration the rule consults. The guest realizes it as the typed Policies object; the host pipes it through as an opaque payload it assembles from the workspace config and CLI overrides.
+	// Policies The per-workspace publishing-discipline configuration the rule consults, carried as a Policies object the host assembles from the workspace configuration and any command-line overrides.
 	Policies Policies `json:"policies,omitempty" yaml:"policies,omitempty" cbor:"policies,omitempty"`
 }
 
