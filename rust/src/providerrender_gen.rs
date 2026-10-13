@@ -268,12 +268,12 @@ pub struct SourceFileResponse {
     pub hostfunc_error_code: String,
 }
 
-/// The fetch-external-input host function's reply: on success the fetched content, on failure an error message. Exactly one of content or error is populated. Failure is delivered in-band rather than by trapping, so a guest carries an unresolvable URL or a fetch failure into its own diagnostics as a deterministic render failure. The request is a bare URL string rather than a structured payload, so only the reply has a declared shape.
+/// The fetch-external-input host function's reply: on success the fetched content, on failure an error message and its code. A reply that carries neither failure field is a success, so a zero-length payload is the reply with every field absent. Failure is delivered in-band rather than by trapping, so a guest carries an unresolvable URL or a fetch failure into its own diagnostics as a deterministic render failure. The request is a bare URL string rather than a structured payload, so only the reply has a declared shape.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FetchExternalInputResponse {
-    /// The fetched content on success; absent on failure. Unlike the byte-carrying fields elsewhere in this socket, every kit holds this one as a string and the guest decodes it to recover the bytes. Held by reference so a zero-length payload still emits the content key and stays distinguishable from a failure.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub content: Option<String>,
+    /// The fetched payload's raw bytes on success; absent on failure, and absent when the payload is empty. The bytes cross the wire as a byte string, never as base64 text. The Go kit holds them as a byte slice; the Rust and TypeScript kits hold them as a base64 string, which each kit's fetch wrapper decodes, so every wrapper returns the payload's raw bytes.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub content: String,
     /// The failure message on failure, naming the URL and the remedy; absent on success.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
@@ -1792,16 +1792,16 @@ impl FetchExternalInputResponse {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 0;
         if !self.error.is_empty() { n += 1; }
-        if self.content.is_some() { n += 1; }
+        if !self.content.is_empty() { n += 1; }
         if !self.hostfunc_error_code.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.error.is_empty() {
             crate::cbor_gen::write_text(out, "error");
             crate::cbor_gen::write_text(out, &self.error);
         }
-        if let Some(ref x) = self.content {
+        if !self.content.is_empty() {
             crate::cbor_gen::write_text(out, "content");
-            crate::cbor_gen::write_text(out, x);
+            crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.content)?);
         }
         if !self.hostfunc_error_code.is_empty() {
             crate::cbor_gen::write_text(out, "hostfunc_error_code");
@@ -1818,14 +1818,14 @@ impl FetchExternalInputResponse {
     }
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_content: Option<String> = None;
+        let mut f_content: String = String::new();
         let mut f_error: String = String::new();
         let mut f_hostfunc_error_code: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
-                "content" => f_content = Some(dec.read_text()?),
+                "content" => f_content = crate::cbor_gen::b64_encode(&dec.read_bytes()?),
                 "error" => f_error = dec.read_text()?,
                 "hostfunc_error_code" => f_hostfunc_error_code = dec.read_text()?,
                 _ => dec.skip()?,

@@ -287,6 +287,13 @@ cbor_case!(parse_source_response, aggrega_abi::ParseSourceResponse, "ParseSource
 // rides in the head rather than in the initial byte.
 cbor_vector!(parse_source_response_tree, aggrega_abi::ParseSourceResponse, "ParseSourceResponseTree");
 cbor_case!(fetch_external_input_response, aggrega_abi::FetchExternalInputResponse, "FetchExternalInputResponse");
+// A zero-length fetched payload, so cbor_vector rather than cbor_case: the trait
+// binding for this type is declared by the failure vector above. The content field
+// is omitted when empty, so the reply carries no field at all and stays
+// distinguishable from a failure only because a failure always carries its error
+// fields. This crate holds the content as a base64 `String`, so the vector also
+// pins that an empty one is omitted rather than written as an empty byte string.
+cbor_vector!(fetch_external_input_response_empty_content, aggrega_abi::FetchExternalInputResponse, "FetchExternalInputResponseEmptyContent");
 
 // The pack-source and read-source-file request and SUCCESS reply vectors. The
 // success reply is the half a failure envelope cannot stand in for: the two are the

@@ -218,9 +218,9 @@ export interface SourceFileResponse {
   hostfunc_error_code?: string;
 }
 
-// The fetch-external-input host function's reply: on success the fetched content, on failure an error message. Exactly one of content or error is populated. Failure is delivered in-band rather than by trapping, so a guest carries an unresolvable URL or a fetch failure into its own diagnostics as a deterministic render failure. The request is a bare URL string rather than a structured payload, so only the reply has a declared shape.
+// The fetch-external-input host function's reply: on success the fetched content, on failure an error message and its code. A reply that carries neither failure field is a success, so a zero-length payload is the reply with every field absent. Failure is delivered in-band rather than by trapping, so a guest carries an unresolvable URL or a fetch failure into its own diagnostics as a deterministic render failure. The request is a bare URL string rather than a structured payload, so only the reply has a declared shape.
 export interface FetchExternalInputResponse {
-  // The fetched content on success; absent on failure. Unlike the byte-carrying fields elsewhere in this socket, every kit holds this one as a string and the guest decodes it to recover the bytes. Held by reference so a zero-length payload still emits the content key and stays distinguishable from a failure.
+  // The fetched payload's raw bytes on success; absent on failure, and absent when the payload is empty. The bytes cross the wire as a byte string, never as base64 text. The Go kit holds them as a byte slice; the Rust and TypeScript kits hold them as a base64 string, which each kit's fetch wrapper decodes, so every wrapper returns the payload's raw bytes.
   content?: string;
   // The failure message on failure, naming the URL and the remedy; absent on success.
   error?: string;
@@ -776,7 +776,7 @@ export function decodeSourceFileResponse(data: string): SourceFileResponse {
 
 export function encodeFetchExternalInputResponse(v: FetchExternalInputResponse): string {
   const parts: string[] = [];
-  if (v.content !== undefined && v.content !== null) parts.push(`${jstr("content")}:${jstr(v.content)}`);
+  if (v.content !== undefined && v.content !== "") parts.push(`${jstr("content")}:${jstr(v.content)}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   if (v.hostfunc_error_code !== undefined && v.hostfunc_error_code !== "") parts.push(`${jstr("hostfunc_error_code")}:${jstr(v.hostfunc_error_code)}`);
   return `{${parts.join(",")}}`;
@@ -2078,16 +2078,16 @@ export function encodeCBORFetchExternalInputResponse(v: FetchExternalInputRespon
 export function appendCBORFetchExternalInputResponse(out: number[], v: FetchExternalInputResponse): void {
   let n = 0;
   if (v.error !== undefined && v.error !== "") n++;
-  if (v.content !== undefined && v.content !== null) n++;
+  if (v.content !== undefined && v.content !== "") n++;
   if (v.hostfunc_error_code !== undefined && v.hostfunc_error_code !== "") n++;
   writeHead(out, 5, n);
   if (v.error !== undefined && v.error !== "") {
     writeText(out, "error");
     writeText(out, v.error);
   }
-  if (v.content !== undefined && v.content !== null) {
+  if (v.content !== undefined && v.content !== "") {
     writeText(out, "content");
-    writeText(out, v.content);
+    writeBytes(out, b64decode(v.content));
   }
   if (v.hostfunc_error_code !== undefined && v.hostfunc_error_code !== "") {
     writeText(out, "hostfunc_error_code");
@@ -2106,7 +2106,7 @@ export function decodeCBORFetchExternalInputResponseFrom(dec: CborDec): FetchExt
   for (let i = 0; i < n; i++) {
     const k = dec.readText();
     switch (k) {
-      case "content": o["content"] = dec.readText(); break;
+      case "content": o["content"] = b64encode(dec.readBytes()); break;
       case "error": o["error"] = dec.readText(); break;
       case "hostfunc_error_code": o["hostfunc_error_code"] = dec.readText(); break;
       default: dec.skip();

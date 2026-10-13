@@ -610,13 +610,24 @@ func TestSocketParity_FetchExternalInputResponse(t *testing.T) {
 	roundTripBothGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponse")
 }
 
-// The content golden is the success path: a base64 content string carried
-// through the pointer-to-scalar content field, proving the field round-trips
-// across the three codecs (a zero-length payload stays distinguishable from a
-// failure because the content key is still present).
+// The content golden is the success path: the fetched bytes carried through a
+// byte field, which crosses the binary wire as a raw byte string and the
+// textual one as base64, proving the field round-trips across the three
+// codecs.
 func TestSocketParity_FetchExternalInputResponseContent(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponseContent")
+}
+
+// The empty-content golden is a zero-length payload: the content field is
+// omitted when empty, so the reply carries no field at all. It stays
+// distinguishable from a failure because a failure always carries its error
+// fields, which is why this shape and the failure golden above are asserted
+// together: a codec that emitted the empty content, or dropped the failure
+// fields, moves one of the two.
+func TestSocketParity_FetchExternalInputResponseEmptyContent(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.FetchExternalInputResponse](t, "FetchExternalInputResponseEmptyContent")
 }
 
 // The pack-source and read-source-file goldens below are the request and the

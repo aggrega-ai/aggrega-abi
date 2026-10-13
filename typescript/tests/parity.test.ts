@@ -189,7 +189,14 @@ const vectors: Array<[string, string]> = [
   // document is long enough that its byte-string length needs a two-byte head.
   ["ParseSourceResponseTree", "ParseSourceResponse"],
   ["FetchExternalInputResponse", "FetchExternalInputResponse"],
+  // The fetched bytes ride a byte field: this package holds them as a base64
+  // string, so the vector pins that the binary half writes them as the raw byte
+  // string the other two languages emit, and reads them back to the same base64.
   ["FetchExternalInputResponseContent", "FetchExternalInputResponse"],
+  // A zero-length fetched payload: the content field is omitted when empty, so
+  // the reply carries no field at all, and it stays distinguishable from a failure
+  // only because a failure always carries its error fields.
+  ["FetchExternalInputResponseEmptyContent", "FetchExternalInputResponse"],
   // The pack-source and read-source-file request and SUCCESS reply vectors. The
   // success reply is the half a failure envelope cannot stand in for: the two are the
   // two directions of one omission property, and an encoder emitting an error key
