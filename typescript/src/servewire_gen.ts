@@ -1885,6 +1885,8 @@ export interface PublishEntityResult {
   pin?: PinResult;
   // The entity's local source as authored, present when it is written as a template. Such a source names its directory only once a Release fills the template in, so the publication carries every file in the entity's directory rather than only the files the entity names. Absent where it carries only those files.
   wholeDirectorySource?: string;
+  // The entries of the published archive whose path holds a part Windows cannot hold as written — a name Windows reserves for a device, such as CON, AUX or NUL, in any letter case and whatever extension follows, or a part ending in a full stop or a space — the entity document's own file name first, then the files it carries. A workspace on Windows refuses to unpack them, so it cannot use the version; the publication goes ahead or stops exactly as it would without them. Absent where there is none, which includes an entity published as its document alone.
+  windowsUnusableEntries?: string[];
 }
 
 // What publishing a file landed, and where.
@@ -4338,6 +4340,7 @@ export function encodePublishEntityResult(v: PublishEntityResult): string {
   parts.push(`${jstr("reach")}:${encodePublicationReach(v.reach)}`);
   if (v.pin !== undefined) parts.push(`${jstr("pin")}:${encodePinResult(v.pin)}`);
   if (v.wholeDirectorySource !== undefined && v.wholeDirectorySource !== "") parts.push(`${jstr("wholeDirectorySource")}:${jstr(v.wholeDirectorySource)}`);
+  if (v.windowsUnusableEntries !== undefined && v.windowsUnusableEntries.length > 0) parts.push(`${jstr("windowsUnusableEntries")}:${`[${v.windowsUnusableEntries!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
