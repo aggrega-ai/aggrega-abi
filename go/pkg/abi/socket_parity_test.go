@@ -540,6 +540,16 @@ func TestSocketParity_ImportInput(t *testing.T) {
 	roundTripBothGolden[abi.ImportInput](t, "ImportInput")
 }
 
+// TestSocketParity_ImportInputCatalog pins the catalog view an importer is handed:
+// the field is omitted when absent, so this is the vector where dropping it moves
+// the bytes. One Component declares sockets and one declares none, the sockets are
+// listed out of name order, and the label keys sort differently in the two wire
+// forms, so a codec that sorted a list or lost a map-key sort fails it.
+func TestSocketParity_ImportInputCatalog(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.ImportInput](t, "ImportInputCatalog")
+}
+
 func TestSocketParity_ImportOutput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.ImportOutput](t, "ImportOutput")

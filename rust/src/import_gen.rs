@@ -22,7 +22,7 @@ where
     }
 }
 
-/// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, and an optional opaque options document the consumer supplies for importer-specific behavior.
+/// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ImportInput {
     /// The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
@@ -35,6 +35,46 @@ pub struct ImportInput {
     /// An opaque import-options document the consumer supplies for importer-specific behavior. The host pipes it through without interpreting it; the importer reads whatever shape it documents. Absent when the consumer supplies no options.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<Box<RawValue>>,
+    /// A view of the Components the workspace's own catalog holds — the catalog the importer itself was selected from — so the importer can weigh them as candidates when it maps a source node to a catalog entity. The host builds it from that local catalog alone, and it carries names, versions, labels and declared structure only: never a value, a default or a secret. Its order is fixed, so one catalog yields one byte sequence. Absent when the catalog holds no Component.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<Box<CatalogProjection>>,
+}
+
+/// The workspace's catalog as an importer sees it: one entry per Component the catalog holds, each carrying the metadata an importer weighs when it scores a candidate.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CatalogProjection {
+    /// One entry per Component name the catalog holds, sorted by name. Where the catalog holds several versions of one Component, its entry describes the version a reference naming the Component without a version resolves to.
+    pub components: Vec<CatalogComponent>,
+}
+
+/// One Component of the workspace's catalog: its name and version, its labels, the key names its values and provides declare, and the sockets it declares for its dependencies. A Component that extends another carries what it inherits as well as what it declares itself.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CatalogComponent {
+    /// The Component's name, as its metadata.name declares it — the name an Aggregate references it by.
+    pub name: String,
+    /// The Component's version, as its metadata.version declares it.
+    pub version: String,
+    /// The Component's labels, as a string-to-string map. Absent when it carries none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub labels: BTreeMap<String, String>,
+    /// The top-level key names the Component's values declares, sorted. A list of names only: it never carries a value or a default. Absent when its values declares no key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<String>,
+    /// The top-level key names the Component's provides declares, sorted. A list of names only: it never carries a value. Absent when its provides declares no key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provides: Vec<String>,
+    /// The sockets the Component declares for its dependencies, in declaration order: for a Component that extends another, the sockets it inherits come first, in the order the extended Component declares them, followed by those it adds. Absent when it declares none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sockets: Vec<CatalogSocket>,
+}
+
+/// One socket a catalog Component declares for its dependencies: the socket's name and the label selector a dependency wired through it must satisfy.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CatalogSocket {
+    /// The socket's name, as the Component's usesSchema declares it.
+    pub name: String,
+    /// The socket's label selector, verbatim, in the Kubernetes-style grammar the Component writes it in: the labels a dependency wired through this socket must carry.
+    pub selector: String,
 }
 
 /// One named source within a multi-file or directory import: a name locating the source and its own bytes.
@@ -192,6 +232,7 @@ impl ImportInput {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
+        if self.catalog.is_some() { n += 1; }
         if !self.sources.is_empty() { n += 1; }
         if self.settings.is_some() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -199,6 +240,10 @@ impl ImportInput {
         crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.bytes)?);
         crate::cbor_gen::write_text(out, "format");
         crate::cbor_gen::write_text(out, &self.format);
+        if let Some(ref x) = self.catalog {
+            crate::cbor_gen::write_text(out, "catalog");
+            x.append_cbor(out)?;
+        }
         if !self.sources.is_empty() {
             crate::cbor_gen::write_text(out, "sources");
             {
@@ -228,6 +273,7 @@ impl ImportInput {
         let mut f_bytes: Option<String> = None;
         let mut f_sources: Vec<ImportSource> = Vec::new();
         let mut f_settings: Option<Box<RawValue>> = None;
+        let mut f_catalog: Option<Box<CatalogProjection>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -236,6 +282,7 @@ impl ImportInput {
                 "bytes" => f_bytes = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
                 "sources" => f_sources = { let sn = dec.read_array_header()?; let mut sv: Vec<ImportSource> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(ImportSource::decode_cbor_from(dec)?); } sv },
                 "settings" => f_settings = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "catalog" => f_catalog = Some(Box::new(CatalogProjection::decode_cbor_from(dec)?)),
                 _ => dec.skip()?,
             }
         }
@@ -244,6 +291,203 @@ impl ImportInput {
             bytes: f_bytes.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field bytes".to_string()))?,
             sources: f_sources,
             settings: f_settings,
+            catalog: f_catalog,
+        })
+    }
+}
+
+impl CatalogProjection {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 1;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "components");
+        {
+            let c = &self.components;
+            crate::cbor_gen::write_head(out, 4, c.len() as u64);
+            for ev in c {
+                ev.append_cbor(out)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_components: Option<Vec<CatalogComponent>> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "components" => f_components = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<CatalogComponent> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(CatalogComponent::decode_cbor_from(dec)?); } sv }),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            components: f_components.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field components".to_string()))?,
+        })
+    }
+}
+
+impl CatalogComponent {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let mut n: u64 = 2;
+        if !self.labels.is_empty() { n += 1; }
+        if !self.values.is_empty() { n += 1; }
+        if !self.sockets.is_empty() { n += 1; }
+        if !self.provides.is_empty() { n += 1; }
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "name");
+        crate::cbor_gen::write_text(out, &self.name);
+        if !self.labels.is_empty() {
+            crate::cbor_gen::write_text(out, "labels");
+            {
+                let c = &self.labels;
+                let mut ks: Vec<&String> = c.keys().collect();
+                crate::cbor_gen::sort_keys(&mut ks);
+                crate::cbor_gen::write_head(out, 5, ks.len() as u64);
+                for k in ks {
+                    crate::cbor_gen::write_text(out, k);
+                    let mv = &c[k];
+                    crate::cbor_gen::write_text(out, mv);
+                }
+            }
+        }
+        if !self.values.is_empty() {
+            crate::cbor_gen::write_text(out, "values");
+            {
+                let c = &self.values;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
+        if !self.sockets.is_empty() {
+            crate::cbor_gen::write_text(out, "sockets");
+            {
+                let c = &self.sockets;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    ev.append_cbor(out)?;
+                }
+            }
+        }
+        crate::cbor_gen::write_text(out, "version");
+        crate::cbor_gen::write_text(out, &self.version);
+        if !self.provides.is_empty() {
+            crate::cbor_gen::write_text(out, "provides");
+            {
+                let c = &self.provides;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_name: Option<String> = None;
+        let mut f_version: Option<String> = None;
+        let mut f_labels: BTreeMap<String, String> = BTreeMap::new();
+        let mut f_values: Vec<String> = Vec::new();
+        let mut f_provides: Vec<String> = Vec::new();
+        let mut f_sockets: Vec<CatalogSocket> = Vec::new();
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "name" => f_name = Some(dec.read_text()?),
+                "version" => f_version = Some(dec.read_text()?),
+                "labels" => f_labels = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
+                "values" => f_values = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
+                "provides" => f_provides = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
+                "sockets" => f_sockets = { let sn = dec.read_array_header()?; let mut sv: Vec<CatalogSocket> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(CatalogSocket::decode_cbor_from(dec)?); } sv },
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
+            version: f_version.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field version".to_string()))?,
+            labels: f_labels,
+            values: f_values,
+            provides: f_provides,
+            sockets: f_sockets,
+        })
+    }
+}
+
+impl CatalogSocket {
+    /// Encodes this value as canonical CBOR (RFC 8949 §4.2.1; floats per
+    /// CBOR CDE §4.2), dispatch-free and without a runtime CBOR library.
+    pub fn encode_cbor(&self) -> Result<Vec<u8>, crate::cbor_gen::CborError> {
+        let mut out = Vec::new();
+        self.append_cbor(&mut out)?;
+        Ok(out)
+    }
+
+    pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
+        let n: u64 = 2;
+        crate::cbor_gen::write_head(out, 5, n);
+        crate::cbor_gen::write_text(out, "name");
+        crate::cbor_gen::write_text(out, &self.name);
+        crate::cbor_gen::write_text(out, "selector");
+        crate::cbor_gen::write_text(out, &self.selector);
+        Ok(())
+    }
+
+    /// Decodes a value from canonical CBOR, dispatch-free. Unknown keys are
+    /// skipped.
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut dec = crate::cbor_gen::CborDec::new(data);
+        Self::decode_cbor_from(&mut dec)
+    }
+
+    pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
+        let mut f_name: Option<String> = None;
+        let mut f_selector: Option<String> = None;
+        let n = dec.read_map_header()?;
+        for _ in 0..n {
+            let k = dec.read_text()?;
+            match k.as_str() {
+                "name" => f_name = Some(dec.read_text()?),
+                "selector" => f_selector = Some(dec.read_text()?),
+                _ => dec.skip()?,
+            }
+        }
+        Ok(Self {
+            name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
+            selector: f_selector.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field selector".to_string()))?,
         })
     }
 }

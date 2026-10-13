@@ -14,7 +14,7 @@ import (
 	"sort"
 )
 
-// ImportInput The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, and an optional opaque options document the consumer supplies for importer-specific behavior.
+// ImportInput The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
 type ImportInput struct {
 	// Format The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
 	Format string `json:"format" yaml:"format" cbor:"format"`
@@ -24,6 +24,38 @@ type ImportInput struct {
 	Sources []ImportSource `json:"sources,omitempty" yaml:"sources,omitempty" cbor:"sources,omitempty"`
 	// Settings An opaque import-options document the consumer supplies for importer-specific behavior. The host pipes it through without interpreting it; the importer reads whatever shape it documents. Absent when the consumer supplies no options.
 	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty" cbor:"settings,omitempty"`
+	// Catalog A view of the Components the workspace's own catalog holds — the catalog the importer itself was selected from — so the importer can weigh them as candidates when it maps a source node to a catalog entity. The host builds it from that local catalog alone, and it carries names, versions, labels and declared structure only: never a value, a default or a secret. Its order is fixed, so one catalog yields one byte sequence. Absent when the catalog holds no Component.
+	Catalog *CatalogProjection `json:"catalog,omitempty" yaml:"catalog,omitempty" cbor:"catalog,omitempty"`
+}
+
+// CatalogProjection The workspace's catalog as an importer sees it: one entry per Component the catalog holds, each carrying the metadata an importer weighs when it scores a candidate.
+type CatalogProjection struct {
+	// Components One entry per Component name the catalog holds, sorted by name. Where the catalog holds several versions of one Component, its entry describes the version a reference naming the Component without a version resolves to.
+	Components []CatalogComponent `json:"components" yaml:"components" cbor:"components"`
+}
+
+// CatalogComponent One Component of the workspace's catalog: its name and version, its labels, the key names its values and provides declare, and the sockets it declares for its dependencies. A Component that extends another carries what it inherits as well as what it declares itself.
+type CatalogComponent struct {
+	// Name The Component's name, as its metadata.name declares it — the name an Aggregate references it by.
+	Name string `json:"name" yaml:"name" cbor:"name"`
+	// Version The Component's version, as its metadata.version declares it.
+	Version string `json:"version" yaml:"version" cbor:"version"`
+	// Labels The Component's labels, as a string-to-string map. Absent when it carries none.
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" cbor:"labels,omitempty"`
+	// Values The top-level key names the Component's values declares, sorted. A list of names only: it never carries a value or a default. Absent when its values declares no key.
+	Values []string `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
+	// Provides The top-level key names the Component's provides declares, sorted. A list of names only: it never carries a value. Absent when its provides declares no key.
+	Provides []string `json:"provides,omitempty" yaml:"provides,omitempty" cbor:"provides,omitempty"`
+	// Sockets The sockets the Component declares for its dependencies, in declaration order: for a Component that extends another, the sockets it inherits come first, in the order the extended Component declares them, followed by those it adds. Absent when it declares none.
+	Sockets []CatalogSocket `json:"sockets,omitempty" yaml:"sockets,omitempty" cbor:"sockets,omitempty"`
+}
+
+// CatalogSocket One socket a catalog Component declares for its dependencies: the socket's name and the label selector a dependency wired through it must satisfy.
+type CatalogSocket struct {
+	// Name The socket's name, as the Component's usesSchema declares it.
+	Name string `json:"name" yaml:"name" cbor:"name"`
+	// Selector The socket's label selector, verbatim, in the Kubernetes-style grammar the Component writes it in: the labels a dependency wired through this socket must carry.
+	Selector string `json:"selector" yaml:"selector" cbor:"selector"`
 }
 
 // ImportSource One named source within a multi-file or directory import: a name locating the source and its own bytes.
@@ -182,6 +214,18 @@ func (t ImportInput) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"settings\":")
 		buf.Write(t.Settings)
 	}
+	if t.Catalog != nil {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"catalog\":")
+		if enc, err := t.Catalog.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
+		}
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -237,6 +281,16 @@ func (t *ImportInput) UnmarshalJSON(data []byte) error {
 			} else {
 				t.Settings = raw
 			}
+		case "catalog":
+			if raw, err := readRaw(dec, data); err != nil {
+				return err
+			} else {
+				v := new(CatalogProjection)
+				if err := v.UnmarshalJSON(raw); err != nil {
+					return err
+				}
+				t.Catalog = v
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -256,7 +310,390 @@ func (t *ImportInput) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *ImportInput) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "format", "bytes", "sources", "settings"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "format", "bytes", "sources", "settings", "catalog"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
+// MarshalJSON encodes CatalogProjection in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t CatalogProjection) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"components\":")
+	buf.WriteByte('[')
+	for i := range t.Components {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		ev := t.Components[i]
+		if enc, err := ev.MarshalJSON(); err != nil {
+			return nil, err
+		} else {
+			buf.Write(enc)
+		}
+	}
+	buf.WriteByte(']')
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes CatalogProjection with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *CatalogProjection) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "components":
+			t.Components = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem CatalogComponent
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
+				}
+				t.Components = append(t.Components, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UnmarshalJSONStrict decodes CatalogProjection exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *CatalogProjection) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "components"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
+// MarshalJSON encodes CatalogComponent in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t CatalogComponent) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"name\":")
+	writeJSONString(&buf, t.Name)
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"version\":")
+	writeJSONString(&buf, t.Version)
+	if len(t.Labels) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"labels\":")
+		{
+			keys := make([]string, 0, len(t.Labels))
+			for k := range t.Labels {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			buf.WriteByte('{')
+			for i, k := range keys {
+				if i > 0 {
+					buf.WriteByte(',')
+				}
+				writeJSONString(&buf, k)
+				buf.WriteByte(':')
+				mv := t.Labels[k]
+				writeJSONString(&buf, mv)
+			}
+			buf.WriteByte('}')
+		}
+	}
+	if len(t.Values) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"values\":")
+		buf.WriteByte('[')
+		for i := range t.Values {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.Values[i]
+			writeJSONString(&buf, ev)
+		}
+		buf.WriteByte(']')
+	}
+	if len(t.Provides) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"provides\":")
+		buf.WriteByte('[')
+		for i := range t.Provides {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.Provides[i]
+			writeJSONString(&buf, ev)
+		}
+		buf.WriteByte(']')
+	}
+	if len(t.Sockets) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"sockets\":")
+		buf.WriteByte('[')
+		for i := range t.Sockets {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.Sockets[i]
+			if enc, err := ev.MarshalJSON(); err != nil {
+				return nil, err
+			} else {
+				buf.Write(enc)
+			}
+		}
+		buf.WriteByte(']')
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes CatalogComponent with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *CatalogComponent) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "name":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
+		case "version":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Version = s
+			}
+		case "labels":
+			t.Labels = make(map[string]string)
+			if err := expectDelim(dec, '{'); err != nil {
+				return err
+			}
+			for dec.More() {
+				mk, err := readKey(dec)
+				if err != nil {
+					return err
+				}
+				var mv string
+				if s, err := readString(dec); err != nil {
+					return err
+				} else {
+					mv = s
+				}
+				t.Labels[mk] = mv
+			}
+			if err := expectDelim(dec, '}'); err != nil {
+				return err
+			}
+		case "values":
+			t.Values = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem string
+				if s, err := readString(dec); err != nil {
+					return err
+				} else {
+					elem = s
+				}
+				t.Values = append(t.Values, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
+		case "provides":
+			t.Provides = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem string
+				if s, err := readString(dec); err != nil {
+					return err
+				} else {
+					elem = s
+				}
+				t.Provides = append(t.Provides, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
+		case "sockets":
+			t.Sockets = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem CatalogSocket
+				if raw, err := readRaw(dec, data); err != nil {
+					return err
+				} else {
+					if err := elem.UnmarshalJSON(raw); err != nil {
+						return err
+					}
+				}
+				t.Sockets = append(t.Sockets, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UnmarshalJSONStrict decodes CatalogComponent exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *CatalogComponent) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "name", "version", "labels", "values", "provides", "sockets"); err != nil {
+		return err
+	}
+	return t.UnmarshalJSON(data)
+}
+
+// MarshalJSON encodes CatalogSocket in field-declaration order, omitting
+// empty non-required fields, dispatch-free.
+func (t CatalogSocket) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	first := true
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"name\":")
+	writeJSONString(&buf, t.Name)
+	if !first {
+		buf.WriteByte(',')
+	}
+	first = false
+	buf.WriteString("\"selector\":")
+	writeJSONString(&buf, t.Selector)
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// UnmarshalJSON decodes CatalogSocket with a streaming token walk, descending
+// into composite fields by direct call to each nested type's generated
+// UnmarshalJSON, dispatch-free. Unknown keys are skipped.
+func (t *CatalogSocket) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := expectDelim(dec, '{'); err != nil {
+		return err
+	}
+	for dec.More() {
+		key, err := readKey(dec)
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "name":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
+		case "selector":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Selector = s
+			}
+		default:
+			if _, err := readRaw(dec, data); err != nil {
+				return err
+			}
+		}
+	}
+	if err := expectDelim(dec, '}'); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UnmarshalJSONStrict decodes CatalogSocket exactly as UnmarshalJSON does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the object's own keys and does not descend.
+func (t *CatalogSocket) UnmarshalJSONStrict(data []byte) error {
+	if err := refuseUndeclaredJSONKeys(data, "name", "selector"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -1407,6 +1844,9 @@ func (t ImportInput) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t ImportInput) appendCBOR(dst []byte) ([]byte, error) {
 	n := 2
+	if t.Catalog != nil {
+		n++
+	}
 	if len(t.Sources) != 0 {
 		n++
 	}
@@ -1419,6 +1859,14 @@ func (t ImportInput) appendCBOR(dst []byte) ([]byte, error) {
 	dst = appendCBORByteString(dst, t.Bytes)
 	dst = appendCBORTextString(dst, "format")
 	dst = appendCBORTextString(dst, t.Format)
+	if t.Catalog != nil {
+		dst = appendCBORTextString(dst, "catalog")
+		if t.Catalog == nil {
+			dst = append(dst, 0xf6)
+		} else if dst, err = t.Catalog.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
 	if len(t.Sources) != 0 {
 		dst = appendCBORTextString(dst, "sources")
 		dst = appendCBORHead(dst, 4, uint64(len(t.Sources)))
@@ -1488,6 +1936,14 @@ func (t *ImportInput) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.Settings = json.RawMessage(v)
 			}
+		case "catalog":
+			{
+				v := new(CatalogProjection)
+				if err := v.decodeCBOR(dec); err != nil {
+					return err
+				}
+				t.Catalog = v
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -1504,7 +1960,358 @@ func (t *ImportInput) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *ImportInput) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "format", "bytes", "sources", "settings"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "format", "bytes", "sources", "settings", "catalog"); err != nil {
+		return err
+	}
+	return t.DecodeCBOR(data)
+}
+
+// EncodeCBOR encodes CatalogProjection as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t CatalogProjection) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends CatalogProjection's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t CatalogProjection) appendCBOR(dst []byte) ([]byte, error) {
+	n := 1
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "components")
+	dst = appendCBORHead(dst, 4, uint64(len(t.Components)))
+	for i := range t.Components {
+		ev := t.Components[i]
+		if dst, err = ev.appendCBOR(dst); err != nil {
+			return nil, err
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes CatalogProjection from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *CatalogProjection) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *CatalogProjection) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "components":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]CatalogComponent, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev CatalogComponent
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Components = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// DecodeCBORStrict decodes CatalogProjection exactly as DecodeCBOR does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the map's own keys and does not descend.
+func (t *CatalogProjection) DecodeCBORStrict(data []byte) error {
+	if err := refuseUndeclaredCBORKeys(data, "components"); err != nil {
+		return err
+	}
+	return t.DecodeCBOR(data)
+}
+
+// EncodeCBOR encodes CatalogComponent as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t CatalogComponent) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends CatalogComponent's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t CatalogComponent) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	if len(t.Labels) != 0 {
+		n++
+	}
+	if len(t.Values) != 0 {
+		n++
+	}
+	if len(t.Sockets) != 0 {
+		n++
+	}
+	if len(t.Provides) != 0 {
+		n++
+	}
+	dst = appendCBORHead(dst, 5, uint64(n))
+	var err error
+	dst = appendCBORTextString(dst, "name")
+	dst = appendCBORTextString(dst, t.Name)
+	if len(t.Labels) != 0 {
+		dst = appendCBORTextString(dst, "labels")
+		{
+			keys := make([]string, 0, len(t.Labels))
+			for k := range t.Labels {
+				keys = append(keys, k)
+			}
+			sortCBORKeys(keys)
+			dst = appendCBORHead(dst, 5, uint64(len(keys)))
+			for _, k := range keys {
+				dst = appendCBORTextString(dst, k)
+				mv := t.Labels[k]
+				dst = appendCBORTextString(dst, mv)
+			}
+		}
+	}
+	if len(t.Values) != 0 {
+		dst = appendCBORTextString(dst, "values")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Values)))
+		for i := range t.Values {
+			ev := t.Values[i]
+			dst = appendCBORTextString(dst, ev)
+		}
+	}
+	if len(t.Sockets) != 0 {
+		dst = appendCBORTextString(dst, "sockets")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Sockets)))
+		for i := range t.Sockets {
+			ev := t.Sockets[i]
+			if dst, err = ev.appendCBOR(dst); err != nil {
+				return nil, err
+			}
+		}
+	}
+	dst = appendCBORTextString(dst, "version")
+	dst = appendCBORTextString(dst, t.Version)
+	if len(t.Provides) != 0 {
+		dst = appendCBORTextString(dst, "provides")
+		dst = appendCBORHead(dst, 4, uint64(len(t.Provides)))
+		for i := range t.Provides {
+			ev := t.Provides[i]
+			dst = appendCBORTextString(dst, ev)
+		}
+	}
+	return dst, nil
+}
+
+// DecodeCBOR decodes CatalogComponent from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *CatalogComponent) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *CatalogComponent) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
+		case "version":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Version = s
+			}
+		case "labels":
+			{
+				mn, err := dec.readMapHeader()
+				if err != nil {
+					return err
+				}
+				m := make(map[string]string, mn)
+				for mi := 0; mi < mn; mi++ {
+					mk, err := dec.readTextString()
+					if err != nil {
+						return err
+					}
+					var mv string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						mv = s
+					}
+					m[mk] = mv
+				}
+				t.Labels = m
+			}
+		case "values":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.Values = s
+			}
+		case "provides":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.Provides = s
+			}
+		case "sockets":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]CatalogSocket, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev CatalogSocket
+					if err := (&ev).decodeCBOR(dec); err != nil {
+						return err
+					}
+					s = append(s, ev)
+				}
+				t.Sockets = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// DecodeCBORStrict decodes CatalogComponent exactly as DecodeCBOR does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the map's own keys and does not descend.
+func (t *CatalogComponent) DecodeCBORStrict(data []byte) error {
+	if err := refuseUndeclaredCBORKeys(data, "name", "version", "labels", "values", "provides", "sockets"); err != nil {
+		return err
+	}
+	return t.DecodeCBOR(data)
+}
+
+// EncodeCBOR encodes CatalogSocket as canonical CBOR (RFC 8949 §4.2.1; floats per
+// CBOR CDE §4.2), dispatch-free.
+func (t CatalogSocket) EncodeCBOR() ([]byte, error) {
+	return t.appendCBOR(nil)
+}
+
+// appendCBOR appends CatalogSocket's canonical CBOR encoding to dst. Fields emit in
+// canonical key order (fixed at generation time), omitting empty
+// non-required fields so the map head's pair count matches.
+func (t CatalogSocket) appendCBOR(dst []byte) ([]byte, error) {
+	n := 2
+	dst = appendCBORHead(dst, 5, uint64(n))
+	dst = appendCBORTextString(dst, "name")
+	dst = appendCBORTextString(dst, t.Name)
+	dst = appendCBORTextString(dst, "selector")
+	dst = appendCBORTextString(dst, t.Selector)
+	return dst, nil
+}
+
+// DecodeCBOR decodes CatalogSocket from canonical CBOR, dispatch-free. Unknown keys
+// are skipped.
+func (t *CatalogSocket) DecodeCBOR(data []byte) error {
+	dec := &cborDec{data: data}
+	return t.decodeCBOR(dec)
+}
+
+func (t *CatalogSocket) decodeCBOR(dec *cborDec) error {
+	n, err := dec.readMapHeader()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < n; i++ {
+		key, err := dec.readTextString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
+		case "selector":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Selector = s
+			}
+		default:
+			if err := dec.skip(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// DecodeCBORStrict decodes CatalogSocket exactly as DecodeCBOR does, except
+// that a top-level key this shape does not declare is refused rather than
+// skipped, naming the offending key. It is the entry point for a payload
+// whose identity is carried by the keys it holds, where skipping an unknown
+// key would yield an empty value indistinguishable from a real one. The
+// check reads the map's own keys and does not descend.
+func (t *CatalogSocket) DecodeCBORStrict(data []byte) error {
+	if err := refuseUndeclaredCBORKeys(data, "name", "selector"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

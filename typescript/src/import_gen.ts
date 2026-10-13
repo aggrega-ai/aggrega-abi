@@ -24,7 +24,7 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, and an optional opaque options document the consumer supplies for importer-specific behavior.
+// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
 export interface ImportInput {
   // The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
   format: string;
@@ -34,6 +34,38 @@ export interface ImportInput {
   sources?: ImportSource[];
   // An opaque import-options document the consumer supplies for importer-specific behavior. The host pipes it through without interpreting it; the importer reads whatever shape it documents. Absent when the consumer supplies no options.
   settings?: unknown;
+  // A view of the Components the workspace's own catalog holds — the catalog the importer itself was selected from — so the importer can weigh them as candidates when it maps a source node to a catalog entity. The host builds it from that local catalog alone, and it carries names, versions, labels and declared structure only: never a value, a default or a secret. Its order is fixed, so one catalog yields one byte sequence. Absent when the catalog holds no Component.
+  catalog?: CatalogProjection;
+}
+
+// The workspace's catalog as an importer sees it: one entry per Component the catalog holds, each carrying the metadata an importer weighs when it scores a candidate.
+export interface CatalogProjection {
+  // One entry per Component name the catalog holds, sorted by name. Where the catalog holds several versions of one Component, its entry describes the version a reference naming the Component without a version resolves to.
+  components: CatalogComponent[];
+}
+
+// One Component of the workspace's catalog: its name and version, its labels, the key names its values and provides declare, and the sockets it declares for its dependencies. A Component that extends another carries what it inherits as well as what it declares itself.
+export interface CatalogComponent {
+  // The Component's name, as its metadata.name declares it — the name an Aggregate references it by.
+  name: string;
+  // The Component's version, as its metadata.version declares it.
+  version: string;
+  // The Component's labels, as a string-to-string map. Absent when it carries none.
+  labels?: Record<string, string>;
+  // The top-level key names the Component's values declares, sorted. A list of names only: it never carries a value or a default. Absent when its values declares no key.
+  values?: string[];
+  // The top-level key names the Component's provides declares, sorted. A list of names only: it never carries a value. Absent when its provides declares no key.
+  provides?: string[];
+  // The sockets the Component declares for its dependencies, in declaration order: for a Component that extends another, the sockets it inherits come first, in the order the extended Component declares them, followed by those it adds. Absent when it declares none.
+  sockets?: CatalogSocket[];
+}
+
+// One socket a catalog Component declares for its dependencies: the socket's name and the label selector a dependency wired through it must satisfy.
+export interface CatalogSocket {
+  // The socket's name, as the Component's usesSchema declares it.
+  name: string;
+  // The socket's label selector, verbatim, in the Kubernetes-style grammar the Component writes it in: the labels a dependency wired through this socket must carry.
+  selector: string;
 }
 
 // One named source within a multi-file or directory import: a name locating the source and its own bytes.
@@ -152,11 +184,48 @@ export function encodeImportInput(v: ImportInput): string {
   parts.push(`${jstr("bytes")}:${jstr(v.bytes)}`);
   if (v.sources !== undefined && v.sources.length > 0) parts.push(`${jstr("sources")}:${`[${v.sources!.map((e0) => encodeImportSource(e0)).join(",")}]`}`);
   if (v.settings !== undefined && v.settings !== null) parts.push(`${jstr("settings")}:${encodeOpaque(v.settings)}`);
+  if (v.catalog !== undefined && v.catalog !== null) parts.push(`${jstr("catalog")}:${encodeCatalogProjection(v.catalog)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeImportInput(data: string): ImportInput {
   return JSON.parse(data) as ImportInput;
+}
+
+export function encodeCatalogProjection(v: CatalogProjection): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("components")}:${`[${v.components!.map((e0) => encodeCatalogComponent(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeCatalogProjection(data: string): CatalogProjection {
+  return JSON.parse(data) as CatalogProjection;
+}
+
+export function encodeCatalogComponent(v: CatalogComponent): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("version")}:${jstr(v.version)}`);
+  if (v.labels !== undefined && Object.keys(v.labels).length > 0) parts.push(`${jstr("labels")}:${`{${Object.keys(v.labels!).sort().map((k0) => `${jstr(k0)}:${jstr(v.labels![k0])}`).join(",")}}`}`);
+  if (v.values !== undefined && v.values.length > 0) parts.push(`${jstr("values")}:${`[${v.values!.map((e0) => jstr(e0)).join(",")}]`}`);
+  if (v.provides !== undefined && v.provides.length > 0) parts.push(`${jstr("provides")}:${`[${v.provides!.map((e0) => jstr(e0)).join(",")}]`}`);
+  if (v.sockets !== undefined && v.sockets.length > 0) parts.push(`${jstr("sockets")}:${`[${v.sockets!.map((e0) => encodeCatalogSocket(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeCatalogComponent(data: string): CatalogComponent {
+  return JSON.parse(data) as CatalogComponent;
+}
+
+export function encodeCatalogSocket(v: CatalogSocket): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("selector")}:${jstr(v.selector)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeCatalogSocket(data: string): CatalogSocket {
+  return JSON.parse(data) as CatalogSocket;
 }
 
 export function encodeImportSource(v: ImportSource): string {
@@ -285,6 +354,7 @@ export function encodeCBORImportInput(v: ImportInput): Uint8Array {
 
 export function appendCBORImportInput(out: number[], v: ImportInput): void {
   let n = 2;
+  if (v.catalog !== undefined && v.catalog !== null) n++;
   if (v.sources !== undefined && v.sources.length > 0) n++;
   if (v.settings !== undefined && v.settings !== null) n++;
   writeHead(out, 5, n);
@@ -292,6 +362,10 @@ export function appendCBORImportInput(out: number[], v: ImportInput): void {
   writeBytes(out, b64decode(v.bytes));
   writeText(out, "format");
   writeText(out, v.format);
+  if (v.catalog !== undefined && v.catalog !== null) {
+    writeText(out, "catalog");
+    appendCBORCatalogProjection(out, v.catalog);
+  }
   if (v.sources !== undefined && v.sources.length > 0) {
     writeText(out, "sources");
     {
@@ -323,10 +397,166 @@ export function decodeCBORImportInputFrom(dec: CborDec): ImportInput {
       case "bytes": o["bytes"] = b64encode(dec.readBytes()); break;
       case "sources": o["sources"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORImportSourceFrom(dec)); } return a; })(); break;
       case "settings": o["settings"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "catalog": o["catalog"] = decodeCBORCatalogProjectionFrom(dec); break;
       default: dec.skip();
     }
   }
   return o as ImportInput;
+}
+
+export function encodeCBORCatalogProjection(v: CatalogProjection): Uint8Array {
+  const out: number[] = [];
+  appendCBORCatalogProjection(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORCatalogProjection(out: number[], v: CatalogProjection): void {
+  let n = 1;
+  writeHead(out, 5, n);
+  writeText(out, "components");
+  {
+    const a0 = v.components;
+    writeHead(out, 4, a0.length);
+    for (const ee0 of a0) {
+      appendCBORCatalogComponent(out, ee0);
+    }
+  }
+}
+
+export function decodeCBORCatalogProjection(data: Uint8Array): CatalogProjection {
+  const dec = new CborDec(data);
+  return decodeCBORCatalogProjectionFrom(dec);
+}
+
+export function decodeCBORCatalogProjectionFrom(dec: CborDec): CatalogProjection {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "components": o["components"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORCatalogComponentFrom(dec)); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as CatalogProjection;
+}
+
+export function encodeCBORCatalogComponent(v: CatalogComponent): Uint8Array {
+  const out: number[] = [];
+  appendCBORCatalogComponent(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORCatalogComponent(out: number[], v: CatalogComponent): void {
+  let n = 2;
+  if (v.labels !== undefined && Object.keys(v.labels).length > 0) n++;
+  if (v.values !== undefined && v.values.length > 0) n++;
+  if (v.sockets !== undefined && v.sockets.length > 0) n++;
+  if (v.provides !== undefined && v.provides.length > 0) n++;
+  writeHead(out, 5, n);
+  writeText(out, "name");
+  writeText(out, v.name);
+  if (v.labels !== undefined && Object.keys(v.labels).length > 0) {
+    writeText(out, "labels");
+    {
+      const m0 = v.labels;
+      const ks0 = Object.keys(m0); sortKeys(ks0);
+      writeHead(out, 5, ks0.length);
+      for (const kk0 of ks0) {
+        writeText(out, kk0);
+        writeText(out, m0[kk0]);
+      }
+    }
+  }
+  if (v.values !== undefined && v.values.length > 0) {
+    writeText(out, "values");
+    {
+      const a0 = v.values;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+  if (v.sockets !== undefined && v.sockets.length > 0) {
+    writeText(out, "sockets");
+    {
+      const a0 = v.sockets;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        appendCBORCatalogSocket(out, ee0);
+      }
+    }
+  }
+  writeText(out, "version");
+  writeText(out, v.version);
+  if (v.provides !== undefined && v.provides.length > 0) {
+    writeText(out, "provides");
+    {
+      const a0 = v.provides;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+}
+
+export function decodeCBORCatalogComponent(data: Uint8Array): CatalogComponent {
+  const dec = new CborDec(data);
+  return decodeCBORCatalogComponentFrom(dec);
+}
+
+export function decodeCBORCatalogComponentFrom(dec: CborDec): CatalogComponent {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "name": o["name"] = dec.readText(); break;
+      case "version": o["version"] = dec.readText(); break;
+      case "labels": o["labels"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
+      case "values": o["values"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "provides": o["provides"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
+      case "sockets": o["sockets"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORCatalogSocketFrom(dec)); } return a; })(); break;
+      default: dec.skip();
+    }
+  }
+  return o as CatalogComponent;
+}
+
+export function encodeCBORCatalogSocket(v: CatalogSocket): Uint8Array {
+  const out: number[] = [];
+  appendCBORCatalogSocket(out, v);
+  return new Uint8Array(out);
+}
+
+export function appendCBORCatalogSocket(out: number[], v: CatalogSocket): void {
+  let n = 2;
+  writeHead(out, 5, n);
+  writeText(out, "name");
+  writeText(out, v.name);
+  writeText(out, "selector");
+  writeText(out, v.selector);
+}
+
+export function decodeCBORCatalogSocket(data: Uint8Array): CatalogSocket {
+  const dec = new CborDec(data);
+  return decodeCBORCatalogSocketFrom(dec);
+}
+
+export function decodeCBORCatalogSocketFrom(dec: CborDec): CatalogSocket {
+  const o: any = {};
+  const n = dec.readMapHeader();
+  for (let i = 0; i < n; i++) {
+    const k = dec.readText();
+    switch (k) {
+      case "name": o["name"] = dec.readText(); break;
+      case "selector": o["selector"] = dec.readText(); break;
+      default: dec.skip();
+    }
+  }
+  return o as CatalogSocket;
 }
 
 export function encodeCBORImportSource(v: ImportSource): Uint8Array {

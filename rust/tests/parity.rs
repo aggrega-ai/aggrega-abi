@@ -254,6 +254,14 @@ cbor_case!(link_resolve_output, aggrega_abi::LinkResolveOutput, "LinkResolveOutp
 cbor_case!(parse_input, aggrega_abi::ParseInput, "ParseInput");
 cbor_case!(parse_output, aggrega_abi::ParseOutput, "ParseOutput");
 cbor_case!(import_input, aggrega_abi::ImportInput, "ImportInput");
+// A second vector for ImportInput, so cbor_vector rather than cbor_case: the trait
+// binding for this type is declared by the vector above. This one carries a
+// POPULATED catalog view, which the vector above does not — the field is elided
+// when absent, so every other ImportInput vector has the same bytes whether the
+// codec handles it or drops it. One Component declares sockets and one declares
+// none, and the sockets are listed out of name order, so a codec that sorted a
+// list would not match.
+cbor_vector!(import_input_catalog, aggrega_abi::ImportInput, "ImportInputCatalog");
 cbor_case!(import_output, aggrega_abi::ImportOutput, "ImportOutput");
 cbor_case!(parse_source_response, aggrega_abi::ParseSourceResponse, "ParseSourceResponse");
 // A second vector for ParseSourceResponse, so cbor_vector rather than cbor_case:

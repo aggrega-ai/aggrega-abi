@@ -160,6 +160,12 @@ const vectors: Array<[string, string]> = [
   ["ParseOutput", "ParseOutput"],
   ["ParseOutputBare", "ParseOutput"],
   ["ImportInput", "ImportInput"],
+  // An import input carrying a POPULATED catalog view: the field is omitted when
+  // absent, so this is the vector where dropping it moves the bytes. One
+  // Component declares sockets and one declares none, the sockets are listed out
+  // of name order, and the label keys sort differently in the two wire forms, so
+  // a codec that sorted a list or lost a map-key sort fails it.
+  ["ImportInputCatalog", "ImportInput"],
   ["ImportOutput", "ImportOutput"],
   ["ParseSourceResponse", "ParseSourceResponse"],
   // The parse-source reply's SUCCESS shape, the half its failure envelope cannot
