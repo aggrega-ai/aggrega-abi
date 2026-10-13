@@ -1,0 +1,1 @@
+{"diagnostics":[{"severity":"halt","message":"main.tf:3,1-9: Unsupported block type","code":"hcl-parse"},{"severity":"warn","message":"variable \"region\" declares no default","code":"missing-default"}]}

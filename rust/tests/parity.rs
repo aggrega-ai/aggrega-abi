@@ -254,6 +254,24 @@ cbor_case!(link_publish_input, aggrega_abi::LinkPublishInput, "LinkPublishInput"
 cbor_case!(link_publish_output, aggrega_abi::LinkPublishOutput, "LinkPublishOutput");
 cbor_case!(link_resolve_input, aggrega_abi::LinkResolveInput, "LinkResolveInput");
 cbor_case!(link_resolve_output, aggrega_abi::LinkResolveOutput, "LinkResolveOutput");
+// The populated payloads of the render family's remaining exports. A type whose
+// trait binding another vector already declares — a failure envelope or a map-order
+// probe below — is cbor_vector; the rest are cbor_case. Each carries its members
+// populated: validate_node_input's diagnostics, carve's and reassemble's file bytes
+// and units, name_bound's proposal and verdicts (one carrying a bound, one not),
+// rendered_name's identities and answer, and boundary_env_overrides' edges, its
+// author-ordered infra and its per-consumer overrides.
+cbor_vector!(validate_node_output, aggrega_abi::ValidateNodeOutput, "ValidateNodeOutput");
+cbor_case!(carve_input, aggrega_abi::CarveInput, "CarveInput");
+cbor_case!(carve_output, aggrega_abi::CarveOutput, "CarveOutput");
+cbor_case!(reassemble_input, aggrega_abi::ReassembleInput, "ReassembleInput");
+cbor_case!(reassemble_output, aggrega_abi::ReassembleOutput, "ReassembleOutput");
+cbor_case!(name_bound_input, aggrega_abi::NameBoundInput, "NameBoundInput");
+cbor_vector!(name_bound_output, aggrega_abi::NameBoundOutput, "NameBoundOutput");
+cbor_case!(rendered_name_input, aggrega_abi::RenderedNameInput, "RenderedNameInput");
+cbor_vector!(rendered_name_output, aggrega_abi::RenderedNameOutput, "RenderedNameOutput");
+cbor_vector!(boundary_env_overrides_input, aggrega_abi::BoundaryEnvOverridesInput, "BoundaryEnvOverridesInput");
+cbor_vector!(boundary_env_overrides_output, aggrega_abi::BoundaryEnvOverridesOutput, "BoundaryEnvOverridesOutput");
 cbor_case!(parse_input, aggrega_abi::ParseInput, "ParseInput");
 // A second vector for ParseInput, so cbor_vector rather than cbor_case: the trait
 // binding for this type is declared by the vector above. Its source bytes are not

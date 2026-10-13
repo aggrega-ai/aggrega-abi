@@ -446,6 +446,69 @@ func TestSocketParity_LinkResolveOutput(t *testing.T) {
 	roundTripBothGolden[abi.LinkResolveOutput](t, "LinkResolveOutput")
 }
 
+// The populated payloads of the render family's remaining exports, each the
+// shape of one export's input or reply carrying its members: validate_node_input's
+// diagnostics, carve's and reassemble's file bytes and units — a structured unit
+// whose tree is an opaque document and an opaque unit carrying none — name_bound's
+// proposal and verdicts, rendered_name's identities and answer, and
+// boundary_env_overrides' edges, its author-ordered infra and the per-consumer
+// overrides it returns.
+
+func TestSocketParity_ValidateNodeOutput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.ValidateNodeOutput](t, "ValidateNodeOutput")
+}
+
+func TestSocketParity_CarveInput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.CarveInput](t, "CarveInput")
+}
+
+func TestSocketParity_CarveOutput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.CarveOutput](t, "CarveOutput")
+}
+
+func TestSocketParity_ReassembleInput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.ReassembleInput](t, "ReassembleInput")
+}
+
+func TestSocketParity_ReassembleOutput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.ReassembleOutput](t, "ReassembleOutput")
+}
+
+func TestSocketParity_NameBoundInput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.NameBoundInput](t, "NameBoundInput")
+}
+
+func TestSocketParity_NameBoundOutput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.NameBoundOutput](t, "NameBoundOutput")
+}
+
+func TestSocketParity_RenderedNameInput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderedNameInput](t, "RenderedNameInput")
+}
+
+func TestSocketParity_RenderedNameOutput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderedNameOutput](t, "RenderedNameOutput")
+}
+
+func TestSocketParity_BoundaryEnvOverridesInput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.BoundaryEnvOverridesInput](t, "BoundaryEnvOverridesInput")
+}
+
+func TestSocketParity_BoundaryEnvOverridesOutput(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.BoundaryEnvOverridesOutput](t, "BoundaryEnvOverridesOutput")
+}
+
 // The two describe goldens are both the PluginDescriptor wire — the shape every
 // plugin returns from describe(). One exercises a CLI descriptor with commands
 // and per-command flags (the surface unique to CLI plugins), the other a

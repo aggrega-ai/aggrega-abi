@@ -151,6 +151,24 @@ const vectors: Array<[string, string]> = [
   ["LinkPublishOutput", "LinkPublishOutput"],
   ["LinkResolveInput", "LinkResolveInput"],
   ["LinkResolveOutput", "LinkResolveOutput"],
+  // The populated payloads of the render family's remaining exports, each with its
+  // members populated: validate_node_input's diagnostics, carve's and reassemble's
+  // file bytes and units — a structured unit whose tree keeps its keys out of key
+  // order, and an opaque unit carrying none — name_bound's proposal and verdicts,
+  // one carrying a bound and one not, rendered_name's identities and answer, and
+  // boundary_env_overrides' edges, its author-ordered infra and its per-consumer
+  // overrides.
+  ["ValidateNodeOutput", "ValidateNodeOutput"],
+  ["CarveInput", "CarveInput"],
+  ["CarveOutput", "CarveOutput"],
+  ["ReassembleInput", "ReassembleInput"],
+  ["ReassembleOutput", "ReassembleOutput"],
+  ["NameBoundInput", "NameBoundInput"],
+  ["NameBoundOutput", "NameBoundOutput"],
+  ["RenderedNameInput", "RenderedNameInput"],
+  ["RenderedNameOutput", "RenderedNameOutput"],
+  ["BoundaryEnvOverridesInput", "BoundaryEnvOverridesInput"],
+  ["BoundaryEnvOverridesOutput", "BoundaryEnvOverridesOutput"],
   ["PluginDescriptorCLI", "PluginDescriptor"],
   ["PluginDescriptorProvider", "PluginDescriptor"],
   // A provider contract claiming to honour omit entries: the claim is omitted
