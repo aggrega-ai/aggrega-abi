@@ -18,9 +18,9 @@ import (
 type ImportInput struct {
 	// Format The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
 	Format string `json:"format" yaml:"format" cbor:"format"`
-	// Bytes The primary source bytes to import, which the importer reads as the named format. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the importer decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
+	// Bytes The primary source bytes to import, which the importer reads as the named format: the whole file where the import's source is one file, and empty where it is a directory, whose files arrive as named sources instead. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the importer decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
 	Bytes []byte `json:"bytes" yaml:"bytes" cbor:"bytes"`
-	// Sources Named sources for a multi-file or directory import, each carrying its own bytes. Absent for a single-file import, where the primary bytes carry the whole source.
+	// Sources Named sources, each carrying its own bytes, in one list sorted by name. Where the import's source is a directory, there is one per file of it that the importer's declared file patterns select, named by its slash-separated path inside the directory. The files the attachment configuring the importer declares under with.sources are carried here too, each under its base name, and the host refuses an import in which a file read from the directory and one of these carry the same name. Absent where neither supplies any.
 	Sources []ImportSource `json:"sources,omitempty" yaml:"sources,omitempty" cbor:"sources,omitempty"`
 	// Settings An opaque import-options document the consumer supplies for importer-specific behavior. The host pipes it through without interpreting it; the importer reads whatever shape it documents. Absent when the consumer supplies no options.
 	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty" cbor:"settings,omitempty"`

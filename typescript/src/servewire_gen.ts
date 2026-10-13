@@ -776,9 +776,9 @@ export interface ConfigCaptureParams {
 export interface ImportParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
-  // The source description to convert.
+  // The file or the directory to convert, as an absolute path or one relative to the workspace root; a request without one is refused. It is read where it is, inside the workspace or not, and a directory is read into the files of it the importer's declared file patterns select.
   source?: string;
-  // The directory under the workspace to write the drafts into. Absent writes where the same conversion in this workspace would.
+  // The directory under the workspace to write the drafts into. It is required under dryRun as well, because every drafted path is relative to it, and a request without one is refused rather than given a destination.
   outputDir?: string;
   // The source format. Absent lets the conversion determine it.
   format?: string;
