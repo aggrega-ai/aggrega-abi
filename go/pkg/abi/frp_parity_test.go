@@ -91,10 +91,9 @@ func TestGoldenParity_FRPStepInput(t *testing.T) {
 // TestGoldenParity_FRPStepOutput round-trips the host's FRPStepOutput wire
 // through the generated codec. The golden carries a patch with the any-typed
 // Value (the field whose omit logic surfaced a host/codec discrepancy in the
-// proving-ground), a side effect, and the opaque diagnostics array (a
-// json.RawMessage carry-through in the codec, a typed slice on the host) — so
-// the byte-compare pins the any-value emission and the opaque-array
-// passthrough.
+// proving-ground), a side effect, and a diagnostic, which every codec carries
+// as the shared diagnostic's own structural encoding — so the byte-compare
+// pins the any-value emission and the diagnostic's encoding.
 func TestGoldenParity_FRPStepOutput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.FRPStepOutput](t, "FRPStepOutput")
