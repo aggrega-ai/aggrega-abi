@@ -772,7 +772,7 @@ export interface ConfigCaptureParams {
   allPlugins?: boolean;
 }
 
-// Converts a foreign source description into draft authoring documents. A source it could not fully convert is an answer rather than a failure: the drafts it did produce are written and the findings say what it could not convert.
+// Converts a foreign source description into draft authoring documents, and writes beside them `.aggrega-import.json`, the record of what the import wrote, which a later sync reads. A source it could not fully convert is an answer rather than a failure: the drafts it did produce are written and the findings say what it could not convert — except under sync, which writes nothing from a conversion that stopped.
 export interface ImportParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
@@ -782,8 +782,10 @@ export interface ImportParams {
   outputDir?: string;
   // The source format. Absent lets the conversion determine it.
   format?: string;
-  // Whether to answer with the drafts' content rather than writing them.
+  // Whether to answer with the content of every file the request would write rather than writing it. Every other behaviour is the write's, so a request the write would refuse is refused under it too; with sync, it answers with what the sync would write and every part that would drift.
   dryRun?: boolean;
+  // Whether to bring what an earlier import drafted beneath outputDir up to date with the source, rather than writing the draft whole. Only what the import wrote changes, as the record beside the drafts lists it: a part the source left alone stays as it is on disk, edited or not; a part the source changed, dropped or gained is written anew, removed — a drafted file deleted whole — or added, where what is on disk is what the import last wrote; and everything else, a key an author added or a comment not written directly above a drafted key, stays byte for byte. A sync that would change or remove what an author edited or added, or add a part where an author already wrote one, is refused naming each part, and so is a sync over an Aggregate no record lists; nothing is written either way. Without it, a request whose drafts would be written over an Aggregate already in outputDir is refused, under dryRun too.
+  sync?: boolean;
 }
 
 // Drafts a starter document for an entity kind. The skeleton is derived from the schema set the binary carries, so nothing is read from a workspace and nothing is written — the answer is text, and where it goes is the client's.
@@ -1357,12 +1359,22 @@ export interface EffectiveConfigurationSetting {
   source: string;
 }
 
-// One draft document a conversion produced.
+// One file an import writes: a draft document, or the record of what the import wrote.
 export interface ImportedFile {
-  // Where the draft belongs, as a path relative to the workspace root.
+  // Where the file belongs, as a path relative to the answer's outputDir.
   path: string;
-  // The draft's text.
+  // The file's text.
   content: string;
+}
+
+// One part a sync brought up to date with the source, or under dryRun would.
+export interface ImportDrift {
+  // How the part drifted: added, for a part the source gained; removed, for one it dropped; or changed, for one it changed.
+  change: string;
+  // The drafted file the part is in, as a path relative to the answer's outputDir.
+  file: string;
+  // The keys leading to the part from the top of a drafted Aggregate, one entry per key, so a key holding a full stop stays one entry. Empty where the part is the whole file.
+  key: string[];
 }
 
 // One thing a conversion could not convert. These are the conversion's most useful output, so they are reported in full rather than reduced to a verdict.
@@ -2113,12 +2125,14 @@ export interface ConfigCaptureResult {
 export interface ImportResult {
   // The source format that was converted.
   format: string;
-  // The directory the drafts were written into.
+  // The directory every path in the answer is relative to, and the one the files were written into.
   outputDir: string;
-  // The drafts that were written.
+  // Each file that reached disk, in the order written: the drafts, then the record of what the import wrote. Under sync, only the drafts the sync changed and the record where it changed. Empty under dryRun.
   written: string[] | null;
-  // The drafts and their text, for a request that asked to be shown them rather than have them written.
+  // Each file the request writes, with its text, under dryRun and without it: every draft, then the record of what the import wrote. Under sync, each draft the sync changes, with its new text, then the record where that changes too, so a sync in step answers an empty list.
   files: ImportedFile[] | null;
+  // Each part a sync brought up to date with the source, or under dryRun would, in the order the draft names them; a drafted file the sync deletes is one of them, removed with no keys. An empty list for a request that is not a sync, for a sync in step, and for a sync whose conversion stopped, which writes nothing.
+  drift: ImportDrift[];
   // What could not be converted.
   diagnostics: ImportDiagnostic[] | null;
   // How the importer mapped each source node, in the importer's order and exactly as it reported it: what tells you where the conversion guessed. Carried under both deliveries and whether or not the conversion stopped, and an empty list for an importer that reports none.
@@ -3155,6 +3169,7 @@ export function encodeImportParams(v: ImportParams): string {
   if (v.outputDir !== undefined && v.outputDir !== "") parts.push(`${jstr("outputDir")}:${jstr(v.outputDir)}`);
   if (v.format !== undefined && v.format !== "") parts.push(`${jstr("format")}:${jstr(v.format)}`);
   if (v.dryRun !== undefined && v.dryRun !== false) parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
+  if (v.sync !== undefined && v.sync !== false) parts.push(`${jstr("sync")}:${String(v.sync)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -3781,6 +3796,18 @@ export function encodeImportedFile(v: ImportedFile): string {
 
 export function decodeImportedFile(data: string): ImportedFile {
   return JSON.parse(data) as ImportedFile;
+}
+
+export function encodeImportDrift(v: ImportDrift): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("change")}:${jstr(v.change)}`);
+  parts.push(`${jstr("file")}:${jstr(v.file)}`);
+  parts.push(`${jstr("key")}:${`[${v.key!.map((e0) => jstr(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeImportDrift(data: string): ImportDrift {
+  return JSON.parse(data) as ImportDrift;
 }
 
 export function encodeImportDiagnostic(v: ImportDiagnostic): string {
@@ -4607,6 +4634,7 @@ export function encodeImportResult(v: ImportResult): string {
   parts.push(`${jstr("outputDir")}:${jstr(v.outputDir)}`);
   parts.push(`${jstr("written")}:${v.written === null ? "null" : `[${v.written!.map((e0) => jstr(e0)).join(",")}]`}`);
   parts.push(`${jstr("files")}:${v.files === null ? "null" : `[${v.files!.map((e0) => encodeImportedFile(e0)).join(",")}]`}`);
+  parts.push(`${jstr("drift")}:${`[${v.drift!.map((e0) => encodeImportDrift(e0)).join(",")}]`}`);
   parts.push(`${jstr("diagnostics")}:${v.diagnostics === null ? "null" : `[${v.diagnostics!.map((e0) => encodeImportDiagnostic(e0)).join(",")}]`}`);
   parts.push(`${jstr("decisions")}:${`[${v.decisions!.map((e0) => encodeImportDecision(e0)).join(",")}]`}`);
   parts.push(`${jstr("halted")}:${String(v.halted)}`);
