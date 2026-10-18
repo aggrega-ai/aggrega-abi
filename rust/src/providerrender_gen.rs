@@ -569,7 +569,7 @@ pub struct LinkEndpoint {
     pub release: String,
 }
 
-/// The generalized, domain-blind per-edge payload the host assembles for a uses edge whose consuming and consumed ends assemble into different dispatch groups. It carries both endpoints, both endpoints' placement annotations as opaque scalar maps the host does not interpret, the consumed endpoint's provides output, and the socket and inject mapping the edge wires. A provider reads it to produce the provider-native cross-reference wiring the two ends need; the host assembles it and passes the annotation map as opaque scalars, inferring no meaning from any value.
+/// The generalized, domain-agnostic per-edge payload the host assembles for a uses edge whose consuming and consumed ends assemble into different dispatch groups. It carries both endpoints, both endpoints' placement annotations as opaque scalar maps the host does not interpret, the consumed endpoint's provides output, and the socket and inject mapping the edge wires. A provider reads it to produce the provider-native cross-reference wiring the two ends need; the host assembles it and passes the annotation map as opaque scalars, inferring no meaning from any value.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LinkEdge {
     /// The consuming endpoint — the source end of the directed uses edge, whose assembled output the consumer-side wiring is injected into.

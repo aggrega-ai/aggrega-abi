@@ -52,7 +52,7 @@ export interface FRPStepOutput {
   error?: string;
 }
 
-// The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and is blind to its content; the guest selects the documents it targets by content and addresses its patches by key.
+// The keyed, scope-rooted set of addressable units a pipeline guest receives as its input surface. The host hands the whole set and does not interpret its content; the guest selects the documents it targets by content and addresses its patches by key.
 export interface DocumentSet {
   // The node's own rendered output, keyed by unit token. Preserves key order so the set reaches the wire in a stable order and the payload is byte-identical across runs of identical input.
   own: Map<string, Unit>;
