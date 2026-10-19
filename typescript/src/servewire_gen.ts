@@ -778,7 +778,7 @@ export interface ImportParams {
   workDoneToken?: ProgressToken;
   // The file or the directory to convert, as an absolute path or one relative to the workspace root; a request without one is refused. It is read where it is, inside the workspace or not, and a directory is read into the files of it the importer's declared file patterns select.
   source?: string;
-  // The directory under the workspace to write the drafts into. It is required under dryRun as well, because every drafted path is relative to it, and a request without one is refused rather than given a destination.
+  // The directory under the workspace to write the drafts into, relative to the workspace root; an absolute value, or one leading out of the workspace as written or through a link, is refused. Absent writes beneath the workspace root, where the same conversion run at a terminal naming no destination writes. Every drafted path is relative to the directory the answer names as outputDir, under dryRun as well.
   outputDir?: string;
   // The source format. Absent lets the conversion determine it.
   format?: string;
