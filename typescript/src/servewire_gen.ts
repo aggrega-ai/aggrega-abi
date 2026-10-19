@@ -772,7 +772,7 @@ export interface ConfigCaptureParams {
   allPlugins?: boolean;
 }
 
-// Converts a foreign source description into draft authoring documents, and writes beside them `.aggrega-import.json`, the record of what the import wrote, which a later sync reads. A source it could not fully convert is an answer rather than a failure: the drafts it did produce are written and the findings say what it could not convert — except under sync, which writes nothing from a conversion that stopped.
+// Converts a foreign source description into draft authoring documents, and writes beside them `.aggrega-import.json`, the record of what the import wrote — the target it was given, where it was given one, each drafted file, and each key of a drafted Aggregate or Release at every depth — which a later sync reads. A source it could not fully convert is an answer rather than a failure: the drafts it did produce are written and the findings say what it could not convert — except under sync, which writes nothing from a conversion that stopped.
 export interface ImportParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
@@ -782,11 +782,11 @@ export interface ImportParams {
   outputDir?: string;
   // The source format. Absent lets the conversion determine it.
   format?: string;
-  // A provider capability, such as compose or helm — the word a Recipe's spec.capability binds to — to draft a Manifest for beside the drafts, as manifest.yaml: each component type the drafted Aggregate declares is mapped to the one Recipe of that capability the workspace's catalog offers for it, a type with none or with Recipes of more than one name is left unmapped with a warning finding naming it, and the drafted Release's spec.manifest is set to the Manifest. A capability no Recipe in the catalog binds to is refused before the conversion runs, and nothing is written. Absent drafts no Manifest.
+  // A provider capability, such as compose or helm — the word a Recipe's spec.capability binds to — to draft a Manifest for beside the drafts, as manifest.yaml: each component type the drafted Aggregate declares is mapped to the one Recipe of that capability the workspace's catalog offers for it, a type with none or with Recipes of more than one name is left unmapped with a warning finding naming it, and the drafted Release's spec.manifest is set to the Manifest. A capability no Recipe in the catalog binds to is refused before the conversion runs, and nothing is written. Absent drafts no Manifest, except under sync, which drafts for the target the record of the earlier import names; a sync naming a target drafts for it, and the record then names it.
   target?: string;
   // Whether to answer with the content of every file the request would write rather than writing it. Every other behaviour is the write's, so a request the write would refuse is refused under it too; with sync, it answers with what the sync would write and every part that would drift.
   dryRun?: boolean;
-  // Whether to bring what an earlier import drafted beneath outputDir up to date with the source, rather than writing the draft whole. Only what the import wrote changes, as the record beside the drafts lists it: a part the source left alone stays as it is on disk, edited or not; a part the source changed, dropped or gained is written anew, removed — a drafted file deleted whole — or added, where what is on disk is what the import last wrote; and everything else, a key an author added or a comment not written directly above a drafted key, stays byte for byte. A sync that would change or remove what an author edited or added, or add a part where an author already wrote one, is refused naming each part, and so is a sync over an Aggregate no record lists; nothing is written either way. Without it, a request whose drafts would be written over an Aggregate already in outputDir is refused, under dryRun too.
+  // Whether to bring what an earlier import drafted beneath outputDir up to date with the source, rather than writing the draft whole. Only what the import wrote changes, as the record beside the drafts lists it: a part the source left alone stays as it is on disk, edited or not; a part the source changed, dropped or gained is written anew, removed — a drafted file deleted whole — or added, where what is on disk is what the import last wrote; and everything else, a key an author added — the environment a drafted Release leaves for its author among them — or a comment not written directly above a drafted key, stays byte for byte. A sync that would change or remove what an author edited or added, or add a part where an author already wrote one, is refused naming each part, and so is a sync over an Aggregate no record lists; nothing is written either way. Without it, a request whose drafts would be written over an Aggregate already in outputDir is refused, under dryRun too.
   sync?: boolean;
 }
 
@@ -1375,7 +1375,7 @@ export interface ImportDrift {
   change: string;
   // The drafted file the part is in, as a path relative to the answer's outputDir.
   file: string;
-  // The keys leading to the part from the top of a drafted Aggregate, one entry per key, so a key holding a full stop stays one entry. Empty where the part is the whole file.
+  // The keys leading to the part from the top of a drafted Aggregate or Release, one entry per key, so a key holding a full stop stays one entry. Empty where the part is the whole file.
   key: string[];
 }
 
