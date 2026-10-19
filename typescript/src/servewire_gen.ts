@@ -782,6 +782,8 @@ export interface ImportParams {
   outputDir?: string;
   // The source format. Absent lets the conversion determine it.
   format?: string;
+  // A provider capability, such as compose or helm — the word a Recipe's spec.capability binds to — to draft a Manifest for beside the drafts, as manifest.yaml: each component type the drafted Aggregate declares is mapped to the one Recipe of that capability the workspace's catalog offers for it, a type with none or with Recipes of more than one name is left unmapped with a warning finding naming it, and the drafted Release's spec.manifest is set to the Manifest. A capability no Recipe in the catalog binds to is refused before the conversion runs, and nothing is written. Absent drafts no Manifest.
+  target?: string;
   // Whether to answer with the content of every file the request would write rather than writing it. Every other behaviour is the write's, so a request the write would refuse is refused under it too; with sync, it answers with what the sync would write and every part that would drift.
   dryRun?: boolean;
   // Whether to bring what an earlier import drafted beneath outputDir up to date with the source, rather than writing the draft whole. Only what the import wrote changes, as the record beside the drafts lists it: a part the source left alone stays as it is on disk, edited or not; a part the source changed, dropped or gained is written anew, removed — a drafted file deleted whole — or added, where what is on disk is what the import last wrote; and everything else, a key an author added or a comment not written directly above a drafted key, stays byte for byte. A sync that would change or remove what an author edited or added, or add a part where an author already wrote one, is refused naming each part, and so is a sync over an Aggregate no record lists; nothing is written either way. Without it, a request whose drafts would be written over an Aggregate already in outputDir is refused, under dryRun too.
@@ -3168,6 +3170,7 @@ export function encodeImportParams(v: ImportParams): string {
   if (v.source !== undefined && v.source !== "") parts.push(`${jstr("source")}:${jstr(v.source)}`);
   if (v.outputDir !== undefined && v.outputDir !== "") parts.push(`${jstr("outputDir")}:${jstr(v.outputDir)}`);
   if (v.format !== undefined && v.format !== "") parts.push(`${jstr("format")}:${jstr(v.format)}`);
+  if (v.target !== undefined && v.target !== "") parts.push(`${jstr("target")}:${jstr(v.target)}`);
   if (v.dryRun !== undefined && v.dryRun !== false) parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
   if (v.sync !== undefined && v.sync !== false) parts.push(`${jstr("sync")}:${String(v.sync)}`);
   return `{${parts.join(",")}}`;
