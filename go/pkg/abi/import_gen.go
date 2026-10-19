@@ -82,7 +82,7 @@ type ImportOutput struct {
 
 // EmittedEntity One entity the import produced: its kind, its name, and how it is emitted — a reference to an existing catalog entity or a newly drafted entity body.
 type EmittedEntity struct {
-	// Kind The kind of entity emitted. In v1 this is Component or Aggregate; additional kinds may appear as the emission surface grows, so a reader tolerates an unrecognized kind.
+	// Kind The kind of entity emitted. In v1 this is Component, Aggregate or Release; additional kinds may appear as the emission surface grows, so a reader tolerates an unrecognized kind.
 	Kind string `json:"kind" yaml:"kind" cbor:"kind"`
 	// Name The name of the emitted entity.
 	Name string `json:"name" yaml:"name" cbor:"name"`
