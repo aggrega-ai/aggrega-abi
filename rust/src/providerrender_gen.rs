@@ -351,7 +351,7 @@ pub struct AssembleBoundaryInput {
     pub aggregate_name: String,
 }
 
-/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its sync wave, the values the compiler resolved for it where those are the compiler's to supply, and the files the render_node export produced for it — carried in the render output's shape, with every member of that shape other than its files left absent.
+/// One node's render output as it appears in an assemble_boundary input: the node id, its type, its merged annotations, its sync wave, the values the compiler resolved for it where those are the compiler's to supply and whether a values mapping produced them, and the files the render_node export produced for it — carried in the render output's shape, with every member of that shape other than its files left absent.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RenderedNode {
     /// The node's absolute id within the topology graph. A contributor that is not one of the graph's nodes — a Feature attached at a boundary rather than at a component — carries the compiler's own dispatch identity for it here instead, which is the same identity the render_node call for that contributor carried; it distinguishes one contributor from another and is not a name any target accepts. What such a contributor derives names from inside the assembled artifact is a separate carry, derived_name_basis.
@@ -375,6 +375,9 @@ pub struct RenderedNode {
     /// The values the compiler resolved for this node, present only for a node rendered from a source — the render_node call that produced its files carried a source_listing. That is the one case where the files came from elsewhere and the values could not be written into them, so a position outside them has to supply them: a boundary assembler places a present dictionary as that contributor's inputs in the assembled artifact itself, rather than beside the contributor's own files, and where the assembled artifact is the only position the target evaluates, that is the difference between an input the target reads and one it never reaches. A node rendered from a workload_projection or an artifacts_projection resolved these values into the files it produced, so it carries none here and the field is absent: supplying them a second time would offer the assembled artifact inputs that node's own files never declare, which the target is free to reject. Keys arrive in sorted order, not author order, and that sorting is what makes the payload byte-identical across runs of identical input; a guest needing any other ordering imposes it itself. An assembler whose output shape carries no per-contributor inputs ignores the field.
     #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
     pub values: OrderedMap<Box<RawValue>>,
+    /// True when the values this node carries are the output of its bound Recipe's valuesMapping, rather than the node's values handed on as the author wrote them — the same mark the render_node call for this node carried on its node projection, carried here beside the values it describes. Absent where no valuesMapping ran, and wherever values is absent. Whether an assembler reads it is that assembler's own contract: one whose render_node binds a mapped node's values to the inputs its source declares can learn from it which names that binding filled, while one that places a node's values as its inputs however they were produced does not read it. It records how the values were produced and is never derived from a key's name or a value's content.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub values_mapped: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -2186,6 +2189,7 @@ impl RenderedNode {
         if !self.values.is_empty() { n += 1; }
         if self.sync_wave != 0 { n += 1; }
         if !self.annotations.is_empty() { n += 1; }
+        if self.values_mapped { n += 1; }
         if !self.output_directory.is_empty() { n += 1; }
         if !self.derived_name_basis.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -2223,6 +2227,10 @@ impl RenderedNode {
                 }
             }
         }
+        if self.values_mapped {
+            crate::cbor_gen::write_text(out, "values_mapped");
+            crate::cbor_gen::write_bool(out, self.values_mapped);
+        }
         if !self.output_directory.is_empty() {
             crate::cbor_gen::write_text(out, "output_directory");
             crate::cbor_gen::write_text(out, &self.output_directory);
@@ -2250,6 +2258,7 @@ impl RenderedNode {
         let mut f_annotations: OrderedMap<String> = OrderedMap::new();
         let mut f_sync_wave: i64 = 0;
         let mut f_values: OrderedMap<Box<RawValue>> = OrderedMap::new();
+        let mut f_values_mapped: bool = false;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -2262,6 +2271,7 @@ impl RenderedNode {
                 "annotations" => f_annotations = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "sync_wave" => f_sync_wave = dec.read_int()?,
                 "values" => f_values = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
+                "values_mapped" => f_values_mapped = dec.read_bool()?,
                 _ => dec.skip()?,
             }
         }
@@ -2274,6 +2284,7 @@ impl RenderedNode {
             annotations: f_annotations,
             sync_wave: f_sync_wave,
             values: f_values,
+            values_mapped: f_values_mapped,
         })
     }
 }

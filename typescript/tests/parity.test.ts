@@ -135,6 +135,9 @@ const vectors: Array<[string, string]> = [
   // mark is omitted when false, so this is the vector where dropping a true mark
   // moves the bytes.
   ["IRNodeProjectionValuesMapped", "IRNodeProjection"],
+  // The same mark on a rendered node of the assembly input, omitted when false, so
+  // this is the vector where dropping a true mark there moves the bytes.
+  ["RenderedNodeValuesMapped", "RenderedNode"],
   ["IRFeatureEntrySensitivePayloadLeaves", "IRFeatureEntry"],
   // An attachment entry carrying the connection it was written on, beside one of the
   // node's own carrying none: the field is omitted when absent, so this is the vector

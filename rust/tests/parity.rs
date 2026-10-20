@@ -226,6 +226,11 @@ cbor_vector!(ir_node_projection_sensitive_rendered_keys, aggrega_abi::IRNodeProj
 // every other vector on this socket has the same bytes whether the codec handles it
 // or drops it, and this is the vector where dropping a true mark moves the bytes.
 cbor_vector!(ir_node_projection_values_mapped, aggrega_abi::IRNodeProjection, "IRNodeProjectionValuesMapped");
+// A second vector for RenderedNode, cbor_vector because the trait binding for this
+// type is declared once with the map-order probe below: a rendered node on the
+// assembly input whose values are a values mapping's output and say so. The mark is
+// elided when false, so this is the vector where dropping a true mark moves the bytes.
+cbor_vector!(rendered_node_values_mapped, aggrega_abi::RenderedNode, "RenderedNodeValuesMapped");
 // A second vector for IRFeatureEntry, so cbor_vector rather than cbor_case for the
 // same reason: the trait binding for this type is declared once with the map-order
 // probe below. This vector carries a POPULATED per-leaf sensitivity marking,

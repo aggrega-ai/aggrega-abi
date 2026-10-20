@@ -347,6 +347,15 @@ func TestSocketParity_IRNodeProjectionValuesMapped(t *testing.T) {
 	roundTripBothGolden[abi.IRNodeProjection](t, "IRNodeProjectionValuesMapped")
 }
 
+// TestSocketParity_RenderedNodeValuesMapped pins a rendered node on the assembly
+// input whose values are the output of its Recipe's values mapping, and which says
+// so. As on the render input, the mark is omitted when false, so this is the vector
+// where dropping a true mark moves the bytes, in all three languages.
+func TestSocketParity_RenderedNodeValuesMapped(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderedNode](t, "RenderedNodeValuesMapped")
+}
+
 // TestSocketParity_IRFeatureEntrySensitivePayloadLeaves pins an attachment entry
 // whose per-leaf sensitivity marking is POPULATED, for the same reason the
 // projection vector above exists: the field is omitted from the payload when it
