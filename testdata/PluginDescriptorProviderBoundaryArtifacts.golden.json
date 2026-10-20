@@ -1,0 +1,1 @@
+{"abi_version":"v1alpha1","plugin_type":"provider","capabilities":["terraform"],"exports":[{"name":"render_node"},{"name":"assemble_boundary"}],"contract":{"input_kinds":{"sourced":true,"synthesized":false,"artifacts_standalone":true},"boundary_assembly":"nest","reusable_instance":true,"boundary_artifacts":true,"nest_segment":"modules"}}

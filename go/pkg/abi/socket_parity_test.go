@@ -539,6 +539,18 @@ func TestSocketParity_PluginDescriptorProviderOmits(t *testing.T) {
 	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorProviderOmits")
 }
 
+// TestSocketParity_PluginDescriptorProviderBoundaryArtifacts pins a provider
+// contract that claims to accept the files a Recipe contributes to its
+// boundary's shared output. The claim is omitted when false, so every other
+// descriptor vector carries the same bytes whether the codec handles it or drops
+// it; this one does not. It sits between the reuse claim and the nest segment, so
+// the JSON wire pins its declared position between the two, while the canonical
+// CBOR, whose length head leads, places it last in the contract map.
+func TestSocketParity_PluginDescriptorProviderBoundaryArtifacts(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.PluginDescriptor](t, "PluginDescriptorProviderBoundaryArtifacts")
+}
+
 // TestSocketParity_PluginDescriptorImporter pins an importer's recognition
 // contract populated in every field: two signatures in two syntaxes, file
 // patterns, and predicates of four kinds carrying an equals and a prefix. The

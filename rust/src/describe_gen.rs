@@ -131,7 +131,7 @@ pub struct PluginDescriptorMeta {
     pub commit: String,
 }
 
-/// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, the Go-template delimiter pair it applies to imported artifact files, and the files its ecosystem never ships beside a source. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
+/// A provider's self-declaration of the compile-time render behaviors it performs across the nodes it renders — the input kinds it accepts, whether and how it assembles a dispatch group's per-node output into a single artifact, the Go-template delimiter pair it applies to imported artifact files, whether it accepts the files a Recipe contributes to its boundary's shared output, and the files its ecosystem never ships beside a source. It describes the provider as a whole, not any one export. The load gate cross-checks it against the entity's authored claim.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProviderContract {
     /// Which of the three Recipe input kinds the plugin renders: a sourced file set, a synthesized workload, and a standalone artifacts-only node.
@@ -153,6 +153,9 @@ pub struct ProviderContract {
     /// Whether the plugin honours the omit entries a render_node input carries: it leaves every rendered unit an entry matches out of everything it returns, and reports one count per entry it was handed in the output's omitted. A plugin declares it true only when it does both. Absent (false) is the safe default: the plugin makes no claim to leave anything out.
     #[serde(default, skip_serializing_if = "is_default")]
     pub omits: bool,
+    /// Whether the plugin's target accepts the files a Recipe contributes to the shared output of the boundary it renders in. The host evaluates those files and writes each one once, in the directory holding the dispatch group's assembled output, beside what the plugin's assembly writes; the plugin is handed none of them and reads none of them, so the claim is a statement that its target treats a file placed there as part of the boundary's output. Absent (false) is the safe default: a Recipe declaring such files for this plugin is refused before anything renders.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub boundary_artifacts: bool,
     /// The directory the plugin's target places each contributor's own sub-directory under, for a plugin that nests a dispatch group's per-node output. The host joins this segment, the contributor's authoring-level name, and each file's own path. Read only when boundary_assembly is nest. Absent, the host places each contributor's sub-directory directly at the dispatch position, with no enclosing directory. The value names one directory and never a path: a value carrying a path separator, or naming the current or the parent directory, is refused, because the host composes the contributor's name into it and a path fragment would place a contributor's files somewhere other than beneath the dispatch position.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub nest_segment: String,
@@ -705,6 +708,7 @@ impl ProviderContract {
         if !self.nest_segment.is_empty() { n += 1; }
         if self.source_ignore.is_some() { n += 1; }
         if self.reusable_instance { n += 1; }
+        if self.boundary_artifacts { n += 1; }
         if self.artifact_delimiters.is_some() { n += 1; }
         if self.cross_boundary_linking { n += 1; }
         if self.assembly_name_annotation.is_some() { n += 1; }
@@ -728,6 +732,10 @@ impl ProviderContract {
         if self.reusable_instance {
             crate::cbor_gen::write_text(out, "reusable_instance");
             crate::cbor_gen::write_bool(out, self.reusable_instance);
+        }
+        if self.boundary_artifacts {
+            crate::cbor_gen::write_text(out, "boundary_artifacts");
+            crate::cbor_gen::write_bool(out, self.boundary_artifacts);
         }
         if let Some(ref x) = self.artifact_delimiters {
             crate::cbor_gen::write_text(out, "artifact_delimiters");
@@ -759,6 +767,7 @@ impl ProviderContract {
         let mut f_reusable_instance: bool = false;
         let mut f_cross_boundary_linking: bool = false;
         let mut f_omits: bool = false;
+        let mut f_boundary_artifacts: bool = false;
         let mut f_nest_segment: String = String::new();
         let mut f_source_ignore: Option<Box<SourceIgnore>> = None;
         let n = dec.read_map_header()?;
@@ -772,6 +781,7 @@ impl ProviderContract {
                 "reusable_instance" => f_reusable_instance = dec.read_bool()?,
                 "cross_boundary_linking" => f_cross_boundary_linking = dec.read_bool()?,
                 "omits" => f_omits = dec.read_bool()?,
+                "boundary_artifacts" => f_boundary_artifacts = dec.read_bool()?,
                 "nest_segment" => f_nest_segment = dec.read_text()?,
                 "source_ignore" => f_source_ignore = Some(Box::new(SourceIgnore::decode_cbor_from(dec)?)),
                 _ => dec.skip()?,
@@ -785,6 +795,7 @@ impl ProviderContract {
             reusable_instance: f_reusable_instance,
             cross_boundary_linking: f_cross_boundary_linking,
             omits: f_omits,
+            boundary_artifacts: f_boundary_artifacts,
             nest_segment: f_nest_segment,
             source_ignore: f_source_ignore,
         })
