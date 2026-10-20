@@ -1,0 +1,1 @@
+{"id":"stream","type":"","resolved_recipe":"","values":{"CloudWatchLogGroupRetention":"7","DestinationBucketName":"!Ref ProbeBucket"},"values_mapped":true,"boundary_path":"stack","recipe_name":"stream-recipe","recipe_version":"1.0.0","provenance":{"compiler_version":"test","aggregate_name":"delivery","provider_name":"cloudformation"}}

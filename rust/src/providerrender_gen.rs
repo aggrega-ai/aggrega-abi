@@ -36,7 +36,7 @@ pub struct RenderNodeInput {
     pub omits: Vec<OmitEntry>,
 }
 
-/// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys and over the values as a whole, outbound uses edges, boundary path, sync wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
+/// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, whether a values mapping produced those values, feature attachments, the sensitivity marking over its rendered keys and over the values as a whole, outbound uses edges, boundary path, sync wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRNodeProjection {
     /// The node's absolute id within the topology graph.
@@ -58,6 +58,9 @@ pub struct IRNodeProjection {
     /// True when the values this payload carries were produced by a template that reads a value an author declared sensitive, or a value traced to one: a Recipe's or a FeatureRecipe's valuesMapping, a single template whose output keys and values are its own invention, so no key of that output can be traced back to the datum it came from and the whole map is marked instead. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from a value's content or a key's name. A guest composing text a person reads, a refusal or a warning, keeps every value of the node's values out of that text when this is true, and keeps out the value under any key sensitive_rendered_keys names whether or not it is: the two compose, one naming the keys whose identity is recovered exactly and this one covering the map where none can be. Absent when no such template read such a value, which includes values that are the declared leaves themselves, marked per key in sensitive_rendered_keys instead, and absent on a payload carrying no values. Absence never states that no value is sensitive.
     #[serde(default, skip_serializing_if = "is_default")]
     pub sensitive_values: bool,
+    /// True when the values this payload carries are the output of the bound Recipe's or FeatureRecipe's valuesMapping, rather than the node's values handed on as the author wrote them. A guest that binds values to inputs its source declares — a template's parameters, a module's arguments — reads this to bind only values a mapping produced for that source, and to leave values written for something else, such as the Recipe's artifacts, unread. It records how the values were produced and is never derived from a key's name or a value's content. Absent where no valuesMapping ran, and on a payload carrying no values.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub values_mapped: bool,
     /// Declared and deliberately withheld: the host never populates this, so the map is absent from every render payload. An outbound edge is consumed before dispatch — the edge's published values are rehydrated into the node's own inject pipe, which the Recipe has already evaluated into the values and workload the guest receives — and a guest assembling a boundary receives the edge list on its own input instead. Were it populated it would key the node's outbound uses edges by socket alias, each carrying that socket's ordered target node ids in author order.
     #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
     pub uses: OrderedMap<Vec<String>>,
@@ -758,6 +761,7 @@ impl IRNodeProjection {
         if !self.recipe_name.is_empty() { n += 1; }
         if !self.boundary_path.is_empty() { n += 1; }
         if !self.output_labels.is_empty() { n += 1; }
+        if self.values_mapped { n += 1; }
         if !self.recipe_version.is_empty() { n += 1; }
         if self.sensitive_values { n += 1; }
         if !self.derived_name_basis.is_empty() { n += 1; }
@@ -838,6 +842,10 @@ impl IRNodeProjection {
                 }
             }
         }
+        if self.values_mapped {
+            crate::cbor_gen::write_text(out, "values_mapped");
+            crate::cbor_gen::write_bool(out, self.values_mapped);
+        }
         if !self.recipe_version.is_empty() {
             crate::cbor_gen::write_text(out, "recipe_version");
             crate::cbor_gen::write_text(out, &self.recipe_version);
@@ -888,6 +896,7 @@ impl IRNodeProjection {
         let mut f_features: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let mut f_sensitive_rendered_keys: BTreeMap<String, String> = BTreeMap::new();
         let mut f_sensitive_values: bool = false;
+        let mut f_values_mapped: bool = false;
         let mut f_uses: OrderedMap<Vec<String>> = OrderedMap::new();
         let mut f_boundary_path: String = String::new();
         let mut f_sync_wave: i64 = 0;
@@ -908,6 +917,7 @@ impl IRNodeProjection {
                 "features" => f_features = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "sensitive_rendered_keys" => f_sensitive_rendered_keys = { let mn = dec.read_map_header()?; let mut m: BTreeMap<String, String> = BTreeMap::new(); for _ in 0..mn { let mk = dec.read_text()?; let mv = dec.read_text()?; m.insert(mk, mv); } m },
                 "sensitive_values" => f_sensitive_values = dec.read_bool()?,
+                "values_mapped" => f_values_mapped = dec.read_bool()?,
                 "uses" => f_uses = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Vec<String>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 "boundary_path" => f_boundary_path = dec.read_text()?,
                 "sync_wave" => f_sync_wave = dec.read_int()?,
@@ -928,6 +938,7 @@ impl IRNodeProjection {
             features: f_features,
             sensitive_rendered_keys: f_sensitive_rendered_keys,
             sensitive_values: f_sensitive_values,
+            values_mapped: f_values_mapped,
             uses: f_uses,
             boundary_path: f_boundary_path,
             sync_wave: f_sync_wave,

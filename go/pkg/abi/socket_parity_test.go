@@ -337,6 +337,16 @@ func TestSocketParity_IRNodeProjectionSensitiveRenderedKeys(t *testing.T) {
 	roundTripBothGolden[abi.IRNodeProjection](t, "IRNodeProjectionSensitiveRenderedKeys")
 }
 
+// TestSocketParity_IRNodeProjectionValuesMapped pins a node projection whose
+// values are the output of the bound Recipe's values mapping, and which says so.
+// The mark is omitted from the payload when false, so every other vector on this
+// socket carries the same bytes whether the codec handles it or drops it; this is
+// the vector where dropping a true mark moves the bytes, in all three languages.
+func TestSocketParity_IRNodeProjectionValuesMapped(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.IRNodeProjection](t, "IRNodeProjectionValuesMapped")
+}
+
 // TestSocketParity_IRFeatureEntrySensitivePayloadLeaves pins an attachment entry
 // whose per-leaf sensitivity marking is POPULATED, for the same reason the
 // projection vector above exists: the field is omitted from the payload when it

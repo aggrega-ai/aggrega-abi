@@ -40,7 +40,7 @@ export interface RenderNodeInput {
   omits?: OmitEntry[];
 }
 
-// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, feature attachments, the sensitivity marking over its rendered keys and over the values as a whole, outbound uses edges, boundary path, sync wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
+// The per-node IR data a Provider guest renders — a bounded projection of the full IR node carrying the per-node identity and the provenance the guest stamps onto every emitted manifest: its id, type, resolved recipe, values, whether a values mapping produced those values, feature attachments, the sensitivity marking over its rendered keys and over the values as a whole, outbound uses edges, boundary path, sync wave, Recipe identity, component-id override, derived-name basis, and build provenance. The identity and the derived-name basis are two carries because they answer two questions — what a resource belongs to, and what an author's own source renders against — and a Feature attachment delivering source its author wrote is where the two answers differ. Source-file content is not carried here; it travels separately in the source projection. Every key set here has a fixed order — features and uses in author order, values and the sensitivity marking in sorted key order — so the wire payload is byte-identical across runs of identical input.
 export interface IRNodeProjection {
   // The node's absolute id within the topology graph.
   id: string;
@@ -56,6 +56,8 @@ export interface IRNodeProjection {
   sensitive_rendered_keys?: Record<string, string>;
   // True when the values this payload carries were produced by a template that reads a value an author declared sensitive, or a value traced to one: a Recipe's or a FeatureRecipe's valuesMapping, a single template whose output keys and values are its own invention, so no key of that output can be traced back to the datum it came from and the whole map is marked instead. It is read from the template's own references against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from a value's content or a key's name. A guest composing text a person reads, a refusal or a warning, keeps every value of the node's values out of that text when this is true, and keeps out the value under any key sensitive_rendered_keys names whether or not it is: the two compose, one naming the keys whose identity is recovered exactly and this one covering the map where none can be. Absent when no such template read such a value, which includes values that are the declared leaves themselves, marked per key in sensitive_rendered_keys instead, and absent on a payload carrying no values. Absence never states that no value is sensitive.
   sensitive_values?: boolean;
+  // True when the values this payload carries are the output of the bound Recipe's or FeatureRecipe's valuesMapping, rather than the node's values handed on as the author wrote them. A guest that binds values to inputs its source declares — a template's parameters, a module's arguments — reads this to bind only values a mapping produced for that source, and to leave values written for something else, such as the Recipe's artifacts, unread. It records how the values were produced and is never derived from a key's name or a value's content. Absent where no valuesMapping ran, and on a payload carrying no values.
+  values_mapped?: boolean;
   // Declared and deliberately withheld: the host never populates this, so the map is absent from every render payload. An outbound edge is consumed before dispatch — the edge's published values are rehydrated into the node's own inject pipe, which the Recipe has already evaluated into the values and workload the guest receives — and a guest assembling a boundary receives the edge list on its own input instead. Were it populated it would key the node's outbound uses edges by socket alias, each carrying that socket's ordered target node ids in author order.
   uses?: Map<string, string[]>;
   // The node's boundary path, stamped as the aggrega.ai/boundary-path annotation on every emitted manifest that carries a metadata block.
@@ -555,6 +557,7 @@ export function encodeIRNodeProjection(v: IRNodeProjection): string {
   if (v.features !== undefined && v.features.size > 0) parts.push(`${jstr("features")}:${writeOrderedObject(v.features!, (v0) => encodeOpaque(v0))}`);
   if (v.sensitive_rendered_keys !== undefined && Object.keys(v.sensitive_rendered_keys).length > 0) parts.push(`${jstr("sensitive_rendered_keys")}:${`{${Object.keys(v.sensitive_rendered_keys!).sort().map((k0) => `${jstr(k0)}:${jstr(v.sensitive_rendered_keys![k0])}`).join(",")}}`}`);
   if (v.sensitive_values !== undefined && v.sensitive_values !== false) parts.push(`${jstr("sensitive_values")}:${String(v.sensitive_values)}`);
+  if (v.values_mapped !== undefined && v.values_mapped !== false) parts.push(`${jstr("values_mapped")}:${String(v.values_mapped)}`);
   if (v.uses !== undefined && v.uses.size > 0) parts.push(`${jstr("uses")}:${writeOrderedObject(v.uses!, (v0) => `[${v0!.map((e1) => jstr(e1)).join(",")}]`)}`);
   if (v.boundary_path !== undefined && v.boundary_path !== "") parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
   if (v.sync_wave !== undefined && v.sync_wave !== 0) parts.push(`${jstr("sync_wave")}:${String(v.sync_wave)}`);
@@ -578,6 +581,7 @@ export function decodeIRNodeProjection(data: string): IRNodeProjection {
       case "features": o["features"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
       case "sensitive_rendered_keys": o["sensitive_rendered_keys"] = JSON.parse(raw); break;
       case "sensitive_values": o["sensitive_values"] = JSON.parse(raw); break;
+      case "values_mapped": o["values_mapped"] = JSON.parse(raw); break;
       case "uses": o["uses"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
       case "boundary_path": o["boundary_path"] = JSON.parse(raw); break;
       case "sync_wave": o["sync_wave"] = JSON.parse(raw); break;
@@ -1271,6 +1275,7 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
   if (v.recipe_name !== undefined && v.recipe_name !== "") n++;
   if (v.boundary_path !== undefined && v.boundary_path !== "") n++;
   if (v.output_labels !== undefined && Object.keys(v.output_labels).length > 0) n++;
+  if (v.values_mapped !== undefined && v.values_mapped !== false) n++;
   if (v.recipe_version !== undefined && v.recipe_version !== "") n++;
   if (v.sensitive_values !== undefined && v.sensitive_values !== false) n++;
   if (v.derived_name_basis !== undefined && v.derived_name_basis !== "") n++;
@@ -1349,6 +1354,10 @@ export function appendCBORIRNodeProjection(out: number[], v: IRNodeProjection): 
       }
     }
   }
+  if (v.values_mapped !== undefined && v.values_mapped !== false) {
+    writeText(out, "values_mapped");
+    writeBool(out, v.values_mapped);
+  }
   if (v.recipe_version !== undefined && v.recipe_version !== "") {
     writeText(out, "recipe_version");
     writeText(out, v.recipe_version);
@@ -1399,6 +1408,7 @@ export function decodeCBORIRNodeProjectionFrom(dec: CborDec): IRNodeProjection {
       case "features": o["features"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       case "sensitive_rendered_keys": o["sensitive_rendered_keys"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); break;
       case "sensitive_values": o["sensitive_values"] = dec.readBool(); break;
+      case "values_mapped": o["values_mapped"] = dec.readBool(); break;
       case "uses": o["uses"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })()); } return m; })(); break;
       case "boundary_path": o["boundary_path"] = dec.readText(); break;
       case "sync_wave": o["sync_wave"] = dec.readInt(); break;

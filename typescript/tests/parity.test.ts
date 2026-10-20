@@ -131,6 +131,10 @@ const vectors: Array<[string, string]> = [
   // where dropping a true mark, or writing a false one, moves the bytes.
   ["RenderNodeInputOmitsSensitive", "RenderNodeInput"],
   ["IRNodeProjectionSensitiveRenderedKeys", "IRNodeProjection"],
+  // A node projection whose values are a values mapping's output and say so. The
+  // mark is omitted when false, so this is the vector where dropping a true mark
+  // moves the bytes.
+  ["IRNodeProjectionValuesMapped", "IRNodeProjection"],
   ["IRFeatureEntrySensitivePayloadLeaves", "IRFeatureEntry"],
   // An attachment entry carrying the connection it was written on, beside one of the
   // node's own carrying none: the field is omitted when absent, so this is the vector
