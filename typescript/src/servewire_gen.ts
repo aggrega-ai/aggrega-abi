@@ -1075,11 +1075,11 @@ export interface CredentialStoreScope {
   workspaceRoot: string;
 }
 
-// How far a publication reached. These answers reach beyond this machine entirely — what they land is what every consumer of that registry resolves — so each names the host it addressed and whether the call landed anything.
+// How far a publication reached. These answers reach beyond this machine entirely — what they attach is what every consumer of that registry resolves — so each names every registry it addressed and whether the call attached anything there.
 export interface PublicationReach {
-  // The registry host that was addressed.
-  registry: string;
-  // Whether anything was landed where others can resolve it.
+  // Every registry host the call addressed, each named once, in the order the call first addressed it. A single-reference call names one; a dry run names the destination it would have addressed.
+  registries: string[];
+  // Whether the call attached anything a registry now serves to others: uploaded content, a signature, a publication date or a deprecation marker. False on a dry run, and on a call that found everything it would have attached already there — a publication run again over a complete version, or a signing batch whose every reference already carried a signature that verifies.
   beyondThisMachine: boolean;
 }
 
@@ -3501,7 +3501,7 @@ export function decodeCredentialStoreScope(data: string): CredentialStoreScope {
 
 export function encodePublicationReach(v: PublicationReach): string {
   const parts: string[] = [];
-  parts.push(`${jstr("registry")}:${jstr(v.registry)}`);
+  parts.push(`${jstr("registries")}:${`[${v.registries!.map((e0) => jstr(e0)).join(",")}]`}`);
   parts.push(`${jstr("beyondThisMachine")}:${String(v.beyondThisMachine)}`);
   return `{${parts.join(",")}}`;
 }
