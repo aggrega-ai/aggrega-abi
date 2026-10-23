@@ -470,6 +470,8 @@ export interface LinkEdge {
   provides: Map<string, string>;
   // The consuming endpoint's inject mapping, keyed by delivery mechanism to an author-ordered key set, describing how the consuming end receives the consumed endpoint's output. Preserves author order so the payload is byte-identical across runs of identical input.
   inject: Map<string, Map<string, string>>;
+  // The keys of the consumed endpoint's provides output that the consuming endpoint's templates read directly through .context.uses, whether or not the inject mapping also delivers them, in the author order of provides. Each entry is one of the keys provides carries. The list rides on the edge so the producer-side publish and the consumer-side resolve read one list. Absent when the consuming endpoint read no provides key directly, and a provider handed none wires the link exactly as it would if the field did not exist.
+  read_provides_keys?: string[];
 }
 
 // One per-file structural patch a provider returns as artifact wiring: the output file and the ordered structural operations to apply to it. A later host pass carves the named file, applies the operations, and reassembles it byte-faithfully. The operation shape is the shared pipeline patch-operation vocabulary; it is opaque at this schema layer, so a guest carries each operation verbatim while the host realizes the typed operation its pipeline applies.
@@ -1105,6 +1107,7 @@ export function encodeLinkEdge(v: LinkEdge): string {
   parts.push(`${jstr("socket")}:${jstr(v.socket)}`);
   parts.push(`${jstr("provides")}:${writeOrderedObject(v.provides!, (v0) => jstr(v0))}`);
   parts.push(`${jstr("inject")}:${writeOrderedObject(v.inject!, (v0) => writeOrderedObject(v0!, (v1) => jstr(v1)))}`);
+  if (v.read_provides_keys !== undefined && v.read_provides_keys.length > 0) parts.push(`${jstr("read_provides_keys")}:${`[${v.read_provides_keys!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -1119,6 +1122,7 @@ export function decodeLinkEdge(data: string): LinkEdge {
       case "socket": o["socket"] = JSON.parse(raw); break;
       case "provides": o["provides"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
       case "inject": o["inject"] = readOrderedObject(raw, (r0) => readOrderedObject(r0, (r1) => JSON.parse(r1))); break;
+      case "read_provides_keys": o["read_provides_keys"] = JSON.parse(raw); break;
     }
   });
   return o as LinkEdge;
@@ -3197,6 +3201,7 @@ export function encodeCBORLinkEdge(v: LinkEdge): Uint8Array {
 
 export function appendCBORLinkEdge(out: number[], v: LinkEdge): void {
   let n = 5;
+  if (v.read_provides_keys !== undefined && v.read_provides_keys.length > 0) n++;
   if (v.source_annotations !== undefined && Object.keys(v.source_annotations).length > 0) n++;
   if (v.target_annotations !== undefined && Object.keys(v.target_annotations).length > 0) n++;
   writeHead(out, 5, n);
@@ -3232,6 +3237,16 @@ export function appendCBORLinkEdge(out: number[], v: LinkEdge): void {
       writeHead(out, 4, 2);
       writeText(out, kk0);
       writeText(out, vv0);
+    }
+  }
+  if (v.read_provides_keys !== undefined && v.read_provides_keys.length > 0) {
+    writeText(out, "read_provides_keys");
+    {
+      const a0 = v.read_provides_keys;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
     }
   }
   if (v.source_annotations !== undefined && Object.keys(v.source_annotations).length > 0) {
@@ -3278,6 +3293,7 @@ export function decodeCBORLinkEdgeFrom(dec: CborDec): LinkEdge {
       case "socket": o["socket"] = dec.readText(); break;
       case "provides": o["provides"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
       case "inject": o["inject"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })()); } return m; })(); break;
+      case "read_provides_keys": o["read_provides_keys"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       default: dec.skip();
     }
   }

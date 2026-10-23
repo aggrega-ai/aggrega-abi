@@ -594,6 +594,9 @@ pub struct LinkEdge {
     pub provides: OrderedMap<String>,
     /// The consuming endpoint's inject mapping, keyed by delivery mechanism to an author-ordered key set, describing how the consuming end receives the consumed endpoint's output. Preserves author order so the payload is byte-identical across runs of identical input.
     pub inject: OrderedMap<OrderedMap<String>>,
+    /// The keys of the consumed endpoint's provides output that the consuming endpoint's templates read directly through .context.uses, whether or not the inject mapping also delivers them, in the author order of provides. Each entry is one of the keys provides carries. The list rides on the edge so the producer-side publish and the consumer-side resolve read one list. Absent when the consuming endpoint read no provides key directly, and a provider handed none wires the link exactly as it would if the field did not exist.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read_provides_keys: Vec<String>,
 }
 
 /// One per-file structural patch a provider returns as artifact wiring: the output file and the ordered structural operations to apply to it. A later host pass carves the named file, applies the operations, and reassembles it byte-faithfully. The operation shape is the shared pipeline patch-operation vocabulary; it is opaque at this schema layer, so a guest carries each operation verbatim while the host realizes the typed operation its pipeline applies.
@@ -3220,6 +3223,7 @@ impl LinkEdge {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 5;
+        if !self.read_provides_keys.is_empty() { n += 1; }
         if !self.source_annotations.is_empty() { n += 1; }
         if !self.target_annotations.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -3255,6 +3259,16 @@ impl LinkEdge {
                 crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
                 crate::cbor_gen::write_text(out, mv);
+            }
+        }
+        if !self.read_provides_keys.is_empty() {
+            crate::cbor_gen::write_text(out, "read_provides_keys");
+            {
+                let c = &self.read_provides_keys;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
             }
         }
         if !self.source_annotations.is_empty() {
@@ -3303,6 +3317,7 @@ impl LinkEdge {
         let mut f_socket: Option<String> = None;
         let mut f_provides: Option<OrderedMap<String>> = None;
         let mut f_inject: Option<OrderedMap<OrderedMap<String>>> = None;
+        let mut f_read_provides_keys: Vec<String> = Vec::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -3314,6 +3329,7 @@ impl LinkEdge {
                 "socket" => f_socket = Some(dec.read_text()?),
                 "provides" => f_provides = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
                 "inject" => f_inject = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<OrderedMap<String>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = { let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
+                "read_provides_keys" => f_read_provides_keys = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
                 _ => dec.skip()?,
             }
         }
@@ -3325,6 +3341,7 @@ impl LinkEdge {
             socket: f_socket.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field socket".to_string()))?,
             provides: f_provides.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field provides".to_string()))?,
             inject: f_inject.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field inject".to_string()))?,
+            read_provides_keys: f_read_provides_keys,
         })
     }
 }

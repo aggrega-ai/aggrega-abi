@@ -301,6 +301,12 @@ const vectors: Array<[string, string]> = [
   ["MapOrderIRNodeProjection", "IRNodeProjection"],
   ["MapOrderIRSpec", "IRSpec"],
   ["MapOrderLinkEdge", "LinkEdge"],
+  // A second LinkEdge vector, with the endpoints, the socket and the provides values
+  // populated beside the probe maps, and read_provides_keys carried — the vector
+  // above leaves that list absent, so it holds the same bytes whether the codec
+  // handles the list or drops it. The list is in the provides map's own order,
+  // which is neither sorted order, so a codec that sorted it fails.
+  ["MapOrderLinkEdgeReadProvidesKeys", "LinkEdge"],
   ["MapOrderLinkPublishOutput", "LinkPublishOutput"],
   ["MapOrderLinkResolveInput", "LinkResolveInput"],
   ["MapOrderLinterInput", "LinterInput"],

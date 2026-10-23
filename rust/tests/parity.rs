@@ -410,6 +410,14 @@ cbor_case!(map_order_ir_node, aggrega_abi::IRNode, "MapOrderIRNode");
 cbor_case!(map_order_ir_node_projection, aggrega_abi::IRNodeProjection, "MapOrderIRNodeProjection");
 cbor_case!(map_order_ir_spec, aggrega_abi::IRSpec, "MapOrderIRSpec");
 cbor_case!(map_order_link_edge, aggrega_abi::LinkEdge, "MapOrderLinkEdge");
+// A second LinkEdge vector, so cbor_vector rather than cbor_case: the binding for
+// this type is declared by the vector above. This one populates the endpoints, the
+// socket and the provides values beside the probe maps, and carries
+// read_provides_keys, which the vector above leaves absent — so that vector holds
+// the same bytes whether the codec handles the list or drops it. The list holds
+// the provides keys in the order the provides map holds them, which is neither
+// sorted order, so a codec that sorted it fails the byte-compare.
+cbor_vector!(map_order_link_edge_read_provides_keys, aggrega_abi::LinkEdge, "MapOrderLinkEdgeReadProvidesKeys");
 cbor_vector!(map_order_link_publish_output, aggrega_abi::LinkPublishOutput, "MapOrderLinkPublishOutput");
 cbor_vector!(map_order_link_resolve_input, aggrega_abi::LinkResolveInput, "MapOrderLinkResolveInput");
 cbor_vector!(map_order_linter_input, aggrega_abi::LinterInput, "MapOrderLinterInput");

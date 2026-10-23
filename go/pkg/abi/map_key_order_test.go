@@ -416,6 +416,16 @@ func TestSocketParity_MapOrderProbes(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.LinkEdge](t, "MapOrderLinkEdge")
 	})
+	// A second LinkEdge vector, with the endpoints, the socket and the provides
+	// values populated beside the probe maps, and with read_provides_keys carried.
+	// The vector above leaves that list absent, so it holds the same bytes whether
+	// a codec handles the list or drops it. The list holds the provides keys in the
+	// order the provides map holds them, which is neither sorted order, so an
+	// encoder or decoder that sorted the list fails the byte-compare.
+	t.Run("LinkEdgeReadProvidesKeys", func(t *testing.T) {
+		t.Parallel()
+		roundTripBothGolden[abi.LinkEdge](t, "MapOrderLinkEdgeReadProvidesKeys")
+	})
 	t.Run("LinkPublishOutput", func(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.LinkPublishOutput](t, "MapOrderLinkPublishOutput")
