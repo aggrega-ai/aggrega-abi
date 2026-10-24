@@ -85,6 +85,8 @@ export type RequestMethod =
   | "aggrega/search"
   | "aggrega/setActiveRelease"
   | "aggrega/signArtifacts"
+  | "aggrega/skillsInstall"
+  | "aggrega/skillsList"
   | "aggrega/validate";
 
 // Every method a client notification may name. The set is closed, and neither notification is answered.
@@ -890,6 +892,16 @@ export interface GetSchemaParams {
   kind?: string;
 }
 
+// Writes the assistant skill built into the binary into the skill folder of each named assistant. Without global it writes each assistant's project folder inside the workspace the request names, and every path it would write there is held to that workspace; with global it writes each assistant's per-user folder under the home directory. Every target is checked before anything is written, so a refusal leaves every folder as it was.
+export interface SkillsInstallParams {
+  workspaceRoot?: WorkspaceRootSubject;
+  workDoneToken?: ProgressToken;
+  // The assistants to install the skill for, by the identifiers the listing reports. A request naming none is refused, and so is an identifier no skill folder is known for, by name. An identifier given twice is installed once.
+  agents?: string[];
+  // Write each assistant's per-user skill folder under the home directory, which it reads in every project, instead of its project folder in the workspace.
+  global?: boolean;
+}
+
 // What the daemon will do in this session, settled against what the client said it can handle.
 export interface ServerCapabilities {
   // The encoding every position in this session is expressed in.
@@ -1070,6 +1082,14 @@ export interface PluginWriteScope {
 // How far a credential change reaches. The store is shared by every project on the machine and by every other tool addressing the same registries, so the answer reports that rather than leaving a session-scoped reading to be inferred.
 export interface CredentialStoreScope {
   // Whether the store the change touched is shared across the machine.
+  machineWide: boolean;
+  // The workspace the request named.
+  workspaceRoot: string;
+}
+
+// How far a skill installation reaches. A request names one workspace, so an answer that said nothing would be read as being about that workspace — and for the per-user folders, which an assistant reads in every project, that reading is wrong.
+export interface SkillFolderScope {
+  // Whether the folders written are the per-user ones under the home directory, which the assistant reads in every project on the machine.
   machineWide: boolean;
   // The workspace the request named.
   workspaceRoot: string;
@@ -2274,6 +2294,53 @@ export interface GetSchemaResult {
   entityKinds?: EntityKindDescriptor[];
 }
 
+// What installing the assistant skill wrote, and where.
+export interface SkillsInstallResult {
+  // The skill that was written.
+  skill: string;
+  // Each skill folder written, in the order the request named the assistants. Assistants reading one shared folder share one entry, because the skill is written there once.
+  installed: SkillsInstalledFolder[];
+  scope: SkillFolderScope;
+}
+
+// One skill folder an installation wrote.
+export interface SkillsInstalledFolder {
+  // The identifiers of the named assistants that read this folder, in the order the request named them.
+  agents: string[];
+  // The skill's folder, as an absolute path.
+  folder: string;
+  // Whether a copy carrying the comment line every written copy of the skill carries — one an earlier installation wrote, or one taken from the published skills repository — was there and has been replaced. A file there without that line is refused rather than replaced.
+  replaced: boolean;
+}
+
+// The skills the binary ships and every assistant an installation can write them for. Nothing is written and nothing is reached.
+export interface SkillsListResult {
+  // Each skill the binary ships, in a fixed order.
+  skills: SkillsListedSkill[];
+  // Each assistant an installation knows a skill folder for, ordered by identifier.
+  agents: SkillsListedAgent[];
+}
+
+// One skill the binary ships.
+export interface SkillsListedSkill {
+  // The skill's name, which is also the name of the folder an installation writes.
+  name: string;
+  // When an assistant uses the skill, as the skill itself declares it.
+  description: string;
+}
+
+// One assistant an installation can write a skill for, with the two folders it reads skills from.
+export interface SkillsListedAgent {
+  // The identifier a request names the assistant by.
+  id: string;
+  // The assistant's own name.
+  name: string;
+  // The folder, relative to a project's root and separated by slashes, that the assistant reads a project's skills from. A project installation writes the skill's folder inside it, in the workspace the request names.
+  projectFolder: string;
+  // The folder, relative to the home directory and separated by slashes, that the assistant reads the user's own skills from in every project. An installation with global writes the skill's folder inside it.
+  userFolder: string;
+}
+
 export function encodeProtocolVersion(v: ProtocolVersion): string {
   return jstr(v);
 }
@@ -3294,6 +3361,19 @@ export function decodeGetSchemaParams(data: string): GetSchemaParams {
   return JSON.parse(data) as GetSchemaParams;
 }
 
+export function encodeSkillsInstallParams(v: SkillsInstallParams): string {
+  const parts: string[] = [];
+  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
+  if (v.agents !== undefined && v.agents.length > 0) parts.push(`${jstr("agents")}:${`[${v.agents!.map((e0) => jstr(e0)).join(",")}]`}`);
+  if (v.global !== undefined && v.global !== false) parts.push(`${jstr("global")}:${String(v.global)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSkillsInstallParams(data: string): SkillsInstallParams {
+  return JSON.parse(data) as SkillsInstallParams;
+}
+
 export function encodeServerCapabilities(v: ServerCapabilities): string {
   const parts: string[] = [];
   parts.push(`${jstr("positionEncoding")}:${jstr(v.positionEncoding)}`);
@@ -3497,6 +3577,17 @@ export function encodeCredentialStoreScope(v: CredentialStoreScope): string {
 
 export function decodeCredentialStoreScope(data: string): CredentialStoreScope {
   return JSON.parse(data) as CredentialStoreScope;
+}
+
+export function encodeSkillFolderScope(v: SkillFolderScope): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("machineWide")}:${String(v.machineWide)}`);
+  parts.push(`${jstr("workspaceRoot")}:${jstr(v.workspaceRoot)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSkillFolderScope(data: string): SkillFolderScope {
+  return JSON.parse(data) as SkillFolderScope;
 }
 
 export function encodePublicationReach(v: PublicationReach): string {
@@ -4776,5 +4867,64 @@ export function encodeGetSchemaResult(v: GetSchemaResult): string {
 
 export function decodeGetSchemaResult(data: string): GetSchemaResult {
   return JSON.parse(data) as GetSchemaResult;
+}
+
+export function encodeSkillsInstallResult(v: SkillsInstallResult): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("skill")}:${jstr(v.skill)}`);
+  parts.push(`${jstr("installed")}:${`[${v.installed!.map((e0) => encodeSkillsInstalledFolder(e0)).join(",")}]`}`);
+  parts.push(`${jstr("scope")}:${encodeSkillFolderScope(v.scope)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSkillsInstallResult(data: string): SkillsInstallResult {
+  return JSON.parse(data) as SkillsInstallResult;
+}
+
+export function encodeSkillsInstalledFolder(v: SkillsInstalledFolder): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("agents")}:${`[${v.agents!.map((e0) => jstr(e0)).join(",")}]`}`);
+  parts.push(`${jstr("folder")}:${jstr(v.folder)}`);
+  parts.push(`${jstr("replaced")}:${String(v.replaced)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSkillsInstalledFolder(data: string): SkillsInstalledFolder {
+  return JSON.parse(data) as SkillsInstalledFolder;
+}
+
+export function encodeSkillsListResult(v: SkillsListResult): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("skills")}:${`[${v.skills!.map((e0) => encodeSkillsListedSkill(e0)).join(",")}]`}`);
+  parts.push(`${jstr("agents")}:${`[${v.agents!.map((e0) => encodeSkillsListedAgent(e0)).join(",")}]`}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSkillsListResult(data: string): SkillsListResult {
+  return JSON.parse(data) as SkillsListResult;
+}
+
+export function encodeSkillsListedSkill(v: SkillsListedSkill): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("description")}:${jstr(v.description)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSkillsListedSkill(data: string): SkillsListedSkill {
+  return JSON.parse(data) as SkillsListedSkill;
+}
+
+export function encodeSkillsListedAgent(v: SkillsListedAgent): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("id")}:${jstr(v.id)}`);
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("projectFolder")}:${jstr(v.projectFolder)}`);
+  parts.push(`${jstr("userFolder")}:${jstr(v.userFolder)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeSkillsListedAgent(data: string): SkillsListedAgent {
+  return JSON.parse(data) as SkillsListedAgent;
 }
 
