@@ -35,9 +35,9 @@ export interface AnnotationTransformInput {
   settings?: unknown;
 }
 
-// The response shape the annotation-transform plugin emits: a list of annotation injections the host applies to the named targets. The host applies only annotation additions to existing target coordinates with string values; an injection naming a non-existent coordinate halts the build loudly.
+// The response shape the annotation-transform plugin emits: a list of annotation injections the host applies to the named targets. The host applies only annotation additions to existing target coordinates, each carrying a value an author could write on that annotation — a string, or an object of subkeys; an injection naming a non-existent coordinate, or carrying a value of any other shape, halts the build loudly.
 export interface AnnotationTransformOutput {
-  // Annotation injections to apply, in order. Each names an existing target coordinate and the annotation key and string value to add there.
+  // Annotation injections to apply, in order. Each names an existing target coordinate and the annotation key and value to add there.
   injections: AnnotationInjection[];
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
   error?: string;
@@ -49,11 +49,11 @@ export interface AnnotationTarget {
   boundary_path: string;
   // The component's name within its boundary.
   component_name: string;
-  // The component's current scalar annotation set, keyed by annotation key.
-  annotations: Map<string, string>;
+  // The annotations the Release writes on the component itself, keyed by annotation key in the order they are written. Each value is what the author wrote: a string, an object of subkeys in its own written order, or null where the component opts out of an annotation it would otherwise inherit. Every key is present whatever its value, so a plugin can tell an annotation the component already carries from one it does not and add only what is absent.
+  annotations: Map<string, unknown>;
 }
 
-// One annotation to inject onto a target: the target coordinate plus the annotation key and its string value.
+// One annotation to inject onto a target: the target coordinate plus the annotation key and its value.
 export interface AnnotationInjection {
   // The slash-separated boundary path of the target component. Must name a target the host supplied; an unknown coordinate halts the build.
   boundary_path: string;
@@ -61,8 +61,8 @@ export interface AnnotationInjection {
   component_name: string;
   // The annotation key to add on the target component.
   annotation_key: string;
-  // The annotation's string value. Values are strings only; the host rejects any other shape.
-  annotation_value: string;
+  // The annotation's value, carried as its JSON: a string, or an object whose keys are subkeys and whose entries are what an author may write under a subkey of a structured annotation. The host reads it exactly as it reads the same value written on the component in the Release, keeping the object's key order, so an object can feed a binding that routes several subkeys at once while a string feeds a binding that routes one. Null, a list, a number, a boolean and an object with no subkeys are refused, naming the injection: an injection adds an annotation and never removes or opts out of one.
+  annotation_value: unknown;
 }
 
 // One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -110,7 +110,7 @@ export function encodeAnnotationTarget(v: AnnotationTarget): string {
   const parts: string[] = [];
   parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
   parts.push(`${jstr("component_name")}:${jstr(v.component_name)}`);
-  parts.push(`${jstr("annotations")}:${writeOrderedObject(v.annotations!, (v0) => jstr(v0))}`);
+  parts.push(`${jstr("annotations")}:${writeOrderedObject(v.annotations!, (v0) => encodeOpaque(v0))}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -131,7 +131,7 @@ export function encodeAnnotationInjection(v: AnnotationInjection): string {
   parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
   parts.push(`${jstr("component_name")}:${jstr(v.component_name)}`);
   parts.push(`${jstr("annotation_key")}:${jstr(v.annotation_key)}`);
-  parts.push(`${jstr("annotation_value")}:${jstr(v.annotation_value)}`);
+  parts.push(`${jstr("annotation_value")}:${encodeOpaque(v.annotation_value)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -273,7 +273,7 @@ export function appendCBORAnnotationTarget(out: number[], v: AnnotationTarget): 
     for (const [kk0, vv0] of m0) {
       writeHead(out, 4, 2);
       writeText(out, kk0);
-      writeText(out, vv0);
+      writeBytes(out, utf8Encode(JSON.stringify(vv0)));
     }
   }
   writeText(out, "boundary_path");
@@ -295,7 +295,7 @@ export function decodeCBORAnnotationTargetFrom(dec: CborDec): AnnotationTarget {
     switch (k) {
       case "boundary_path": o["boundary_path"] = dec.readText(); break;
       case "component_name": o["component_name"] = dec.readText(); break;
-      case "annotations": o["annotations"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
+      case "annotations": o["annotations"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       default: dec.skip();
     }
   }
@@ -318,7 +318,7 @@ export function appendCBORAnnotationInjection(out: number[], v: AnnotationInject
   writeText(out, "component_name");
   writeText(out, v.component_name);
   writeText(out, "annotation_value");
-  writeText(out, v.annotation_value);
+  writeBytes(out, utf8Encode(JSON.stringify(v.annotation_value)));
 }
 
 export function decodeCBORAnnotationInjection(data: Uint8Array): AnnotationInjection {
@@ -335,7 +335,7 @@ export function decodeCBORAnnotationInjectionFrom(dec: CborDec): AnnotationInjec
       case "boundary_path": o["boundary_path"] = dec.readText(); break;
       case "component_name": o["component_name"] = dec.readText(); break;
       case "annotation_key": o["annotation_key"] = dec.readText(); break;
-      case "annotation_value": o["annotation_value"] = dec.readText(); break;
+      case "annotation_value": o["annotation_value"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       default: dec.skip();
     }
   }

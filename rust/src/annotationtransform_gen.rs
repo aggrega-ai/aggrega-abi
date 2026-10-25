@@ -25,10 +25,10 @@ pub struct AnnotationTransformInput {
     pub settings: Option<Box<RawValue>>,
 }
 
-/// The response shape the annotation-transform plugin emits: a list of annotation injections the host applies to the named targets. The host applies only annotation additions to existing target coordinates with string values; an injection naming a non-existent coordinate halts the build loudly.
+/// The response shape the annotation-transform plugin emits: a list of annotation injections the host applies to the named targets. The host applies only annotation additions to existing target coordinates, each carrying a value an author could write on that annotation — a string, or an object of subkeys; an injection naming a non-existent coordinate, or carrying a value of any other shape, halts the build loudly.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AnnotationTransformOutput {
-    /// Annotation injections to apply, in order. Each names an existing target coordinate and the annotation key and string value to add there.
+    /// Annotation injections to apply, in order. Each names an existing target coordinate and the annotation key and value to add there.
     pub injections: Vec<AnnotationInjection>,
     /// A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -42,12 +42,12 @@ pub struct AnnotationTarget {
     pub boundary_path: String,
     /// The component's name within its boundary.
     pub component_name: String,
-    /// The component's current scalar annotation set, keyed by annotation key.
-    pub annotations: OrderedMap<String>,
+    /// The annotations the Release writes on the component itself, keyed by annotation key in the order they are written. Each value is what the author wrote: a string, an object of subkeys in its own written order, or null where the component opts out of an annotation it would otherwise inherit. Every key is present whatever its value, so a plugin can tell an annotation the component already carries from one it does not and add only what is absent.
+    pub annotations: OrderedMap<Box<RawValue>>,
 }
 
-/// One annotation to inject onto a target: the target coordinate plus the annotation key and its string value.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// One annotation to inject onto a target: the target coordinate plus the annotation key and its value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnnotationInjection {
     /// The slash-separated boundary path of the target component. Must name a target the host supplied; an unknown coordinate halts the build.
     pub boundary_path: String,
@@ -55,8 +55,8 @@ pub struct AnnotationInjection {
     pub component_name: String,
     /// The annotation key to add on the target component.
     pub annotation_key: String,
-    /// The annotation's string value. Values are strings only; the host rejects any other shape.
-    pub annotation_value: String,
+    /// The annotation's value, carried as its JSON: a string, or an object whose keys are subkeys and whose entries are what an author may write under a subkey of a structured annotation. The host reads it exactly as it reads the same value written on the component in the Release, keeping the object's key order, so an object can feed a binding that routes several subkeys at once while a string feeds a binding that routes one. Null, a list, a number, a boolean and an object with no subkeys are refused, naming the injection: an injection adds an annotation and never removes or opts out of one.
+    pub annotation_value: Box<RawValue>,
 }
 
 /// One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -221,7 +221,7 @@ impl AnnotationTarget {
             for (k, mv) in c.iter() {
                 crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
-                crate::cbor_gen::write_text(out, mv);
+                crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
             }
         }
         crate::cbor_gen::write_text(out, "boundary_path");
@@ -241,14 +241,14 @@ impl AnnotationTarget {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_boundary_path: Option<String> = None;
         let mut f_component_name: Option<String> = None;
-        let mut f_annotations: Option<OrderedMap<String>> = None;
+        let mut f_annotations: Option<OrderedMap<Box<RawValue>>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "boundary_path" => f_boundary_path = Some(dec.read_text()?),
                 "component_name" => f_component_name = Some(dec.read_text()?),
-                "annotations" => f_annotations = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
+                "annotations" => f_annotations = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
                 _ => dec.skip()?,
             }
         }
@@ -279,7 +279,7 @@ impl AnnotationInjection {
         crate::cbor_gen::write_text(out, "component_name");
         crate::cbor_gen::write_text(out, &self.component_name);
         crate::cbor_gen::write_text(out, "annotation_value");
-        crate::cbor_gen::write_text(out, &self.annotation_value);
+        crate::cbor_gen::write_bytes(out, self.annotation_value.get().as_bytes());
         Ok(())
     }
 
@@ -294,7 +294,7 @@ impl AnnotationInjection {
         let mut f_boundary_path: Option<String> = None;
         let mut f_component_name: Option<String> = None;
         let mut f_annotation_key: Option<String> = None;
-        let mut f_annotation_value: Option<String> = None;
+        let mut f_annotation_value: Option<Box<RawValue>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -302,7 +302,7 @@ impl AnnotationInjection {
                 "boundary_path" => f_boundary_path = Some(dec.read_text()?),
                 "component_name" => f_component_name = Some(dec.read_text()?),
                 "annotation_key" => f_annotation_key = Some(dec.read_text()?),
-                "annotation_value" => f_annotation_value = Some(dec.read_text()?),
+                "annotation_value" => f_annotation_value = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 _ => dec.skip()?,
             }
         }

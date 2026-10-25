@@ -236,9 +236,15 @@ func TestAnnotationTargetKeepsTheAnnotationOrder(t *testing.T) {
 
 	ordered := []string{"tier", "aggrega.ai/owner", "8080", "cost-center"}
 	values := map[string]string{"tier": "frontend", "aggrega.ai/owner": "checkout", "8080": "port", "cost-center": "42"}
-	var annotations abi.OrderedMap[string]
+	// Each value crosses as the JSON of what the component carries, which for a
+	// string is its quoted form.
+	var annotations abi.OrderedMap[json.RawMessage]
 	for _, k := range ordered {
-		annotations.Set(k, values[k])
+		raw, err := json.Marshal(values[k])
+		if err != nil {
+			t.Fatalf("encode the value of %q: %v", k, err)
+		}
+		annotations.Set(k, raw)
 	}
 	v := abi.AnnotationTarget{BoundaryPath: "prod/edge", ComponentName: "web", Annotations: annotations}
 
