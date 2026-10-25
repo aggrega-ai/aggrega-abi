@@ -297,9 +297,9 @@ func TestOrderedMap_EveryValueShapeRoundTripsInOrder(t *testing.T) {
 		roundTrip(t, `{"zz":`+authoredProbeObject+`,"8080":{},"a":{"y":"1","x":"2"}}`, &abi.OrderedMap[abi.OrderedMap[string]]{})
 	})
 	t.Run("a payload type with its own codec", func(t *testing.T) {
-		// MutatorNode's labels are a plain map, which its codec writes sorted, so
-		// the labels here are already in that order; the order under test is the
-		// container's own.
+		// MutatorNode's labels are an order-keeping map too, written here in the
+		// order they are held, so both levels round-trip; the order under test is
+		// the outer container's own.
 		roundTrip(t, `{"web":{"component":"c","resolved_version":"1","labels":{"a":"1","b":"2"}},`+
 			`"8080":{"component":"d","resolved_version":"2","labels":{}}}`, &abi.OrderedMap[abi.MutatorNode]{})
 	})

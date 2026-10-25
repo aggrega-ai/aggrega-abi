@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use crate::OrderedMap;
 
-/// The payload the host hands the mutator plugin on each invocation: release-level compilation context plus a labels-only projection of the topology graph.
+/// The payload the host hands the mutator plugin on each invocation: release-level compilation context plus a projection of the topology graph carrying each node's labels and the values its instance declares.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MutatorInput {
     pub compilation_context: CompilationContext,
@@ -42,14 +42,14 @@ pub struct CompilationContext {
     pub environment: String,
 }
 
-/// The labels-only projection of the topology graph exposed to the mutator plugin. Intentionally narrower than the full topology result: edges, values, and feature payloads are not exposed because the mutator's job is labelling, not topology reshaping.
+/// The projection of the topology graph exposed to the mutator plugin: each node's Component, its resolved version, its labels and the values its instance declares. Intentionally narrower than the full topology result: edges and feature payloads are not exposed because the mutator's job is labelling, not topology reshaping. The values are there to be read, so a configuration the developer declared can decide a label; a patch reaches labels and nothing else, so the plugin cannot change them.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MutatorGraph {
     /// Nodes keyed by absolute node ID.
     pub nodes: OrderedMap<MutatorNode>,
 }
 
-/// The minimum per-node projection the mutator plugin needs to evaluate compliance rules: which Component the node implements, which version of that Component resolved, and which labels the node carries.
+/// The per-node projection the mutator plugin evaluates its rules against: which Component the node implements, which version of that Component resolved, which labels the node carries, and which values its instance declares.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MutatorNode {
     /// The name of the underlying Component the node instantiates.
@@ -58,6 +58,9 @@ pub struct MutatorNode {
     pub resolved_version: String,
     /// The node's duck-typing and ontology labels.
     pub labels: OrderedMap<String>,
+    /// The values the node's component instance declares in the Aggregate, keyed as the author wrote them and in the author's order. Every template in the Aggregate has already been evaluated against its parameters, so a value hoisted into a parameter arrives as the value the Release supplied, or as the parameter's default. Only the instance's own values are here: a default the Component's schema declares, and anything a Recipe or a Feature contributes, are not. A value the Component declares sensitive arrives withheld, exactly as the governance verdict over the whole graph receives it: in its place sits the same single-key withheld-marker object that verdict carries, naming the reason declared, and a sibling value no declaration reaches arrives as written. A plugin reads them to decide which labels to add; a patch cannot reach them. Absent when the instance declares no values.
+    #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
+    pub values: OrderedMap<Box<RawValue>>,
 }
 
 /// One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -294,7 +297,8 @@ impl MutatorNode {
     }
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let n: u64 = 3;
+        let mut n: u64 = 3;
+        if !self.values.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "labels");
         {
@@ -304,6 +308,18 @@ impl MutatorNode {
                 crate::cbor_gen::write_head(out, 4, 2);
                 crate::cbor_gen::write_text(out, k);
                 crate::cbor_gen::write_text(out, mv);
+            }
+        }
+        if !self.values.is_empty() {
+            crate::cbor_gen::write_text(out, "values");
+            {
+                let c = &self.values;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for (k, mv) in c.iter() {
+                    crate::cbor_gen::write_head(out, 4, 2);
+                    crate::cbor_gen::write_text(out, k);
+                    crate::cbor_gen::write_bytes(out, mv.get().as_bytes());
+                }
             }
         }
         crate::cbor_gen::write_text(out, "component");
@@ -324,6 +340,7 @@ impl MutatorNode {
         let mut f_component: Option<String> = None;
         let mut f_resolved_version: Option<String> = None;
         let mut f_labels: Option<OrderedMap<String>> = None;
+        let mut f_values: OrderedMap<Box<RawValue>> = OrderedMap::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -331,6 +348,7 @@ impl MutatorNode {
                 "component" => f_component = Some(dec.read_text()?),
                 "resolved_version" => f_resolved_version = Some(dec.read_text()?),
                 "labels" => f_labels = Some({ let mn = dec.read_array_header()?; let mut m: OrderedMap<String> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = dec.read_text()?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m }),
+                "values" => f_values = { let mn = dec.read_array_header()?; let mut m: OrderedMap<Box<RawValue>> = OrderedMap::new(); for _ in 0..mn { let mk = dec.read_entry_key()?; let mv = crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?; m.insert_new(mk, mv).map_err(|k| crate::cbor_gen::CborError(format!("cbor: {}", crate::orderedmap_gen::duplicate_key(&k))))?; } m },
                 _ => dec.skip()?,
             }
         }
@@ -338,6 +356,7 @@ impl MutatorNode {
             component: f_component.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field component".to_string()))?,
             resolved_version: f_resolved_version.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field resolved_version".to_string()))?,
             labels: f_labels.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field labels".to_string()))?,
+            values: f_values,
         })
     }
 }

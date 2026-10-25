@@ -23,7 +23,7 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// The payload the host hands the mutator plugin on each invocation: release-level compilation context plus a labels-only projection of the topology graph.
+// The payload the host hands the mutator plugin on each invocation: release-level compilation context plus a projection of the topology graph carrying each node's labels and the values its instance declares.
 export interface MutatorInput {
   compilation_context: CompilationContext;
   graph: MutatorGraph;
@@ -49,13 +49,13 @@ export interface CompilationContext {
   environment: string;
 }
 
-// The labels-only projection of the topology graph exposed to the mutator plugin. Intentionally narrower than the full topology result: edges, values, and feature payloads are not exposed because the mutator's job is labelling, not topology reshaping.
+// The projection of the topology graph exposed to the mutator plugin: each node's Component, its resolved version, its labels and the values its instance declares. Intentionally narrower than the full topology result: edges and feature payloads are not exposed because the mutator's job is labelling, not topology reshaping. The values are there to be read, so a configuration the developer declared can decide a label; a patch reaches labels and nothing else, so the plugin cannot change them.
 export interface MutatorGraph {
   // Nodes keyed by absolute node ID.
   nodes: Map<string, MutatorNode>;
 }
 
-// The minimum per-node projection the mutator plugin needs to evaluate compliance rules: which Component the node implements, which version of that Component resolved, and which labels the node carries.
+// The per-node projection the mutator plugin evaluates its rules against: which Component the node implements, which version of that Component resolved, which labels the node carries, and which values its instance declares.
 export interface MutatorNode {
   // The name of the underlying Component the node instantiates.
   component: string;
@@ -63,6 +63,8 @@ export interface MutatorNode {
   resolved_version: string;
   // The node's duck-typing and ontology labels.
   labels: Map<string, string>;
+  // The values the node's component instance declares in the Aggregate, keyed as the author wrote them and in the author's order. Every template in the Aggregate has already been evaluated against its parameters, so a value hoisted into a parameter arrives as the value the Release supplied, or as the parameter's default. Only the instance's own values are here: a default the Component's schema declares, and anything a Recipe or a Feature contributes, are not. A value the Component declares sensitive arrives withheld, exactly as the governance verdict over the whole graph receives it: in its place sits the same single-key withheld-marker object that verdict carries, naming the reason declared, and a sibling value no declaration reaches arrives as written. A plugin reads them to decide which labels to add; a patch cannot reach them. Absent when the instance declares no values.
+  values?: Map<string, unknown>;
 }
 
 // One definition file handed to the plugin: its base-name path and the file's content. Both are carried verbatim; the host does not parse the content.
@@ -138,6 +140,7 @@ export function encodeMutatorNode(v: MutatorNode): string {
   parts.push(`${jstr("component")}:${jstr(v.component)}`);
   parts.push(`${jstr("resolved_version")}:${jstr(v.resolved_version)}`);
   parts.push(`${jstr("labels")}:${writeOrderedObject(v.labels!, (v0) => jstr(v0))}`);
+  if (v.values !== undefined && v.values.size > 0) parts.push(`${jstr("values")}:${writeOrderedObject(v.values!, (v0) => encodeOpaque(v0))}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -148,6 +151,7 @@ export function decodeMutatorNode(data: string): MutatorNode {
       case "component": o["component"] = JSON.parse(raw); break;
       case "resolved_version": o["resolved_version"] = JSON.parse(raw); break;
       case "labels": o["labels"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
+      case "values": o["values"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
     }
   });
   return o as MutatorNode;
@@ -340,6 +344,7 @@ export function encodeCBORMutatorNode(v: MutatorNode): Uint8Array {
 
 export function appendCBORMutatorNode(out: number[], v: MutatorNode): void {
   let n = 3;
+  if (v.values !== undefined && v.values.size > 0) n++;
   writeHead(out, 5, n);
   writeText(out, "labels");
   {
@@ -349,6 +354,18 @@ export function appendCBORMutatorNode(out: number[], v: MutatorNode): void {
       writeHead(out, 4, 2);
       writeText(out, kk0);
       writeText(out, vv0);
+    }
+  }
+  if (v.values !== undefined && v.values.size > 0) {
+    writeText(out, "values");
+    {
+      const m0 = v.values;
+      writeHead(out, 4, m0.size);
+      for (const [kk0, vv0] of m0) {
+        writeHead(out, 4, 2);
+        writeText(out, kk0);
+        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
+      }
     }
   }
   writeText(out, "component");
@@ -371,6 +388,7 @@ export function decodeCBORMutatorNodeFrom(dec: CborDec): MutatorNode {
       case "component": o["component"] = dec.readText(); break;
       case "resolved_version": o["resolved_version"] = dec.readText(); break;
       case "labels": o["labels"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, dec.readText()); } return m; })(); break;
+      case "values": o["values"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
       default: dec.skip();
     }
   }

@@ -487,7 +487,7 @@ func TestMapBearingCensusIsComplete(t *testing.T) {
 	// order-preserving ones counts as plain.
 	const (
 		wantPlainMapFields   = 12
-		wantOrderedMapFields = 31
+		wantOrderedMapFields = 32
 	)
 
 	plain, ordered := 0, 0
