@@ -353,9 +353,11 @@ export interface BuildParams {
   outputParent?: string;
   // Whether to resolve the Release's dependencies first. Asking for it reaches the configured registries and writes the lockfile; unasked, the build reaches no registry.
   autoPull?: boolean;
+  // The directory to write, beside the artifacts, the payload each governance role hands a plugin attached there, as a path relative to the workspace root — the files `aggrega build --policy-input` writes, by the same names, written whether the build finishes or stops. The answer's notices say how many were written and name each role written no file for. On a request that fails, the files written are on disk and that account is not in the reply: the error carries the refusal alone. Absent writes none. An absolute path, or one that climbs out of the workspace, is refused.
+  policyInput?: string;
 }
 
-// Compiles a Release and reports what writing the artifacts would have produced, writing nothing. It declines the dependency-resolution field the writing build takes, because a request that writes nothing cannot fill a lockfile.
+// Compiles a Release and reports what writing the artifacts would have produced, writing none of them. It declines the dependency-resolution field the writing build takes, because a request that writes nothing cannot fill a lockfile.
 export interface BuildPreviewParams {
   workspaceRoot?: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
@@ -363,6 +365,8 @@ export interface BuildPreviewParams {
   release?: string;
   // Accepted on the wire and refused by the method: this request writes nothing, so it cannot fill a lockfile and remain what it says it is.
   autoPull?: boolean;
+  // The directory to write the payload each governance role hands a plugin attached there into, as a path relative to the workspace root — the files `aggrega build --dry-run --policy-input` writes, by the same names. Sent, they are the one thing this request writes; the output directory and the lockfile are left untouched. The answer's notices say how many were written and name each role written no file for. On a request that fails, the files written are on disk and that account is not in the reply: the error carries the refusal alone. An absolute path, or one that climbs out of the workspace, is refused.
+  policyInput?: string;
 }
 
 // Answers with what one entity name resolves to and where the document defining it lives.
@@ -2756,6 +2760,7 @@ export function encodeBuildParams(v: BuildParams): string {
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   if (v.outputParent !== undefined && v.outputParent !== "") parts.push(`${jstr("outputParent")}:${jstr(v.outputParent)}`);
   if (v.autoPull !== undefined && v.autoPull !== false) parts.push(`${jstr("autoPull")}:${String(v.autoPull)}`);
+  if (v.policyInput !== undefined && v.policyInput !== "") parts.push(`${jstr("policyInput")}:${jstr(v.policyInput)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2769,6 +2774,7 @@ export function encodeBuildPreviewParams(v: BuildPreviewParams): string {
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   if (v.autoPull !== undefined && v.autoPull !== false) parts.push(`${jstr("autoPull")}:${String(v.autoPull)}`);
+  if (v.policyInput !== undefined && v.policyInput !== "") parts.push(`${jstr("policyInput")}:${jstr(v.policyInput)}`);
   return `{${parts.join(",")}}`;
 }
 
