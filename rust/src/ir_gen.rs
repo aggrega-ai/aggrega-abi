@@ -16,9 +16,12 @@ fn is_default<T: Default + PartialEq>(v: &T) -> bool {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Maintainer {
+    /// The maintainer's name.
     pub name: String,
+    /// The maintainer's email address.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub email: String,
+    /// The maintainer's web address.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub url: String,
 }
@@ -28,13 +31,13 @@ pub struct Maintainer {
 pub struct FieldProvenance {
     /// Whether the leaf was authored explicitly or contributed by the annotation-driven expansion pass.
     pub origin: String,
-    /// Authoring surface the annotation was declared on; empty for explicit leaves.
+    /// Authoring surface the annotation was declared on; absent for explicit leaves.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub side: String,
-    /// Annotation name that contributed this leaf; empty for explicit leaves.
+    /// Annotation name that contributed this leaf; absent for explicit leaves.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub annotation_key: String,
-    /// Source location of the annotation declaration as <file-path>:<dotted-yaml-key-path>; empty for explicit leaves.
+    /// Source location of the annotation declaration as <file-path>:<dotted-yaml-key-path>; absent for explicit leaves.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub annotation_source: String,
     /// The annotation contribution that lost this leaf to an explicit one: when an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced. Singular — exactly one suppressed contribution is ever retained.
@@ -59,10 +62,10 @@ pub struct IRFeatureEntry {
     pub r#type: String,
     /// The exact semantic version resolved during compilation.
     pub resolved_version: String,
-    /// The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
+    /// The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Absent when the Feature declares no labels, and when its type resolves to no catalog entity.
     #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
     pub labels: OrderedMap<String>,
-    /// The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
+    /// The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Absent when the Feature declares no annotations, and when its type resolves to no catalog entity.
     #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
     pub catalog_annotations: OrderedMap<String>,
     /// Names the attachment slot this attachment fills, or "free" when it fills no declared slot. A slot is declared in one of two places, and where the attachment was written decides which: an attachment of the node's own attachment block fills a slot the host Component declares in its featuresSchema, and an attachment written on a connection fills a slot the connection's socket declares in that socket's featuresSchema on the host Component. The pairing is by name in both — an attachment fills a slot when the Feature is attached under the slot's name, on the component's block or on the connection — so the value is an exact key from the declared slot set, never anything read out of the attachment's key. A socket's slot set is closed, since an attachment written on a connection under a name its socket does not declare halts the build, so an attachment that carries a connection never reports free. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
@@ -80,10 +83,10 @@ pub struct IRFeatureEntry {
     /// Distinguishes attachments authored in a features: block (explicit) from synthetic attachments produced by the annotation-driven expansion pass (annotation), or mixed when the attachment's value/infra leaves carry a mix of both (per-leaf detail then lives in the provenance maps).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub origin: String,
-    /// Annotation name that triggered a synthetic attachment. Empty when origin is explicit.
+    /// Annotation name that triggered a synthetic attachment. Absent when origin is explicit.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub annotation_key: String,
-    /// Source location of the annotation declaration as <release-file-path>:<dotted-yaml-key-path>. Empty when origin is explicit.
+    /// Source location of the annotation declaration as <release-file-path>:<dotted-yaml-key-path>. Absent when origin is explicit.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub annotation_source: String,
     /// Per-leaf origin for the values payload, keyed by dotted leaf path.
@@ -95,10 +98,10 @@ pub struct IRFeatureEntry {
     /// True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the slot the attachment fills declares the material it carries sensitive: the host Component's attachment slot of the same name, or, for an attachment written on a connection, the slot of that name the connection's socket declares. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
     #[serde(default, skip_serializing_if = "is_default")]
     pub sensitive: bool,
-    /// The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
+    /// The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Absent when the attachment declares no delivery mechanism or references no sensitive provides key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sensitive_inject: Option<Box<RawValue>>,
-    /// The leaves this attachment's values and infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one an author wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf left readable. An absent key states that this attachment names no leaf its Feature declares sensitive. It does not assert that the payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent learns what absence states above and nothing about whether anything reads the key. Leaves arrive in the order the payload holds them, the values pillar's before the infra pillar's — the same order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
+    /// The leaves this attachment's values and infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one an author wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf left readable. An absent key states that this attachment names no leaf its Feature declares sensitive. It does not assert that the payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the payload holds them, the values pillar's before the infra pillar's — the same order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sensitive_payload_leaves: Vec<String>,
     /// The connection this attachment belongs to: present on every attachment written on one of the node's connections, and absent on every attachment of the node's own attachment block. An attachment written on a connection is one of the node's attachments in every other respect — keyed by its qualified name, the connection's alias and the slot joined by a dot, and taking its binding and its sensitivity from the slot the connection's socket declares — so this field is what tells the two apart, and it carries the connection as data rather than leaving it to be read out of the key. A consumer joins it to the graph's edges by socket and alias: the edge whose source is the node carrying this attachment and whose socket and alias are these is the connection the attachment is presented on, and that edge's target is what it is presented to. An attachment of a connection a Feature attachment draws never carries one, because such a connection carries no attachments.
@@ -129,21 +132,26 @@ pub struct IRBoundaryFeature {
 /// The Enterprise Metadata Suite explicitly extracted from the Catalog entity, exposing lifecycle and ownership data to Wasm linters.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CatalogMetadata {
+    /// The maintainers the Catalog entity lists as owning it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub maintainers: Vec<Maintainer>,
+    /// The SPDX license identifier the Catalog entity declares for the software it describes.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub license: String,
+    /// The URL of the Git repository the Catalog entity names as holding its source files.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub repository: String,
+    /// The URL of the Catalog entity's home page, wiki or documentation.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub home: String,
+    /// The descriptive keywords the Catalog entity declares.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keywords: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRNode {
-    /// Optional developer-authored documentation describing this component instance's role in the application. Passed through from the Aggregate for augmenting rendering and linting diagnostics.
+    /// Optional developer-authored documentation describing this component instance's role in the application. Carried through from the Aggregate for rendering and for lint diagnostics.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
     /// The entity's duck-typing and ontology labels.
@@ -181,7 +189,7 @@ pub struct IRNode {
     /// Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub self_inject: Option<Box<RawValue>>,
-    /// Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
+    /// Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The path is relative to the workspace root (the directory containing .aggrega-config.yaml), so the graph is byte-identical on machines whose workspaces sit at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Absent when the graph was built without a workspace root.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_file: String,
     /// The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
@@ -194,7 +202,9 @@ pub struct IRNode {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IREdge {
+    /// The ID of the consuming node, where the connection starts.
     pub source: String,
+    /// The ID of the node the connection reaches.
     pub target: String,
     /// The usesSchema category this edge belongs to (e.g., 'databases', 'tools').
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -213,10 +223,10 @@ pub struct IREdge {
     /// True when this edge was created by a Release wiring a declared-but-unbound socket to an existing component. Marks edge AUTHORSHIP, not configuration: a developer-declared edge that a Release merely supplied infra for stays Aggregate-origin (origin_release unset; its Release infra appears in the edge's infra map). origin_feature set => Feature-origin; origin_release true => Release-origin; neither => Aggregate-origin.
     #[serde(default, skip_serializing_if = "is_default")]
     pub origin_release: bool,
-    /// Resolved per-connection developer values for this edge (from the Aggregate edge), validated at resolution against the valueSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected into the consuming node's render context at .uses.<alias>.values. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
+    /// Resolved per-connection developer values for this edge (from the Aggregate edge), validated at resolution against the valueSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected into the consuming node's render context at .context.uses.<alias>.values. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub values: Option<Box<RawValue>>,
-    /// Resolved per-connection infra for this edge, supplied by a Release edge entry, validated at resolution against the infraSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected at .uses.<alias>.infra. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
+    /// Resolved per-connection infra for this edge, supplied by a Release edge entry, validated at resolution against the infraSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected at .context.uses.<alias>.infra. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub infra: Option<Box<RawValue>>,
     /// Agnostic injection routing. Maps local variables to Target provides keys.
@@ -224,17 +234,19 @@ pub struct IREdge {
     pub inject: Option<Box<RawValue>>,
 }
 
+/// Identity of the graph: the Aggregate it was built from.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRMetadata {
-    /// The Aggregate's metadata.name. Follows IR snake_case convention.
+    /// The Aggregate's metadata.name.
     pub aggregate_name: String,
 }
 
 /// Traceability metadata for diagnostics and auditing.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRProvenance {
+    /// The version of the IR schema the graph conforms to — aggrega.ai/v1alpha1, the same value the graph's apiVersion carries.
     pub schema_version: String,
-    /// Mandatory compliance stamp. Identifies the specific Go compiler binary used to generate this graph.
+    /// Mandatory compliance stamp. Identifies, by its version, the aggrega binary that built this graph.
     pub compiler_version: String,
     /// The exact semantic version of the root Aggregate intent used during compilation.
     pub aggregate_version: String,
@@ -242,9 +254,11 @@ pub struct IRProvenance {
     pub manifest_version: String,
     /// The exact semantic version of the Release routing file used during compilation.
     pub release_version: String,
+    /// Present in every graph and empty in every graph the compiler emits.
     pub source_identifiers: Vec<String>,
 }
 
+/// The graph itself: its nodes, its edges and the payloads keyed by node.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IRSpec {
     /// Dictionary of all nodes in the graph, keyed by their absolute ID. Purely topological.
@@ -257,7 +271,7 @@ pub struct IRSpec {
     pub infra_mapping: OrderedMap<Box<RawValue>>,
     /// Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment. An attachment written on one of the node's connections is keyed by its qualified name, the connection's alias and the slot joined by a dot, and names its connection in its own connection field.
     pub feature_values_mapping: OrderedMap<OrderedMap<IRFeatureEntry>>,
-    /// Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
+    /// Each boundary's Feature attachments, keyed by boundary path then by instance name. Present only when the graph has boundary-level Feature attachments.
     #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
     pub boundary_features: OrderedMap<OrderedMap<IRBoundaryFeature>>,
     pub provenance: IRProvenance,

@@ -15,20 +15,23 @@ import (
 )
 
 type Maintainer struct {
-	Name  string `json:"name" yaml:"name" cbor:"name"`
+	// Name The maintainer's name.
+	Name string `json:"name" yaml:"name" cbor:"name"`
+	// Email The maintainer's email address.
 	Email string `json:"email,omitempty" yaml:"email,omitempty" cbor:"email,omitempty"`
-	URL   string `json:"url,omitempty" yaml:"url,omitempty" cbor:"url,omitempty"`
+	// URL The maintainer's web address.
+	URL string `json:"url,omitempty" yaml:"url,omitempty" cbor:"url,omitempty"`
 }
 
 // FieldProvenance Origin of one leaf in an attachment's values or infra payload.
 type FieldProvenance struct {
 	// Origin Whether the leaf was authored explicitly or contributed by the annotation-driven expansion pass.
 	Origin string `json:"origin" yaml:"origin" cbor:"origin"`
-	// Side Authoring surface the annotation was declared on; empty for explicit leaves.
+	// Side Authoring surface the annotation was declared on; absent for explicit leaves.
 	Side string `json:"side,omitempty" yaml:"side,omitempty" cbor:"side,omitempty"`
-	// AnnotationKey Annotation name that contributed this leaf; empty for explicit leaves.
+	// AnnotationKey Annotation name that contributed this leaf; absent for explicit leaves.
 	AnnotationKey string `json:"annotation_key,omitempty" yaml:"annotation_key,omitempty" cbor:"annotation_key,omitempty"`
-	// AnnotationSource Source location of the annotation declaration as <file-path>:<dotted-yaml-key-path>; empty for explicit leaves.
+	// AnnotationSource Source location of the annotation declaration as <file-path>:<dotted-yaml-key-path>; absent for explicit leaves.
 	AnnotationSource string `json:"annotation_source,omitempty" yaml:"annotation_source,omitempty" cbor:"annotation_source,omitempty"`
 	// OverriddenAnnotation The annotation contribution that lost this leaf to an explicit one: when an explicit leaf overwrote an annotation-contributed leaf, the suppressed provenance it replaced. Singular — exactly one suppressed contribution is ever retained.
 	OverriddenAnnotation *FieldProvenance `json:"overridden_annotation,omitempty" yaml:"overridden_annotation,omitempty" cbor:"overridden_annotation,omitempty"`
@@ -48,9 +51,9 @@ type IRFeatureEntry struct {
 	Type string `json:"type" yaml:"type" cbor:"type"`
 	// ResolvedVersion The exact semantic version resolved during compilation.
 	ResolvedVersion string `json:"resolved_version" yaml:"resolved_version" cbor:"resolved_version"`
-	// Labels The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Empty when the Feature declares no labels, and when its type resolves to no catalog entity.
+	// Labels The attached Feature's catalog labels, carried verbatim in the order its catalog entity declares them — never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote. The compiler reads none of them. Absent when the Feature declares no labels, and when its type resolves to no catalog entity.
 	Labels OrderedMap[string] `json:"labels,omitempty,omitzero" yaml:"labels,omitempty" cbor:"labels,omitempty"`
-	// CatalogAnnotations The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Empty when the Feature declares no annotations, and when its type resolves to no catalog entity.
+	// CatalogAnnotations The attached Feature's catalog annotations — the metadata.annotations of the Feature entity this attachment names — carried verbatim in the order that entity declares them, never filtered, normalised or prefix-stripped, so a consumer reads exactly what the catalog author wrote, including keys in the author's own namespace. The compiler reads none of them. Distinct from annotation_key and annotation_source, which name and locate the annotation that caused this attachment to exist at all: those two report how the attachment came to be, this one reports the metadata of the entity it names, and an attachment written in a features: block carries these annotations while carrying neither of those. Absent when the Feature declares no annotations, and when its type resolves to no catalog entity.
 	CatalogAnnotations OrderedMap[string] `json:"catalog_annotations,omitempty,omitzero" yaml:"catalog_annotations,omitempty" cbor:"catalog_annotations,omitempty"`
 	// Binding Names the attachment slot this attachment fills, or "free" when it fills no declared slot. A slot is declared in one of two places, and where the attachment was written decides which: an attachment of the node's own attachment block fills a slot the host Component declares in its featuresSchema, and an attachment written on a connection fills a slot the connection's socket declares in that socket's featuresSchema on the host Component. The pairing is by name in both — an attachment fills a slot when the Feature is attached under the slot's name, on the component's block or on the connection — so the value is an exact key from the declared slot set, never anything read out of the attachment's key. A socket's slot set is closed, since an attachment written on a connection under a name its socket does not declare halts the build, so an attachment that carries a connection never reports free. The slot name is carried rather than a bare boolean because which slot was filled is the more useful half of the answer. Empty when the host Component's declared slot set could not be resolved, which is distinct from "free": free is the positive finding that no declared slot carries this name.
 	Binding string `json:"binding,omitempty" yaml:"binding,omitempty" cbor:"binding,omitempty"`
@@ -62,9 +65,9 @@ type IRFeatureEntry struct {
 	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty" cbor:"inject,omitempty"`
 	// Origin Distinguishes attachments authored in a features: block (explicit) from synthetic attachments produced by the annotation-driven expansion pass (annotation), or mixed when the attachment's value/infra leaves carry a mix of both (per-leaf detail then lives in the provenance maps).
 	Origin string `json:"origin,omitempty" yaml:"origin,omitempty" cbor:"origin,omitempty"`
-	// AnnotationKey Annotation name that triggered a synthetic attachment. Empty when origin is explicit.
+	// AnnotationKey Annotation name that triggered a synthetic attachment. Absent when origin is explicit.
 	AnnotationKey string `json:"annotation_key,omitempty" yaml:"annotation_key,omitempty" cbor:"annotation_key,omitempty"`
-	// AnnotationSource Source location of the annotation declaration as <release-file-path>:<dotted-yaml-key-path>. Empty when origin is explicit.
+	// AnnotationSource Source location of the annotation declaration as <release-file-path>:<dotted-yaml-key-path>. Absent when origin is explicit.
 	AnnotationSource string `json:"annotation_source,omitempty" yaml:"annotation_source,omitempty" cbor:"annotation_source,omitempty"`
 	// ValuesProvenance Per-leaf origin for the values payload, keyed by dotted leaf path.
 	ValuesProvenance OrderedMap[FieldProvenance] `json:"values_provenance,omitempty,omitzero" yaml:"values_provenance,omitempty" cbor:"values_provenance,omitempty"`
@@ -72,9 +75,9 @@ type IRFeatureEntry struct {
 	InfraProvenance OrderedMap[FieldProvenance] `json:"infra_provenance,omitempty,omitzero" yaml:"infra_provenance,omitempty" cbor:"infra_provenance,omitempty"`
 	// Sensitive True when this attachment handles material an author declared sensitive — either the attached Feature declares a sensitive leaf in its values, infra or provides pillar, or the slot the attachment fills declares the material it carries sensitive: the host Component's attachment slot of the same name, or, for an attachment written on a connection, the slot of that name the connection's socket declares. Derived from those declarations over the merged attachment, never from a value's content or a name. Unset when neither declaration is present.
 	Sensitive bool `json:"sensitive,omitempty" yaml:"sensitive,omitempty" cbor:"sensitive,omitempty"`
-	// SensitiveInject The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Empty when the attachment declares no delivery mechanism or references no sensitive provides key.
+	// SensitiveInject The delivery keys of inject whose referenced provides key the attached Feature declares sensitive, in inject's own shape: mechanism, then delivery key, with the referenced provides key as the value. A subset of inject. Absent when the attachment declares no delivery mechanism or references no sensitive provides key.
 	SensitiveInject json.RawMessage `json:"sensitive_inject,omitempty" yaml:"sensitive_inject,omitempty" cbor:"sensitive_inject,omitempty"`
-	// SensitivePayloadLeaves The leaves this attachment's values and infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one an author wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf left readable. An absent key states that this attachment names no leaf its Feature declares sensitive. It does not assert that the payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. The marking is part of this payload's contract rather than a response to any one plugin: a policy that needs it can be written whenever the need arises, without the payload having to be widened first to make it expressible, so a plugin finding this key absent learns what absence states above and nothing about whether anything reads the key. Leaves arrive in the order the payload holds them, the values pillar's before the infra pillar's — the same order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
+	// SensitivePayloadLeaves The leaves this attachment's values and infra payload carries that the attached Feature declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The payload read here is the one the attachment ends up carrying, so a leaf standing at a value the Feature's schema declares as a default is named alongside one an author wrote — a filled default is a datum the payload carries, and a marking read off the written block alone would leave it unnamed. This is the per-leaf unit of the sensitivity marking, and it answers a question neither of the other two does — sensitive gives one answer for the whole attachment, sensitive_inject gives one per inject delivery key, and neither names an individual leaf. A leaf appears where a path the Feature's schema declares sensitive covers it: the declaration names that leaf, or names an object containing it, so a leaf beneath an object a declaration covers is named by that declaration. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. The per-attachment answer is never spread across individual leaves, which would assert something false about a leaf left readable. An absent key states that this attachment names no leaf its Feature declares sensitive. It does not assert that the payload is insensitive, and it does not separate an attachment that has no such leaf to name from a producer that does not report this axis at all — a guest that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the payload holds them, the values pillar's before the infra pillar's — the same order the values and infra payloads themselves carry, and what makes the payload byte-identical across runs of identical input. Absent when the attachment carries no leaf its Feature declares sensitive.
 	SensitivePayloadLeaves []string `json:"sensitive_payload_leaves,omitempty" yaml:"sensitive_payload_leaves,omitempty" cbor:"sensitive_payload_leaves,omitempty"`
 	// Connection The connection this attachment belongs to: present on every attachment written on one of the node's connections, and absent on every attachment of the node's own attachment block. An attachment written on a connection is one of the node's attachments in every other respect — keyed by its qualified name, the connection's alias and the slot joined by a dot, and taking its binding and its sensitivity from the slot the connection's socket declares — so this field is what tells the two apart, and it carries the connection as data rather than leaving it to be read out of the key. A consumer joins it to the graph's edges by socket and alias: the edge whose source is the node carrying this attachment and whose socket and alias are these is the connection the attachment is presented on, and that edge's target is what it is presented to. An attachment of a connection a Feature attachment draws never carries one, because such a connection carries no attachments.
 	Connection *AttachmentConnection `json:"connection,omitempty" yaml:"connection,omitempty" cbor:"connection,omitempty"`
@@ -96,15 +99,20 @@ type IRBoundaryFeature struct {
 
 // CatalogMetadata The Enterprise Metadata Suite explicitly extracted from the Catalog entity, exposing lifecycle and ownership data to Wasm linters.
 type CatalogMetadata struct {
+	// Maintainers The maintainers the Catalog entity lists as owning it.
 	Maintainers []Maintainer `json:"maintainers,omitempty" yaml:"maintainers,omitempty" cbor:"maintainers,omitempty"`
-	License     string       `json:"license,omitempty" yaml:"license,omitempty" cbor:"license,omitempty"`
-	Repository  string       `json:"repository,omitempty" yaml:"repository,omitempty" cbor:"repository,omitempty"`
-	Home        string       `json:"home,omitempty" yaml:"home,omitempty" cbor:"home,omitempty"`
-	Keywords    []string     `json:"keywords,omitempty" yaml:"keywords,omitempty" cbor:"keywords,omitempty"`
+	// License The SPDX license identifier the Catalog entity declares for the software it describes.
+	License string `json:"license,omitempty" yaml:"license,omitempty" cbor:"license,omitempty"`
+	// Repository The URL of the Git repository the Catalog entity names as holding its source files.
+	Repository string `json:"repository,omitempty" yaml:"repository,omitempty" cbor:"repository,omitempty"`
+	// Home The URL of the Catalog entity's home page, wiki or documentation.
+	Home string `json:"home,omitempty" yaml:"home,omitempty" cbor:"home,omitempty"`
+	// Keywords The descriptive keywords the Catalog entity declares.
+	Keywords []string `json:"keywords,omitempty" yaml:"keywords,omitempty" cbor:"keywords,omitempty"`
 }
 
 type IRNode struct {
-	// Description Optional developer-authored documentation describing this component instance's role in the application. Passed through from the Aggregate for augmenting rendering and linting diagnostics.
+	// Description Optional developer-authored documentation describing this component instance's role in the application. Carried through from the Aggregate for rendering and for lint diagnostics.
 	Description string `json:"description,omitempty" yaml:"description,omitempty" cbor:"description,omitempty"`
 	// Labels The entity's duck-typing and ontology labels.
 	Labels OrderedMap[string] `json:"labels" yaml:"labels" cbor:"labels"`
@@ -131,7 +139,7 @@ type IRNode struct {
 	AggregateAnnotations OrderedMap[string] `json:"aggregate_annotations,omitempty,omitzero" yaml:"aggregate_annotations,omitempty" cbor:"aggregate_annotations,omitempty"`
 	// SelfInject Component-level self-inject block carried from the Aggregate; the agnostic injection routing the node declares for itself. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
 	SelfInject json.RawMessage `json:"self_inject,omitempty" yaml:"self_inject,omitempty" cbor:"self_inject,omitempty"`
-	// SourceFile Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The emitter normalizes against the workspace root (the directory containing .aggrega-config.yaml) so the IR wire shape stays byte-identical across developer machines whose workspaces live at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Empty when the emitter has no workspace concept (e.g., synthetic test fixtures); the field is omitted from the JSON when empty.
+	// SourceFile Workspace-relative path of the Aggregate file where this node was authored. Root-tier nodes carry the root Aggregate's path; sub-aggregate nodes carry the imported Aggregate's file path. The path is relative to the workspace root (the directory containing .aggrega-config.yaml), so the graph is byte-identical on machines whose workspaces sit at different absolute paths. Consumers that filter diagnostics per file resolve the field against the same workspace root before comparison. Absent when the graph was built without a workspace root.
 	SourceFile string `json:"source_file,omitempty" yaml:"source_file,omitempty" cbor:"source_file,omitempty"`
 	// Uses The node's `uses` block exactly as authored: each socket name maps to either a list of target instance names or an alias-keyed map of connection entries, in the order the author declared them. This is the block as written, which is a different fact from the resolved connections in `edges`: a socket the author populated appears here even where it produced no connection, so a reader can tell a socket the author filled apart from a socket that reaches a target. Absent when the node authored no `uses` block. Opaque at this schema layer; a policy plugin that reads it parses the bytes.
 	Uses json.RawMessage `json:"uses,omitempty" yaml:"uses,omitempty" cbor:"uses,omitempty"`
@@ -140,7 +148,9 @@ type IRNode struct {
 }
 
 type IREdge struct {
+	// Source The ID of the consuming node, where the connection starts.
 	Source string `json:"source" yaml:"source" cbor:"source"`
+	// Target The ID of the node the connection reaches.
 	Target string `json:"target" yaml:"target" cbor:"target"`
 	// Socket The usesSchema category this edge belongs to (e.g., 'databases', 'tools').
 	Socket string `json:"socket,omitempty" yaml:"socket,omitempty" cbor:"socket,omitempty"`
@@ -154,33 +164,37 @@ type IREdge struct {
 	OriginFeatureInstance string `json:"origin_feature_instance,omitempty" yaml:"origin_feature_instance,omitempty" cbor:"origin_feature_instance,omitempty"`
 	// OriginRelease True when this edge was created by a Release wiring a declared-but-unbound socket to an existing component. Marks edge AUTHORSHIP, not configuration: a developer-declared edge that a Release merely supplied infra for stays Aggregate-origin (origin_release unset; its Release infra appears in the edge's infra map). origin_feature set => Feature-origin; origin_release true => Release-origin; neither => Aggregate-origin.
 	OriginRelease bool `json:"origin_release,omitempty" yaml:"origin_release,omitempty" cbor:"origin_release,omitempty"`
-	// Values Resolved per-connection developer values for this edge (from the Aggregate edge), validated at resolution against the valueSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected into the consuming node's render context at .uses.<alias>.values. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
+	// Values Resolved per-connection developer values for this edge (from the Aggregate edge), validated at resolution against the valueSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected into the consuming node's render context at .context.uses.<alias>.values. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
 	Values json.RawMessage `json:"values,omitempty" yaml:"values,omitempty" cbor:"values,omitempty"`
-	// Infra Resolved per-connection infra for this edge, supplied by a Release edge entry, validated at resolution against the infraSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected at .uses.<alias>.infra. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
+	// Infra Resolved per-connection infra for this edge, supplied by a Release edge entry, validated at resolution against the infraSchema declared by the source socket (the socket on the consuming component, which is the edge's source) and projected at .context.uses.<alias>.infra. Keys the author omitted are filled from the socket's declared defaults; an authored value wins.
 	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 	// Inject Agnostic injection routing. Maps local variables to Target provides keys.
 	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty" cbor:"inject,omitempty"`
 }
 
+// IRMetadata Identity of the graph: the Aggregate it was built from.
 type IRMetadata struct {
-	// AggregateName The Aggregate's metadata.name. Follows IR snake_case convention.
+	// AggregateName The Aggregate's metadata.name.
 	AggregateName string `json:"aggregate_name" yaml:"aggregate_name" cbor:"aggregate_name"`
 }
 
 // IRProvenance Traceability metadata for diagnostics and auditing.
 type IRProvenance struct {
+	// SchemaVersion The version of the IR schema the graph conforms to — aggrega.ai/v1alpha1, the same value the graph's apiVersion carries.
 	SchemaVersion string `json:"schema_version" yaml:"schema_version" cbor:"schema_version"`
-	// CompilerVersion Mandatory compliance stamp. Identifies the specific Go compiler binary used to generate this graph.
+	// CompilerVersion Mandatory compliance stamp. Identifies, by its version, the aggrega binary that built this graph.
 	CompilerVersion string `json:"compiler_version" yaml:"compiler_version" cbor:"compiler_version"`
 	// AggregateVersion The exact semantic version of the root Aggregate intent used during compilation.
 	AggregateVersion string `json:"aggregate_version" yaml:"aggregate_version" cbor:"aggregate_version"`
 	// ManifestVersion The exact semantic version of the Manifest lockfile used during compilation.
 	ManifestVersion string `json:"manifest_version" yaml:"manifest_version" cbor:"manifest_version"`
 	// ReleaseVersion The exact semantic version of the Release routing file used during compilation.
-	ReleaseVersion    string   `json:"release_version" yaml:"release_version" cbor:"release_version"`
+	ReleaseVersion string `json:"release_version" yaml:"release_version" cbor:"release_version"`
+	// SourceIdentifiers Present in every graph and empty in every graph the compiler emits.
 	SourceIdentifiers []string `json:"source_identifiers" yaml:"source_identifiers" cbor:"source_identifiers"`
 }
 
+// IRSpec The graph itself: its nodes, its edges and the payloads keyed by node.
 type IRSpec struct {
 	// Nodes Dictionary of all nodes in the graph, keyed by their absolute ID. Purely topological.
 	Nodes OrderedMap[IRNode] `json:"nodes" yaml:"nodes" cbor:"nodes"`
@@ -192,7 +206,7 @@ type IRSpec struct {
 	InfraMapping OrderedMap[json.RawMessage] `json:"infra_mapping" yaml:"infra_mapping" cbor:"infra_mapping"`
 	// FeatureValuesMapping Normalized map of Node IDs to their attached Feature configurations. One bucket carries every attachment on a node whatever it produces — operational Features, credential Features, identity Features — keyed by the instance name the author gave each attachment. An attachment written on one of the node's connections is keyed by its qualified name, the connection's alias and the slot joined by a dot, and names its connection in its own connection field.
 	FeatureValuesMapping OrderedMap[OrderedMap[IRFeatureEntry]] `json:"feature_values_mapping" yaml:"feature_values_mapping" cbor:"feature_values_mapping"`
-	// BoundaryFeatures Un-folded projection of each boundary's Feature attachments, keyed by boundary path then by instance name. Mirrors the boundaries' feature attachments as the single source both lock-time source resolution and the render-time boundary-scope dispatch read, so neither re-walks the routing tree. Present only when the graph has boundary-level Feature attachments.
+	// BoundaryFeatures Each boundary's Feature attachments, keyed by boundary path then by instance name. Present only when the graph has boundary-level Feature attachments.
 	BoundaryFeatures OrderedMap[OrderedMap[IRBoundaryFeature]] `json:"boundary_features,omitempty,omitzero" yaml:"boundary_features,omitempty" cbor:"boundary_features,omitempty"`
 	Provenance       IRProvenance                              `json:"provenance" yaml:"provenance" cbor:"provenance"`
 }

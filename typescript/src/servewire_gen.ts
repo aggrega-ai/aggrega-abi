@@ -321,7 +321,7 @@ export interface InvalidateParams {
   workDoneToken?: ProgressToken;
   // The document that changed.
   file?: string;
-  // How much of what the daemon holds to drop.
+  // How much of what the daemon holds to drop: `file` drops what it holds for the named document only; `workspace`, the default and what any other value is read as, also drops what it holds for the whole workspace.
   granularity?: string;
 }
 
@@ -800,7 +800,7 @@ export interface ImportParams {
 export interface ScaffoldEntityParams {
   workspaceRoot?: WorkspaceRootAccepted;
   workDoneToken?: ProgressToken;
-  // The entity kind to draft, named as a lowercase-hyphenated schema token such as component, aggregate, release or recipe.
+  // The entity kind to draft, named by its lowercase token, such as component, aggregate, release, recipe or featurerecipe — the token `aggrega/getSchema` lists for it.
   kind?: string;
   // The name to write into the drafted document.
   name?: string;
@@ -1203,7 +1203,7 @@ export interface MarkupContent {
 
 // One kind an author writes a document of, pairing the token a request names with the kind the document itself declares, and saying which operations accept a document of that kind.
 export interface EntityKindDescriptor {
-  // The lowercase-hyphenated token a request names.
+  // The lowercase token a request names, such as component or featurerecipe.
   kind: string;
   // The kind the document's own header declares.
   documentKind: string;
