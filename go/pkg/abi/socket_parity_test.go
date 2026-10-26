@@ -665,6 +665,15 @@ func TestSocketParity_ImportInputCatalog(t *testing.T) {
 	roundTripBothGolden[abi.ImportInput](t, "ImportInputCatalog")
 }
 
+// TestSocketParity_ImportInputNamed pins a file imported on its own: the primary
+// bytes and the name of the file they were read from, with no named source. The
+// name is omitted when empty, so this is the vector where dropping it moves the
+// bytes, and its four-byte key sorts ahead of every other key of the shape.
+func TestSocketParity_ImportInputNamed(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.ImportInput](t, "ImportInputNamed")
+}
+
 func TestSocketParity_ImportOutput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.ImportOutput](t, "ImportOutput")

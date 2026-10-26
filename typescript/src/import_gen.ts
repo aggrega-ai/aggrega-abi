@@ -24,12 +24,14 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
+// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
 export interface ImportInput {
   // The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
   format: string;
   // The primary source bytes to import, which the importer reads as the named format: the whole file where the import's source is one file, and empty where it is a directory, whose files arrive as named sources instead. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the importer decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
   bytes: string;
+  // The name of the file the primary bytes were read from: its base name, with no directory, so an importer can name the file in what it reports about it. The primary bytes arrive as no named source, so this is the one name they carry. Absent where the import's source is a directory, whose files arrive as named sources, each under its own name.
+  name?: string;
   // Named sources, each carrying its own bytes, in one list sorted by name. Where the import's source is a directory, there is one per file of it that the importer's declared file patterns select, named by its slash-separated path inside the directory. The files the attachment configuring the importer declares under with.sources are carried here too, each under its base name, and the host refuses an import in which a file read from the directory and one of these carry the same name. Absent where neither supplies any.
   sources?: ImportSource[];
   // An opaque import-options document the consumer supplies for importer-specific behavior. The host pipes it through without interpreting it; the importer reads whatever shape it documents. Absent when the consumer supplies no options.
@@ -182,6 +184,7 @@ export function encodeImportInput(v: ImportInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("format")}:${jstr(v.format)}`);
   parts.push(`${jstr("bytes")}:${jstr(v.bytes)}`);
+  if (v.name !== undefined && v.name !== "") parts.push(`${jstr("name")}:${jstr(v.name)}`);
   if (v.sources !== undefined && v.sources.length > 0) parts.push(`${jstr("sources")}:${`[${v.sources!.map((e0) => encodeImportSource(e0)).join(",")}]`}`);
   if (v.settings !== undefined && v.settings !== null) parts.push(`${jstr("settings")}:${encodeOpaque(v.settings)}`);
   if (v.catalog !== undefined && v.catalog !== null) parts.push(`${jstr("catalog")}:${encodeCatalogProjection(v.catalog)}`);
@@ -354,10 +357,15 @@ export function encodeCBORImportInput(v: ImportInput): Uint8Array {
 
 export function appendCBORImportInput(out: number[], v: ImportInput): void {
   let n = 2;
+  if (v.name !== undefined && v.name !== "") n++;
   if (v.catalog !== undefined && v.catalog !== null) n++;
   if (v.sources !== undefined && v.sources.length > 0) n++;
   if (v.settings !== undefined && v.settings !== null) n++;
   writeHead(out, 5, n);
+  if (v.name !== undefined && v.name !== "") {
+    writeText(out, "name");
+    writeText(out, v.name);
+  }
   writeText(out, "bytes");
   writeBytes(out, b64decode(v.bytes));
   writeText(out, "format");
@@ -395,6 +403,7 @@ export function decodeCBORImportInputFrom(dec: CborDec): ImportInput {
     switch (k) {
       case "format": o["format"] = dec.readText(); break;
       case "bytes": o["bytes"] = b64encode(dec.readBytes()); break;
+      case "name": o["name"] = dec.readText(); break;
       case "sources": o["sources"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORImportSourceFrom(dec)); } return a; })(); break;
       case "settings": o["settings"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "catalog": o["catalog"] = decodeCBORCatalogProjectionFrom(dec); break;

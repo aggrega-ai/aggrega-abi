@@ -207,6 +207,11 @@ const vectors: Array<[string, string]> = [
   // of name order, and the label keys sort differently in the two wire forms, so
   // a codec that sorted a list or lost a map-key sort fails it.
   ["ImportInputCatalog", "ImportInput"],
+  // A file imported on its own: the primary bytes and the name of the file they
+  // were read from, with no named source. The name is omitted when empty, so this
+  // is the vector where dropping it moves the bytes, and its four-byte key sorts
+  // ahead of every other key of the shape.
+  ["ImportInputNamed", "ImportInput"],
   ["ImportOutput", "ImportOutput"],
   ["ParseSourceResponse", "ParseSourceResponse"],
   // The parse-source reply's SUCCESS shape, the half its failure envelope cannot

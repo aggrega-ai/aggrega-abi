@@ -14,12 +14,14 @@ import (
 	"sort"
 )
 
-// ImportInput The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
+// ImportInput The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
 type ImportInput struct {
 	// Format The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
 	Format string `json:"format" yaml:"format" cbor:"format"`
 	// Bytes The primary source bytes to import, which the importer reads as the named format: the whole file where the import's source is one file, and empty where it is a directory, whose files arrive as named sources instead. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the importer decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
 	Bytes []byte `json:"bytes" yaml:"bytes" cbor:"bytes"`
+	// Name The name of the file the primary bytes were read from: its base name, with no directory, so an importer can name the file in what it reports about it. The primary bytes arrive as no named source, so this is the one name they carry. Absent where the import's source is a directory, whose files arrive as named sources, each under its own name.
+	Name string `json:"name,omitempty" yaml:"name,omitempty" cbor:"name,omitempty"`
 	// Sources Named sources, each carrying its own bytes, in one list sorted by name. Where the import's source is a directory, there is one per file of it that the importer's declared file patterns select, named by its slash-separated path inside the directory. The files the attachment configuring the importer declares under with.sources are carried here too, each under its base name, and the host refuses an import in which a file read from the directory and one of these carry the same name. Absent where neither supplies any.
 	Sources []ImportSource `json:"sources,omitempty" yaml:"sources,omitempty" cbor:"sources,omitempty"`
 	// Settings An opaque import-options document the consumer supplies for importer-specific behavior. The host pipes it through without interpreting it; the importer reads whatever shape it documents. Absent when the consumer supplies no options.
@@ -186,6 +188,14 @@ func (t ImportInput) MarshalJSON() ([]byte, error) {
 	first = false
 	buf.WriteString("\"bytes\":")
 	writeJSONBytes(&buf, t.Bytes)
+	if t.Name != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"name\":")
+		writeJSONString(&buf, t.Name)
+	}
 	if len(t.Sources) != 0 {
 		if !first {
 			buf.WriteByte(',')
@@ -256,6 +266,12 @@ func (t *ImportInput) UnmarshalJSON(data []byte) error {
 			} else {
 				t.Bytes = v
 			}
+		case "name":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
 		case "sources":
 			t.Sources = nil
 			if err := expectDelim(dec, '['); err != nil {
@@ -310,7 +326,7 @@ func (t *ImportInput) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *ImportInput) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "format", "bytes", "sources", "settings", "catalog"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "format", "bytes", "name", "sources", "settings", "catalog"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -1844,6 +1860,9 @@ func (t ImportInput) EncodeCBOR() ([]byte, error) {
 // non-required fields so the map head's pair count matches.
 func (t ImportInput) appendCBOR(dst []byte) ([]byte, error) {
 	n := 2
+	if t.Name != "" {
+		n++
+	}
 	if t.Catalog != nil {
 		n++
 	}
@@ -1855,6 +1874,10 @@ func (t ImportInput) appendCBOR(dst []byte) ([]byte, error) {
 	}
 	dst = appendCBORHead(dst, 5, uint64(n))
 	var err error
+	if t.Name != "" {
+		dst = appendCBORTextString(dst, "name")
+		dst = appendCBORTextString(dst, t.Name)
+	}
 	dst = appendCBORTextString(dst, "bytes")
 	dst = appendCBORByteString(dst, t.Bytes)
 	dst = appendCBORTextString(dst, "format")
@@ -1914,6 +1937,12 @@ func (t *ImportInput) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.Bytes = v
 			}
+		case "name":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Name = s
+			}
 		case "sources":
 			{
 				sn, err := dec.readArrayHeader()
@@ -1960,7 +1989,7 @@ func (t *ImportInput) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *ImportInput) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "format", "bytes", "sources", "settings", "catalog"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "format", "bytes", "name", "sources", "settings", "catalog"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

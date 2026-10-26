@@ -22,13 +22,16 @@ where
     }
 }
 
-/// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
+/// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ImportInput {
     /// The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
     pub format: String,
     /// The primary source bytes to import, which the importer reads as the named format: the whole file where the import's source is one file, and empty where it is a directory, whose files arrive as named sources instead. Each kit carries them in its own field type — raw where that type is a byte type, base64-encoded where it is a string the importer decodes to recover them — and the generated encoder converts between the field and the form the wire carries bytes in.
     pub bytes: String,
+    /// The name of the file the primary bytes were read from: its base name, with no directory, so an importer can name the file in what it reports about it. The primary bytes arrive as no named source, so this is the one name they carry. Absent where the import's source is a directory, whose files arrive as named sources, each under its own name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
     /// Named sources, each carrying its own bytes, in one list sorted by name. Where the import's source is a directory, there is one per file of it that the importer's declared file patterns select, named by its slash-separated path inside the directory. The files the attachment configuring the importer declares under with.sources are carried here too, each under its base name, and the host refuses an import in which a file read from the directory and one of these carry the same name. Absent where neither supplies any.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<ImportSource>,
@@ -232,10 +235,15 @@ impl ImportInput {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
+        if !self.name.is_empty() { n += 1; }
         if self.catalog.is_some() { n += 1; }
         if !self.sources.is_empty() { n += 1; }
         if self.settings.is_some() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
+        if !self.name.is_empty() {
+            crate::cbor_gen::write_text(out, "name");
+            crate::cbor_gen::write_text(out, &self.name);
+        }
         crate::cbor_gen::write_text(out, "bytes");
         crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.bytes)?);
         crate::cbor_gen::write_text(out, "format");
@@ -271,6 +279,7 @@ impl ImportInput {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_format: Option<String> = None;
         let mut f_bytes: Option<String> = None;
+        let mut f_name: String = String::new();
         let mut f_sources: Vec<ImportSource> = Vec::new();
         let mut f_settings: Option<Box<RawValue>> = None;
         let mut f_catalog: Option<Box<CatalogProjection>> = None;
@@ -280,6 +289,7 @@ impl ImportInput {
             match k.as_str() {
                 "format" => f_format = Some(dec.read_text()?),
                 "bytes" => f_bytes = Some(crate::cbor_gen::b64_encode(&dec.read_bytes()?)),
+                "name" => f_name = dec.read_text()?,
                 "sources" => f_sources = { let sn = dec.read_array_header()?; let mut sv: Vec<ImportSource> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(ImportSource::decode_cbor_from(dec)?); } sv },
                 "settings" => f_settings = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "catalog" => f_catalog = Some(Box::new(CatalogProjection::decode_cbor_from(dec)?)),
@@ -289,6 +299,7 @@ impl ImportInput {
         Ok(Self {
             format: f_format.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field format".to_string()))?,
             bytes: f_bytes.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field bytes".to_string()))?,
+            name: f_name,
             sources: f_sources,
             settings: f_settings,
             catalog: f_catalog,

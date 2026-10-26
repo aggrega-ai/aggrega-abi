@@ -300,6 +300,11 @@ cbor_case!(import_input, aggrega_abi::ImportInput, "ImportInput");
 // none, and the sockets are listed out of name order, so a codec that sorted a
 // list would not match.
 cbor_vector!(import_input_catalog, aggrega_abi::ImportInput, "ImportInputCatalog");
+// A third: a file imported on its own, carrying the primary bytes and the name of
+// the file they were read from, with no named source. The name is elided when
+// empty, so this is the vector where dropping it moves the bytes, and its
+// four-byte key sorts ahead of every other key of the shape.
+cbor_vector!(import_input_named, aggrega_abi::ImportInput, "ImportInputNamed");
 cbor_case!(import_output, aggrega_abi::ImportOutput, "ImportOutput");
 cbor_case!(parse_source_response, aggrega_abi::ParseSourceResponse, "ParseSourceResponse");
 // A second vector for ParseSourceResponse, so cbor_vector rather than cbor_case:
