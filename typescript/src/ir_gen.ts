@@ -199,8 +199,6 @@ export interface IRProvenance {
   manifest_version: string;
   // The exact semantic version of the Release routing file used during compilation.
   release_version: string;
-  // Present in every graph and empty in every graph the compiler emits.
-  source_identifiers: string[];
 }
 
 // The graph itself: its nodes, its edges and the payloads keyed by node.
@@ -426,7 +424,6 @@ export function encodeIRProvenance(v: IRProvenance): string {
   parts.push(`${jstr("aggregate_version")}:${jstr(v.aggregate_version)}`);
   parts.push(`${jstr("manifest_version")}:${jstr(v.manifest_version)}`);
   parts.push(`${jstr("release_version")}:${jstr(v.release_version)}`);
-  parts.push(`${jstr("source_identifiers")}:${`[${v.source_identifiers!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -1191,7 +1188,7 @@ export function encodeCBORIRProvenance(v: IRProvenance): Uint8Array {
 }
 
 export function appendCBORIRProvenance(out: number[], v: IRProvenance): void {
-  let n = 6;
+  let n = 5;
   writeHead(out, 5, n);
   writeText(out, "schema_version");
   writeText(out, v.schema_version);
@@ -1203,14 +1200,6 @@ export function appendCBORIRProvenance(out: number[], v: IRProvenance): void {
   writeText(out, v.manifest_version);
   writeText(out, "aggregate_version");
   writeText(out, v.aggregate_version);
-  writeText(out, "source_identifiers");
-  {
-    const a0 = v.source_identifiers;
-    writeHead(out, 4, a0.length);
-    for (const ee0 of a0) {
-      writeText(out, ee0);
-    }
-  }
 }
 
 export function decodeCBORIRProvenance(data: Uint8Array): IRProvenance {
@@ -1229,7 +1218,6 @@ export function decodeCBORIRProvenanceFrom(dec: CborDec): IRProvenance {
       case "aggregate_version": o["aggregate_version"] = dec.readText(); break;
       case "manifest_version": o["manifest_version"] = dec.readText(); break;
       case "release_version": o["release_version"] = dec.readText(); break;
-      case "source_identifiers": o["source_identifiers"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       default: dec.skip();
     }
   }

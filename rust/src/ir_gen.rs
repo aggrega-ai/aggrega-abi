@@ -254,8 +254,6 @@ pub struct IRProvenance {
     pub manifest_version: String,
     /// The exact semantic version of the Release routing file used during compilation.
     pub release_version: String,
-    /// Present in every graph and empty in every graph the compiler emits.
-    pub source_identifiers: Vec<String>,
 }
 
 /// The graph itself: its nodes, its edges and the payloads keyed by node.
@@ -1192,7 +1190,7 @@ impl IRProvenance {
     }
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
-        let n: u64 = 6;
+        let n: u64 = 5;
         crate::cbor_gen::write_head(out, 5, n);
         crate::cbor_gen::write_text(out, "schema_version");
         crate::cbor_gen::write_text(out, &self.schema_version);
@@ -1204,14 +1202,6 @@ impl IRProvenance {
         crate::cbor_gen::write_text(out, &self.manifest_version);
         crate::cbor_gen::write_text(out, "aggregate_version");
         crate::cbor_gen::write_text(out, &self.aggregate_version);
-        crate::cbor_gen::write_text(out, "source_identifiers");
-        {
-            let c = &self.source_identifiers;
-            crate::cbor_gen::write_head(out, 4, c.len() as u64);
-            for ev in c {
-                crate::cbor_gen::write_text(out, ev);
-            }
-        }
         Ok(())
     }
 
@@ -1228,7 +1218,6 @@ impl IRProvenance {
         let mut f_aggregate_version: Option<String> = None;
         let mut f_manifest_version: Option<String> = None;
         let mut f_release_version: Option<String> = None;
-        let mut f_source_identifiers: Option<Vec<String>> = None;
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -1238,7 +1227,6 @@ impl IRProvenance {
                 "aggregate_version" => f_aggregate_version = Some(dec.read_text()?),
                 "manifest_version" => f_manifest_version = Some(dec.read_text()?),
                 "release_version" => f_release_version = Some(dec.read_text()?),
-                "source_identifiers" => f_source_identifiers = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv }),
                 _ => dec.skip()?,
             }
         }
@@ -1248,7 +1236,6 @@ impl IRProvenance {
             aggregate_version: f_aggregate_version.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field aggregate_version".to_string()))?,
             manifest_version: f_manifest_version.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field manifest_version".to_string()))?,
             release_version: f_release_version.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field release_version".to_string()))?,
-            source_identifiers: f_source_identifiers.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field source_identifiers".to_string()))?,
         })
     }
 }

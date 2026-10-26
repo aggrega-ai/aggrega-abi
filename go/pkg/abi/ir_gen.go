@@ -190,8 +190,6 @@ type IRProvenance struct {
 	ManifestVersion string `json:"manifest_version" yaml:"manifest_version" cbor:"manifest_version"`
 	// ReleaseVersion The exact semantic version of the Release routing file used during compilation.
 	ReleaseVersion string `json:"release_version" yaml:"release_version" cbor:"release_version"`
-	// SourceIdentifiers Present in every graph and empty in every graph the compiler emits.
-	SourceIdentifiers []string `json:"source_identifiers" yaml:"source_identifiers" cbor:"source_identifiers"`
 }
 
 // IRSpec The graph itself: its nodes, its edges and the payloads keyed by node.
@@ -1780,20 +1778,6 @@ func (t IRProvenance) MarshalJSON() ([]byte, error) {
 	first = false
 	buf.WriteString("\"release_version\":")
 	writeJSONString(&buf, t.ReleaseVersion)
-	if !first {
-		buf.WriteByte(',')
-	}
-	first = false
-	buf.WriteString("\"source_identifiers\":")
-	buf.WriteByte('[')
-	for i := range t.SourceIdentifiers {
-		if i > 0 {
-			buf.WriteByte(',')
-		}
-		ev := t.SourceIdentifiers[i]
-		writeJSONString(&buf, ev)
-	}
-	buf.WriteByte(']')
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -1842,23 +1826,6 @@ func (t *IRProvenance) UnmarshalJSON(data []byte) error {
 			} else {
 				t.ReleaseVersion = s
 			}
-		case "source_identifiers":
-			t.SourceIdentifiers = nil
-			if err := expectDelim(dec, '['); err != nil {
-				return err
-			}
-			for dec.More() {
-				var elem string
-				if s, err := readString(dec); err != nil {
-					return err
-				} else {
-					elem = s
-				}
-				t.SourceIdentifiers = append(t.SourceIdentifiers, elem)
-			}
-			if err := expectDelim(dec, ']'); err != nil {
-				return err
-			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -1878,7 +1845,7 @@ func (t *IRProvenance) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *IRProvenance) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "schema_version", "compiler_version", "aggregate_version", "manifest_version", "release_version", "source_identifiers"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "schema_version", "compiler_version", "aggregate_version", "manifest_version", "release_version"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -3776,7 +3743,7 @@ func (t IRProvenance) EncodeCBOR() ([]byte, error) {
 // canonical key order (fixed at generation time), omitting empty
 // non-required fields so the map head's pair count matches.
 func (t IRProvenance) appendCBOR(dst []byte) ([]byte, error) {
-	n := 6
+	n := 5
 	dst = appendCBORHead(dst, 5, uint64(n))
 	dst = appendCBORTextString(dst, "schema_version")
 	dst = appendCBORTextString(dst, t.SchemaVersion)
@@ -3788,12 +3755,6 @@ func (t IRProvenance) appendCBOR(dst []byte) ([]byte, error) {
 	dst = appendCBORTextString(dst, t.ManifestVersion)
 	dst = appendCBORTextString(dst, "aggregate_version")
 	dst = appendCBORTextString(dst, t.AggregateVersion)
-	dst = appendCBORTextString(dst, "source_identifiers")
-	dst = appendCBORHead(dst, 4, uint64(len(t.SourceIdentifiers)))
-	for i := range t.SourceIdentifiers {
-		ev := t.SourceIdentifiers[i]
-		dst = appendCBORTextString(dst, ev)
-	}
 	return dst, nil
 }
 
@@ -3845,24 +3806,6 @@ func (t *IRProvenance) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.ReleaseVersion = s
 			}
-		case "source_identifiers":
-			{
-				sn, err := dec.readArrayHeader()
-				if err != nil {
-					return err
-				}
-				s := make([]string, 0, sn)
-				for si := 0; si < sn; si++ {
-					var ev string
-					if s, err := dec.readTextString(); err != nil {
-						return err
-					} else {
-						ev = s
-					}
-					s = append(s, ev)
-				}
-				t.SourceIdentifiers = s
-			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -3879,7 +3822,7 @@ func (t *IRProvenance) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *IRProvenance) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "schema_version", "compiler_version", "aggregate_version", "manifest_version", "release_version", "source_identifiers"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "schema_version", "compiler_version", "aggregate_version", "manifest_version", "release_version"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)
