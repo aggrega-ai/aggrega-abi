@@ -92,7 +92,7 @@ export interface ImportOutput {
 
 // One entity the import produced: its kind, its name, and how it is emitted — a reference to an existing catalog entity or a newly drafted entity body.
 export interface EmittedEntity {
-  // The kind of entity emitted. In v1 this is Component, Aggregate or Release; additional kinds may appear as the emission surface grows, so a reader tolerates an unrecognized kind.
+  // The kind of entity emitted. The core importers emit Component, Aggregate and Release; a reader tolerates any other kind.
   kind: string;
   // The name of the emitted entity.
   name: string;
@@ -100,9 +100,9 @@ export interface EmittedEntity {
   mode: string;
   // The raw YAML body of a drafted entity. Empty for a pure reference, which names an existing entity rather than drafting one.
   body?: string;
-  // Labels to attach to the emitted entity, as a string-to-string map. Empty in v1; reserved for a future label-driven emission axis.
+  // Labels to attach to the emitted entity, as a string-to-string map. The core importers leave it empty.
   labels?: Record<string, string>;
-  // Annotations to attach to the emitted entity, as a string-to-string map. Empty in v1; reserved for a future annotation-driven emission axis.
+  // Annotations to attach to the emitted entity, as a string-to-string map. The core importers leave it empty.
   annotations?: Record<string, string>;
   // A reference to the source node this entity was emitted from, so a reader can trace the entity back to its origin in the imported source.
   sourceRef?: string;

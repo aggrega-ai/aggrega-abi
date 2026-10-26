@@ -82,7 +82,7 @@ type ImportOutput struct {
 
 // EmittedEntity One entity the import produced: its kind, its name, and how it is emitted — a reference to an existing catalog entity or a newly drafted entity body.
 type EmittedEntity struct {
-	// Kind The kind of entity emitted. In v1 this is Component, Aggregate or Release; additional kinds may appear as the emission surface grows, so a reader tolerates an unrecognized kind.
+	// Kind The kind of entity emitted. The core importers emit Component, Aggregate and Release; a reader tolerates any other kind.
 	Kind string `json:"kind" yaml:"kind" cbor:"kind"`
 	// Name The name of the emitted entity.
 	Name string `json:"name" yaml:"name" cbor:"name"`
@@ -90,9 +90,9 @@ type EmittedEntity struct {
 	Mode string `json:"mode" yaml:"mode" cbor:"mode"`
 	// Body The raw YAML body of a drafted entity. Empty for a pure reference, which names an existing entity rather than drafting one.
 	Body string `json:"body,omitempty" yaml:"body,omitempty" cbor:"body,omitempty"`
-	// Labels Labels to attach to the emitted entity, as a string-to-string map. Empty in v1; reserved for a future label-driven emission axis.
+	// Labels Labels to attach to the emitted entity, as a string-to-string map. The core importers leave it empty.
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" cbor:"labels,omitempty"`
-	// Annotations Annotations to attach to the emitted entity, as a string-to-string map. Empty in v1; reserved for a future annotation-driven emission axis.
+	// Annotations Annotations to attach to the emitted entity, as a string-to-string map. The core importers leave it empty.
 	Annotations map[string]string `json:"annotations,omitempty" yaml:"annotations,omitempty" cbor:"annotations,omitempty"`
 	// SourceRef A reference to the source node this entity was emitted from, so a reader can trace the entity back to its origin in the imported source.
 	SourceRef string `json:"sourceRef,omitempty" yaml:"sourceRef,omitempty" cbor:"sourceRef,omitempty"`

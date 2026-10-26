@@ -18,7 +18,7 @@ pub struct FRPStepInput {
     /// The step's rendered `with` block, an author-ordered key set the guest reads as its step-local input. Preserves author order so the payload is byte-identical across runs of identical input.
     #[serde(default, skip_serializing_if = "OrderedMap::is_empty")]
     pub step_input: OrderedMap<Box<RawValue>>,
-    /// The render-time context the host hands the step. The step carries it through; the schema does not interpret its internal shape (an opaque passthrough), so the FRP socket schema does not bind to the cross-boundary render-context shape. The render context's own contract is the render-context wire shape; a guest that reads it consults that contract.
+    /// The render-time context the host hands the step, carried as the bytes of its JSON document; this schema leaves the object undeclared, and the host reads nothing back from it. A step of a Recipe or of a component-scope FeatureRecipe receives parameters, the Release's parameter values sorted by name and absent when there are none; annotations, the node's annotations split by where each was written into aggregate, release and catalog, each absent when empty; and boundary, the boundary the node sits in: name, path (its segments), sync_wave (absent when 0), directory, sub_directory (absent when there is none) and annotations (the boundary's own, absent when empty). A step of a boundary-scope FeatureRecipe, which has no host component, receives parameters and a boundary carrying its name, path and annotations. The indentation width, yaml_indent, is not set for a step.
     pub context: Box<RawValue>,
     /// This step's zero-based position in the pipeline.
     pub step_index: i64,
@@ -30,7 +30,7 @@ pub struct FRPStepInput {
 /// The payload a feature-recipe-pipeline guest returns for one pipeline step: the RFC 6902 patches the host applies to the keyed document set, the side effects this step produced, and any diagnostics the guest raised.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FRPStepOutput {
-    /// Structured RFC 6902 operations the step emits against documents in the keyed set. Each names its target document by scope and key, then names the op, path, and value explicitly. Distinct from the mutator socket's opaque patch slice: an FRP step's patches are applied by the host and restored by snapshot on a failed step, so the operations are explicit here rather than opaque.
+    /// Structured RFC 6902 operations the step emits against documents in the keyed set. Each names its target document by scope and key, then names the op, path, and value explicitly. Distinct from the label-transform role's opaque patch list: an FRP step's patches are applied by the host and restored by snapshot on a failed step, so the operations are explicit here rather than opaque.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub patches: Vec<JSONPatchOp>,
     /// The effects this step produced beyond patching an existing document (for example emitting a CRD or writing a file).
@@ -92,10 +92,10 @@ pub struct JSONPatchOp {
     pub from: String,
 }
 
-/// One effect a feature-recipe-pipeline step produces beyond patching an existing document. Kind is an open string rather than a closed enum so a future effect kind extends the contract without an ABI break. When kind is emit_crd, crd carries the CRD document and file is omitted; when kind is emit_file, file carries the file to write and crd is omitted.
+/// One effect a feature-recipe-pipeline step produces beyond patching an existing document. Kind is emit_crd or emit_file; the schema leaves it an open string so a new kind can be added without an ABI break, and a build halts on any other kind. When kind is emit_crd, crd carries the CRD document and file is omitted; when kind is emit_file, file carries the file to write and crd is omitted.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SideEffect {
-    /// The effect kind — for example emit_crd or emit_file. An open string so a future effect kind extends the contract without an ABI break.
+    /// The effect kind: emit_crd or emit_file. The schema leaves the field an open string so a new kind can be added without an ABI break; a build halts on any other kind, naming the node, the side effect and the kind.
     pub kind: String,
     /// The document root the emit contributes to: own (the node's own set) or host (the attached host component's set). An absent scope means own at apply time.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -116,12 +116,12 @@ pub struct SideEffectFile {
     pub content: String,
 }
 
-/// One pipeline step that ran before the current step, so a guest can inspect what came before it: the step's pipeline index, the Wasm plugin URI that implemented it, and the side effects that step emitted.
+/// One pipeline step that ran before the current step, so a guest can inspect what came before it: the step's pipeline index, the plugin it named, and the side effects that step emitted.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PrecedingStep {
     /// The preceding step's zero-based position in the pipeline.
     pub index: i64,
-    /// The Universal URI of the Wasm plugin that implemented the preceding step.
+    /// The plugin the preceding pipeline entry names in its plugin field, as written.
     pub plugin_uri: String,
     /// The side effects the preceding step emitted.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

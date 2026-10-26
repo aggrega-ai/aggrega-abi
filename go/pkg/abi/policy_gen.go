@@ -33,7 +33,7 @@ type PolicyOutput struct {
 	Error string `json:"error,omitempty" yaml:"error,omitempty" cbor:"error,omitempty"`
 }
 
-// RenderPolicyInput The payload the render stage hands to a policy socket that declares the render stage: the rendered output files the policy reasons over. The render stage carries the rendered artifacts instead of the IR graph.
+// RenderPolicyInput The payload a governance plugin attached at the render-verdict role receives: the rendered output files the policy reasons over, in place of the IR graph.
 type RenderPolicyInput struct {
 	// Artifacts The rendered output files the policy reasons over, as an ordered list sorted by path so the wire is byte-identical across runs of identical input.
 	Artifacts []RenderedArtifact `json:"artifacts" yaml:"artifacts" cbor:"artifacts"`

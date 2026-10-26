@@ -154,7 +154,7 @@ export interface OmitEntry {
   sensitive?: boolean;
 }
 
-// One file of a pre-packaged source projection: its chart-root-relative path and its raw bytes, exactly as the host read them from the local source at compile time.
+// One file of a pre-packaged source projection: its path relative to the source root and its raw bytes, exactly as the host read them from the local source at compile time.
 export interface SourceFile {
   // The file's path relative to the source root (for example Chart.yaml or templates/deployment.yaml).
   path: string;
@@ -162,9 +162,9 @@ export interface SourceFile {
   content: string;
 }
 
-// The packed source content (e.g. a Helm chart's files, keyed by source-root-relative path, in walk order) the host reads and returns to the guest in response to a pack-source request, so the guest reconstructs the selected source in memory and touches no filesystem. It is the pack-source host function's success payload.
+// The packed source content (e.g. a Helm chart's files, each named by its path relative to the source root, in walk order) the host reads and returns to the guest in response to a pack-source request, so the guest reconstructs the selected source in memory and touches no filesystem. It is the pack-source host function's success payload.
 export interface SourceProjection {
-  // The source files, keyed by source-root-relative path, in the host's deterministic walk order.
+  // The source files, each named by its path relative to the source root, in the host's deterministic walk order.
   files: SourceFile[];
 }
 
@@ -264,11 +264,11 @@ export interface ArtifactProjectionEntry {
 
 // The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs with their merged annotations and deployment waves, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
 export interface AssembleBoundaryInput {
-  // Optional per-render boundary metadata a guest may consult. A dispatch group can merge contributors from multiple boundaries, so there is no single boundary; the field is carry-only-consumed and absent when the host merges across boundaries. Opaque at this schema layer; the guest reads the boundary-context shape through the render-context wire contract.
+  // Not populated by the host: it is absent from every assembly input. A dispatch group can merge contributors from several boundaries, so there is no single boundary to carry; a guest reads each contributor's placement from its rendered_nodes entry, its annotations and sync_wave.
   boundary?: unknown;
   // The per-node render outputs that fed this dispatch group, in node order.
   rendered_nodes: RenderedNode[];
-  // The render-time context the host hands the guest, the same opaque render-context passthrough the render_node export receives.
+  // The render-time context, carried as the bytes of its JSON document. On this export the host sets only yaml_indent, the render-wide indentation width the assembled files are serialized at; the context's other members carry nothing here, because an assembly merges contributors whose annotations and boundaries differ, and each contributor's annotations arrive on its rendered_nodes entry instead.
   context: unknown;
   // The evaluated dispatch-group output path the assembled artifact lands at; a boundary assembler uses it as the boundary-level fallback identity (e.g. the compose network name for a node carrying no namespace annotation).
   boundary_path: string;
@@ -303,6 +303,7 @@ export interface RenderedNode {
   values_mapped?: boolean;
 }
 
+// One directed uses edge of the graph, named by its two node ids: source is the consuming node and target the consumed one. The list carries every uses edge of the graph, so either end may be a node outside this dispatch group.
 export interface RenderEdge {
   // The consuming node's id — the source end of a directed uses edge.
   source: string;
@@ -430,9 +431,9 @@ export interface RenderedNameInput {
   synthesized?: boolean;
 }
 
-// The payload a Provider guest returns from its rendered_name export: the name its target gives the resources it renders for the node — from the node's author-supplied source, or from the workload it synthesizes — or no name at all. An absent or empty name is a positive answer rather than a failure — it says this target derives no such name — and the host spends what it was told without reading it, so no knowledge of the target's naming crosses the boundary.
+// The payload a Provider guest returns from its rendered_name export: the name its target gives the resources it renders for the node — from the node's author-supplied source, or from the workload it synthesizes — or no name at all. An absent or empty name is a positive answer rather than a failure — it says this target derives no such name — and the host uses what it was told without reading it, so no knowledge of the target's naming crosses the boundary.
 export interface RenderedNameOutput {
-  // The name the guest will itself render this node's author-supplied source, or the resources it synthesizes for the node, under, already written into whatever alphabet its target accepts in that position. Empty or absent means the guest derives no such name.
+  // The name under which the guest renders this node's author-supplied source, or which it gives the resources it synthesizes for the node, already written in the alphabet its target accepts in that position. Empty or absent means the guest derives no such name.
   name?: string;
   // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from reporting no name: no name is an answer about the target, while error reports that the question itself could not be answered. The host surfaces a present error as a failed plugin invocation.
   error?: string;

@@ -39,7 +39,7 @@ export interface AnnotationTransformInput {
 export interface AnnotationTransformOutput {
   // Annotation injections to apply, in order. Each names an existing target coordinate and the annotation key and value to add there.
   injections: AnnotationInjection[];
-  // A failure message set when the guest ran but could not complete the operation; absent on success. It is distinct from any diagnostics the output carries: diagnostics report issues found during a run that still produced a result, while error reports that the operation itself did not complete. The host surfaces a present error as a failed plugin invocation.
+  // A failure message set when the guest ran but could not complete the operation; absent on success. The host surfaces a present error as a failed plugin invocation.
   error?: string;
 }
 
