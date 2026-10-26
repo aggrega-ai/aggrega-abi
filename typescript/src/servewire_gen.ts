@@ -271,7 +271,7 @@ export interface Location {
 
 // The params object of a method that declares no fields of its own. It still admits the two fields every request admits: the workspace it acts on, and a progress token.
 export interface WorkspaceAndProgressParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
 }
 
@@ -305,7 +305,7 @@ export interface ClientCapabilitiesWindow {
 
 // Checks the workspace, or one document in it, and answers with the findings.
 export interface ValidateParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document to check. Absent checks what the workspace holds.
   file?: string;
@@ -317,7 +317,7 @@ export interface ValidateParams {
 
 // Tells the daemon that a document it holds a reading of has changed, so the next answer about it is computed from the new bytes.
 export interface InvalidateParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document that changed.
   file?: string;
@@ -327,7 +327,7 @@ export interface InvalidateParams {
 
 // Answers with the findings the daemon already holds for a document, without checking it again.
 export interface DiagnosticsParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document to report on. The daemon must already hold a reading of it.
   file?: string;
@@ -335,7 +335,7 @@ export interface DiagnosticsParams {
 
 // Answers with the resolved graph a Release compiles to, without rendering it.
 export interface IrGraphParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The Release to resolve, as a path relative to the workspace root. An absolute path is refused.
   release?: string;
@@ -345,7 +345,7 @@ export interface IrGraphParams {
 
 // Compiles a Release and writes the rendered artifacts into the workspace.
 export interface BuildParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The Release to build, as a path relative to the workspace root. An absolute path is refused.
   release?: string;
@@ -359,7 +359,7 @@ export interface BuildParams {
 
 // Compiles a Release and reports what writing the artifacts would have produced, writing none of them. It declines the dependency-resolution field the writing build takes, because a request that writes nothing cannot fill a lockfile.
 export interface BuildPreviewParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The Release to compile, as a path relative to the workspace root.
   release?: string;
@@ -371,7 +371,7 @@ export interface BuildPreviewParams {
 
 // Answers with what one entity name resolves to and where the document defining it lives.
 export interface EntityDefinitionParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The entity to resolve, by name — or a registry reference, `oci://<host>/<repository>:<tag>` or `@<digest>` in place of `:<tag>`, to read the entity published at that coordinate.
   name?: string;
@@ -381,7 +381,7 @@ export interface EntityDefinitionParams {
 
 // Answers with the entities the workspace holds: every entity its documents declare, and the Features its catalog directories declare.
 export interface CatalogIndexParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The Release to list the entities in the terms of, as a path relative to the workspace root. The Features are then the ones the catalog directories the workspace configuration gives that Release declare, and a document under a catalog directory only other Releases read is left out, so a workspace keeping variants of one entity side by side, one per Release, is listed with the variant that Release builds with. Absent, the listing is the workspace's own. A value that names no Release file is refused.
   release?: string;
@@ -389,7 +389,7 @@ export interface CatalogIndexParams {
 
 // Answers with everything a Release depends on, as resolution reached it.
 export interface ReleaseClosureParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The Release to inspect, as a path relative to the workspace root.
   release?: string;
@@ -397,7 +397,7 @@ export interface ReleaseClosureParams {
 
 // Resolves a Release's dependencies, pinning them in the lockfile and acquiring the external inputs its render consumes. It reaches the configured registries and it writes.
 export interface ResolveDependenciesParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The Release to resolve, as a path relative to the workspace root.
   release?: string;
@@ -413,7 +413,7 @@ export interface ResolveDependenciesParams {
 
 // Records, in the `entity.lock` beside a Recipe or FeatureRecipe, the content pin for every input the entity reads from outside its own document. No Release is named: an input whose identity the entity writes out in full names one artifact for every Release that uses the entity, so nothing a Release supplies is needed to pin it. It reaches the hosts the entity's sources name and it writes beside the entity; the entity document itself is never written.
 export interface PinParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The entity document to pin, as a path relative to the workspace root.
   entity?: string;
@@ -423,7 +423,7 @@ export interface PinParams {
 
 // Reclaims cached content until what remains fits under a size the request names.
 export interface CacheEvictParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The size to reclaim down to, written the way a person writes one — for instance 500MB.
   maxSize?: string;
@@ -431,7 +431,7 @@ export interface CacheEvictParams {
 
 // Searches what the configured registries' local indexes offer. It reads the index already on disk and contacts no registry.
 export interface SearchParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The text to match against a record's name and description.
   query?: string;
@@ -453,7 +453,7 @@ export interface SearchParams {
 
 // Registers a registry and the trust policy resolution applies to what it serves. It writes the machine-wide configuration file unless the request asks otherwise, so every workspace on the machine resolves through the entry.
 export interface RegistryAddParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The registry host to register.
   host?: string;
@@ -479,7 +479,7 @@ export interface RegistryAddParams {
 
 // Removes a registered registry. It writes the machine-wide configuration file unless the request asks otherwise.
 export interface RegistryRemoveParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The registry to remove, by host or by alias.
   registry?: string;
@@ -491,7 +491,7 @@ export interface RegistryRemoveParams {
 
 // Refreshes the local index a search reads, reaching the registry to do it. What it writes is the index under this workspace's own configured cache directory. A registry needing a credential no ambient source carries is refused with the credential named, rather than prompted for.
 export interface RegistryUpdateParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The one registry to refresh. Absent refreshes every configured host.
   registry?: string;
@@ -501,7 +501,7 @@ export interface RegistryUpdateParams {
 
 // Removes a stored registry credential. The store is shared by every project on the machine, and the answer says so.
 export interface LogoutParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The registry whose stored credential to remove.
   registry?: string;
@@ -509,7 +509,7 @@ export interface LogoutParams {
 
 // Publishes an entity to a registry. What it lands is what every consumer of that registry resolves, and a published version cannot be recalled from anyone who already fetched it. Nothing is prompted for: identity resolves from what the request supplied or what the environment already carries.
 export interface PublishEntityParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The entity document to publish, as a path relative to the workspace root.
   entity?: string;
@@ -535,7 +535,7 @@ export interface PublishEntityParams {
 
 // Publishes an arbitrary file to a registry under a name and tag the request gives it.
 export interface PublishArtifactParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The file to publish, as a path relative to the workspace root.
   file?: string;
@@ -553,7 +553,7 @@ export interface PublishArtifactParams {
 
 // Signs what is already published. A signature cannot be recalled from anyone who already fetched it.
 export interface SignArtifactsParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The published references to sign.
   references?: string[];
@@ -569,7 +569,7 @@ export interface SignArtifactsParams {
 
 // Marks a published version as deprecated, so resolution can report or decline it. The marker is itself published and signed.
 export interface DeprecateArtifactParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The published reference to mark.
   reference?: string;
@@ -595,7 +595,7 @@ export interface DeprecateArtifactParams {
 
 // Answers where the thing under the cursor is defined.
 export interface ResolveParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document the cursor is in.
   uri?: string;
@@ -606,7 +606,7 @@ export interface ResolveParams {
 
 // Answers where the thing under the cursor is referred to.
 export interface FindReferencesParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document the cursor is in.
   uri?: string;
@@ -617,7 +617,7 @@ export interface FindReferencesParams {
 
 // Answers which documents implement the thing under the cursor.
 export interface FindImplementationsParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document the cursor is in.
   uri?: string;
@@ -628,7 +628,7 @@ export interface FindImplementationsParams {
 
 // Answers with what to show about the thing under the cursor.
 export interface HoverParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document the cursor is in.
   uri?: string;
@@ -639,7 +639,7 @@ export interface HoverParams {
 
 // Answers with what may be written at the cursor.
 export interface CompletionParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document the cursor is in.
   uri?: string;
@@ -659,7 +659,7 @@ export interface CompletionContext {
 
 // Answers which Features may be attached to an entity, judged against that entity's labels, and, for one connection a graph node's component draws, which may fill each slot the connection's socket declares.
 export interface AttachCandidatesParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The entity to judge candidates against, by name, read from what the workspace documents declare.
   node?: string;
@@ -675,7 +675,7 @@ export interface AttachCandidatesParams {
 
 // Answers which entities a socket on an entity may be wired to.
 export interface ConnectionCandidatesParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The entity whose sockets are being asked about.
   node?: string;
@@ -685,7 +685,7 @@ export interface ConnectionCandidatesParams {
 
 // Answers where in a document a new entry under a named container belongs, leaving composing and applying the entry to the caller that owns the buffer.
 export interface InsertionPointParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document to answer about.
   file?: string;
@@ -695,7 +695,7 @@ export interface InsertionPointParams {
 
 // Answers which document, and where in it, an attachment on a graph node, or on one connection its component draws, belongs.
 export interface AttachmentContainerParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The graph node the attachment is for.
   graphNode?: string;
@@ -707,7 +707,7 @@ export interface AttachmentContainerParams {
 
 // Answers which connection's entry a position in an Aggregate or a Release falls inside: the graph node and the connection, in the terms the candidacy and container requests take them, or why no connection is written there. The entries are the ones an attachment is written in — the entry a component draws a connection with, under the connection's alias, in the document the component was authored in, and every per-edge entry the Release writes — each where the compiled graph records it, so whether a key is a connection is never read from what it is called.
 export interface ConnectionAtPositionParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document the position is in: the Release, or a document the Release's graph records components as authored in — its Aggregate, or the document of a module that Aggregate imports. It is read from what the session holds for it first, and from disk otherwise.
   file?: string;
@@ -728,7 +728,7 @@ export interface ConnectionCoordinate {
 
 // Records a Release as the workspace's default by writing a marker in the `.aggrega` directory: the choice `aggrega/activeRelease` reports reads that marker after the configuration's authoring Release. The marker is written inside the workspace and nowhere else: where the `.aggrega` directory or the marker is a link leading out of the workspace, whether or not the place it leads to exists yet, the write is refused naming the link and nothing is written. The answer is the one `aggrega/activeRelease` gives once the marker is written, so it names a different Release where the configuration's authoring Release outranks the marker.
 export interface SetActiveReleaseParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The Release to record, as a path relative to the workspace root. An absolute path, and one climbing out of the workspace, are refused; so is one leading out of it through a link, unless the workspace configuration names that Release.
   release?: string;
@@ -736,7 +736,7 @@ export interface SetActiveReleaseParams {
 
 // Applies one bounded edit to a document the workspace carries: one entry added under one container, or one scalar set. The composed document is checked against its kind's schema and reaches disk only if that passes, so this cannot write what the authoring schema refuses. A refused edit leaves the file byte-for-byte as it was.
 export interface EditDocumentParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The document to edit.
   file?: string;
@@ -756,7 +756,7 @@ export interface EditDocumentParams {
 
 // Seeds a configuration document. It writes the machine-wide file by default, since a registry and the identities trusted on it are machine-wide tooling. It reaches the named registry to read the trust policy it advertises; a registry advertising nothing is reported as such and the seeding proceeds, on the built-in baseline for the official hub and on no policy for any other registry.
 export interface ConfigInitParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The registry to seed the configuration for.
   registry?: string;
@@ -772,7 +772,7 @@ export interface ConfigInitParams {
 
 // Freezes the resolved configuration into this workspace's own document, so the workspace is self-contained. It always writes that workspace's file and reaches nothing outside it.
 export interface ConfigCaptureParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // Whether to freeze every attached plugin rather than only the ones the workspace itself configured.
   allPlugins?: boolean;
@@ -780,7 +780,7 @@ export interface ConfigCaptureParams {
 
 // Converts a foreign source description into draft authoring documents, and writes beside them `.aggrega-import.json`, the record of what the import wrote — the target it was given, where it was given one, each drafted file, and each key of a drafted Aggregate or Release at every depth — which a later sync reads. A source it could not fully convert is an answer rather than a failure: the drafts it did produce are written and the findings say what it could not convert — except under sync, which writes nothing from a conversion that stopped.
 export interface ImportParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The file or the directory to convert, as an absolute path or one relative to the workspace root; a request without one is refused. It is read where it is, inside the workspace or not, and a directory is read into the files of it the importer's declared file patterns select.
   source?: string;
@@ -808,7 +808,7 @@ export interface ScaffoldEntityParams {
 
 // Checks catalog publishing conventions over one entity, over everything a Release's closure reaches, or over everything under the configured catalog directories. Nothing is written under any mode. Naming neither an entity nor a Release checks the whole catalog: in a workspace whose configuration gives no Release catalog directories of its own, once over the workspace's directories; in a workspace that names Releases under workspace.releases, once for each Release over the directories that Release reads, never over all of them together.
 export interface LintParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The one entity document to check.
   entity?: string;
@@ -820,7 +820,7 @@ export interface LintParams {
 
 // Attaches a plugin to a socket the workspace configures. It reaches a registry to resolve the query to one plugin and to pin a version. The one decision a terminal would obtain — accepting a command-extension plugin's declared capabilities — arrives as a field here, so the client asks whoever is driving it and this surface never waits on a prompt.
 export interface PluginAddParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The socket the plugin attaches to.
   type?: string;
@@ -842,7 +842,7 @@ export interface PluginAddParams {
 
 // Detaches a plugin from a socket the workspace configures.
 export interface PluginRemoveParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The socket the plugin is attached to.
   type?: string;
@@ -856,7 +856,7 @@ export interface PluginRemoveParams {
 
 // Aligns a Plugin entity's machine-owned records with the module it points at. It rewrites those records and carries every other byte of the document through unchanged.
 export interface PluginSyncParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The Plugin entity document to align.
   entity?: string;
@@ -866,7 +866,7 @@ export interface PluginSyncParams {
 
 // Generates Plugin catalog documents from a plugin's own declared metadata plus an authored overlay. Regenerating over unchanged inputs produces byte-identical documents.
 export interface PluginGenCatalogParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // Whether to read the metadata from the plugins the binary already carries.
   fromEmbedded?: boolean;
@@ -882,7 +882,7 @@ export interface PluginGenCatalogParams {
 
 // Expands a code a finding carried into what the compiler declares about that condition and the published entries that teach the authoring fix. It acquires the published documentation when the workspace has no copy; one it cannot acquire still answers what the binary declares, and says why the prose is missing.
 export interface ExplainErrorParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The condition to expand, named by either the code a finding carried or its short code.
   code?: string;
@@ -898,7 +898,7 @@ export interface GetSchemaParams {
 
 // Writes the assistant skill built into the binary into the skill folder of each named assistant. Without global it writes each assistant's project folder inside the workspace the request names, and every path it would write there is held to that workspace; with global it writes each assistant's per-user folder under the home directory. Every target is checked before anything is written, so a refusal leaves every folder as it was.
 export interface SkillsInstallParams {
-  workspaceRoot?: WorkspaceRootSubject;
+  workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
   // The assistants to install the skill for, by the identifiers the listing reports. A request naming none is refused, and so is an identifier no skill folder is known for, by name. An identifier given twice is installed once.
   agents?: string[];
@@ -2649,7 +2649,7 @@ export function decodeLocation(data: string): Location {
 
 export function encodeWorkspaceAndProgressParams(v: WorkspaceAndProgressParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   return `{${parts.join(",")}}`;
 }
@@ -2703,7 +2703,7 @@ export function decodeClientCapabilitiesWindow(data: string): ClientCapabilities
 
 export function encodeValidateParams(v: ValidateParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.file !== undefined && v.file !== "") parts.push(`${jstr("file")}:${jstr(v.file)}`);
   if (v.content !== undefined && v.content !== "") parts.push(`${jstr("content")}:${jstr(v.content)}`);
@@ -2717,7 +2717,7 @@ export function decodeValidateParams(data: string): ValidateParams {
 
 export function encodeInvalidateParams(v: InvalidateParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.file !== undefined && v.file !== "") parts.push(`${jstr("file")}:${jstr(v.file)}`);
   if (v.granularity !== undefined && v.granularity !== "") parts.push(`${jstr("granularity")}:${jstr(v.granularity)}`);
@@ -2730,7 +2730,7 @@ export function decodeInvalidateParams(data: string): InvalidateParams {
 
 export function encodeDiagnosticsParams(v: DiagnosticsParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.file !== undefined && v.file !== "") parts.push(`${jstr("file")}:${jstr(v.file)}`);
   return `{${parts.join(",")}}`;
@@ -2742,7 +2742,7 @@ export function decodeDiagnosticsParams(data: string): DiagnosticsParams {
 
 export function encodeIrGraphParams(v: IrGraphParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   if (v.unredacted !== undefined && v.unredacted !== false) parts.push(`${jstr("unredacted")}:${String(v.unredacted)}`);
@@ -2755,7 +2755,7 @@ export function decodeIrGraphParams(data: string): IrGraphParams {
 
 export function encodeBuildParams(v: BuildParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   if (v.outputParent !== undefined && v.outputParent !== "") parts.push(`${jstr("outputParent")}:${jstr(v.outputParent)}`);
@@ -2770,7 +2770,7 @@ export function decodeBuildParams(data: string): BuildParams {
 
 export function encodeBuildPreviewParams(v: BuildPreviewParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   if (v.autoPull !== undefined && v.autoPull !== false) parts.push(`${jstr("autoPull")}:${String(v.autoPull)}`);
@@ -2784,7 +2784,7 @@ export function decodeBuildPreviewParams(data: string): BuildPreviewParams {
 
 export function encodeEntityDefinitionParams(v: EntityDefinitionParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.name !== undefined && v.name !== "") parts.push(`${jstr("name")}:${jstr(v.name)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
@@ -2797,7 +2797,7 @@ export function decodeEntityDefinitionParams(data: string): EntityDefinitionPara
 
 export function encodeCatalogIndexParams(v: CatalogIndexParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
@@ -2809,7 +2809,7 @@ export function decodeCatalogIndexParams(data: string): CatalogIndexParams {
 
 export function encodeReleaseClosureParams(v: ReleaseClosureParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
@@ -2821,7 +2821,7 @@ export function decodeReleaseClosureParams(data: string): ReleaseClosureParams {
 
 export function encodeResolveDependenciesParams(v: ResolveDependenciesParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   if (v.upgrade !== undefined && v.upgrade !== false) parts.push(`${jstr("upgrade")}:${String(v.upgrade)}`);
@@ -2837,7 +2837,7 @@ export function decodeResolveDependenciesParams(data: string): ResolveDependenci
 
 export function encodePinParams(v: PinParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.entity !== undefined && v.entity !== "") parts.push(`${jstr("entity")}:${jstr(v.entity)}`);
   if (v.dryRun !== undefined && v.dryRun !== false) parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
@@ -2850,7 +2850,7 @@ export function decodePinParams(data: string): PinParams {
 
 export function encodeCacheEvictParams(v: CacheEvictParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.maxSize !== undefined && v.maxSize !== "") parts.push(`${jstr("maxSize")}:${jstr(v.maxSize)}`);
   return `{${parts.join(",")}}`;
@@ -2862,7 +2862,7 @@ export function decodeCacheEvictParams(data: string): CacheEvictParams {
 
 export function encodeSearchParams(v: SearchParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.query !== undefined && v.query !== "") parts.push(`${jstr("query")}:${jstr(v.query)}`);
   if (v.kinds !== undefined && v.kinds.length > 0) parts.push(`${jstr("kinds")}:${`[${v.kinds!.map((e0) => jstr(e0)).join(",")}]`}`);
@@ -2881,7 +2881,7 @@ export function decodeSearchParams(data: string): SearchParams {
 
 export function encodeRegistryAddParams(v: RegistryAddParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.host !== undefined && v.host !== "") parts.push(`${jstr("host")}:${jstr(v.host)}`);
   if (v.name !== undefined && v.name !== "") parts.push(`${jstr("name")}:${jstr(v.name)}`);
@@ -2902,7 +2902,7 @@ export function decodeRegistryAddParams(data: string): RegistryAddParams {
 
 export function encodeRegistryRemoveParams(v: RegistryRemoveParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.registry !== undefined && v.registry !== "") parts.push(`${jstr("registry")}:${jstr(v.registry)}`);
   if (v.global !== undefined && v.global !== false) parts.push(`${jstr("global")}:${String(v.global)}`);
@@ -2916,7 +2916,7 @@ export function decodeRegistryRemoveParams(data: string): RegistryRemoveParams {
 
 export function encodeRegistryUpdateParams(v: RegistryUpdateParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.registry !== undefined && v.registry !== "") parts.push(`${jstr("registry")}:${jstr(v.registry)}`);
   if (v.upgrade !== undefined && v.upgrade !== false) parts.push(`${jstr("upgrade")}:${String(v.upgrade)}`);
@@ -2929,7 +2929,7 @@ export function decodeRegistryUpdateParams(data: string): RegistryUpdateParams {
 
 export function encodeLogoutParams(v: LogoutParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.registry !== undefined && v.registry !== "") parts.push(`${jstr("registry")}:${jstr(v.registry)}`);
   return `{${parts.join(",")}}`;
@@ -2941,7 +2941,7 @@ export function decodeLogoutParams(data: string): LogoutParams {
 
 export function encodePublishEntityParams(v: PublishEntityParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.entity !== undefined && v.entity !== "") parts.push(`${jstr("entity")}:${jstr(v.entity)}`);
   if (v.registry !== undefined && v.registry !== "") parts.push(`${jstr("registry")}:${jstr(v.registry)}`);
@@ -2962,7 +2962,7 @@ export function decodePublishEntityParams(data: string): PublishEntityParams {
 
 export function encodePublishArtifactParams(v: PublishArtifactParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.file !== undefined && v.file !== "") parts.push(`${jstr("file")}:${jstr(v.file)}`);
   if (v.name !== undefined && v.name !== "") parts.push(`${jstr("name")}:${jstr(v.name)}`);
@@ -2979,7 +2979,7 @@ export function decodePublishArtifactParams(data: string): PublishArtifactParams
 
 export function encodeSignArtifactsParams(v: SignArtifactsParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.references !== undefined && v.references.length > 0) parts.push(`${jstr("references")}:${`[${v.references!.map((e0) => jstr(e0)).join(",")}]`}`);
   if (v.fulcioUrl !== undefined && v.fulcioUrl !== "") parts.push(`${jstr("fulcioUrl")}:${jstr(v.fulcioUrl)}`);
@@ -2995,7 +2995,7 @@ export function decodeSignArtifactsParams(data: string): SignArtifactsParams {
 
 export function encodeDeprecateArtifactParams(v: DeprecateArtifactParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.reference !== undefined && v.reference !== "") parts.push(`${jstr("reference")}:${jstr(v.reference)}`);
   if (v.severity !== undefined && v.severity !== "") parts.push(`${jstr("severity")}:${jstr(v.severity)}`);
@@ -3016,7 +3016,7 @@ export function decodeDeprecateArtifactParams(data: string): DeprecateArtifactPa
 
 export function encodeResolveParams(v: ResolveParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
@@ -3030,7 +3030,7 @@ export function decodeResolveParams(data: string): ResolveParams {
 
 export function encodeFindReferencesParams(v: FindReferencesParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
@@ -3044,7 +3044,7 @@ export function decodeFindReferencesParams(data: string): FindReferencesParams {
 
 export function encodeFindImplementationsParams(v: FindImplementationsParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
@@ -3058,7 +3058,7 @@ export function decodeFindImplementationsParams(data: string): FindImplementatio
 
 export function encodeHoverParams(v: HoverParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
@@ -3072,7 +3072,7 @@ export function decodeHoverParams(data: string): HoverParams {
 
 export function encodeCompletionParams(v: CompletionParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
@@ -3098,7 +3098,7 @@ export function decodeCompletionContext(data: string): CompletionContext {
 
 export function encodeAttachCandidatesParams(v: AttachCandidatesParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.node !== undefined && v.node !== "") parts.push(`${jstr("node")}:${jstr(v.node)}`);
   if (v.graphNode !== undefined && v.graphNode !== "") parts.push(`${jstr("graphNode")}:${jstr(v.graphNode)}`);
@@ -3114,7 +3114,7 @@ export function decodeAttachCandidatesParams(data: string): AttachCandidatesPara
 
 export function encodeConnectionCandidatesParams(v: ConnectionCandidatesParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.node !== undefined && v.node !== "") parts.push(`${jstr("node")}:${jstr(v.node)}`);
   if (v.socket !== undefined && v.socket !== "") parts.push(`${jstr("socket")}:${jstr(v.socket)}`);
@@ -3127,7 +3127,7 @@ export function decodeConnectionCandidatesParams(data: string): ConnectionCandid
 
 export function encodeInsertionPointParams(v: InsertionPointParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.file !== undefined && v.file !== "") parts.push(`${jstr("file")}:${jstr(v.file)}`);
   if (v.container !== undefined && v.container.length > 0) parts.push(`${jstr("container")}:${`[${v.container!.map((e0) => jstr(e0)).join(",")}]`}`);
@@ -3140,7 +3140,7 @@ export function decodeInsertionPointParams(data: string): InsertionPointParams {
 
 export function encodeAttachmentContainerParams(v: AttachmentContainerParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.graphNode !== undefined && v.graphNode !== "") parts.push(`${jstr("graphNode")}:${jstr(v.graphNode)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
@@ -3154,7 +3154,7 @@ export function decodeAttachmentContainerParams(data: string): AttachmentContain
 
 export function encodeConnectionAtPositionParams(v: ConnectionAtPositionParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.file !== undefined && v.file !== "") parts.push(`${jstr("file")}:${jstr(v.file)}`);
   if (v.position !== undefined) parts.push(`${jstr("position")}:${encodePosition(v.position)}`);
@@ -3180,7 +3180,7 @@ export function decodeConnectionCoordinate(data: string): ConnectionCoordinate {
 
 export function encodeSetActiveReleaseParams(v: SetActiveReleaseParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
   return `{${parts.join(",")}}`;
@@ -3192,7 +3192,7 @@ export function decodeSetActiveReleaseParams(data: string): SetActiveReleasePara
 
 export function encodeEditDocumentParams(v: EditDocumentParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.file !== undefined && v.file !== "") parts.push(`${jstr("file")}:${jstr(v.file)}`);
   if (v.edit !== undefined && v.edit !== "") parts.push(`${jstr("edit")}:${jstr(v.edit)}`);
@@ -3210,7 +3210,7 @@ export function decodeEditDocumentParams(data: string): EditDocumentParams {
 
 export function encodeConfigInitParams(v: ConfigInitParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.registry !== undefined && v.registry !== "") parts.push(`${jstr("registry")}:${jstr(v.registry)}`);
   if (v.force !== undefined && v.force !== false) parts.push(`${jstr("force")}:${String(v.force)}`);
@@ -3226,7 +3226,7 @@ export function decodeConfigInitParams(data: string): ConfigInitParams {
 
 export function encodeConfigCaptureParams(v: ConfigCaptureParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.allPlugins !== undefined && v.allPlugins !== false) parts.push(`${jstr("allPlugins")}:${String(v.allPlugins)}`);
   return `{${parts.join(",")}}`;
@@ -3238,7 +3238,7 @@ export function decodeConfigCaptureParams(data: string): ConfigCaptureParams {
 
 export function encodeImportParams(v: ImportParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.source !== undefined && v.source !== "") parts.push(`${jstr("source")}:${jstr(v.source)}`);
   if (v.outputDir !== undefined && v.outputDir !== "") parts.push(`${jstr("outputDir")}:${jstr(v.outputDir)}`);
@@ -3268,7 +3268,7 @@ export function decodeScaffoldEntityParams(data: string): ScaffoldEntityParams {
 
 export function encodeLintParams(v: LintParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.entity !== undefined && v.entity !== "") parts.push(`${jstr("entity")}:${jstr(v.entity)}`);
   if (v.release !== undefined && v.release !== "") parts.push(`${jstr("release")}:${jstr(v.release)}`);
@@ -3282,7 +3282,7 @@ export function decodeLintParams(data: string): LintParams {
 
 export function encodePluginAddParams(v: PluginAddParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.type !== undefined && v.type !== "") parts.push(`${jstr("type")}:${jstr(v.type)}`);
   if (v.query !== undefined && v.query !== "") parts.push(`${jstr("query")}:${jstr(v.query)}`);
@@ -3301,7 +3301,7 @@ export function decodePluginAddParams(data: string): PluginAddParams {
 
 export function encodePluginRemoveParams(v: PluginRemoveParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.type !== undefined && v.type !== "") parts.push(`${jstr("type")}:${jstr(v.type)}`);
   if (v.query !== undefined && v.query !== "") parts.push(`${jstr("query")}:${jstr(v.query)}`);
@@ -3316,7 +3316,7 @@ export function decodePluginRemoveParams(data: string): PluginRemoveParams {
 
 export function encodePluginSyncParams(v: PluginSyncParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.entity !== undefined && v.entity !== "") parts.push(`${jstr("entity")}:${jstr(v.entity)}`);
   if (v.plugin !== undefined && v.plugin !== "") parts.push(`${jstr("plugin")}:${jstr(v.plugin)}`);
@@ -3329,7 +3329,7 @@ export function decodePluginSyncParams(data: string): PluginSyncParams {
 
 export function encodePluginGenCatalogParams(v: PluginGenCatalogParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.fromEmbedded !== undefined && v.fromEmbedded !== false) parts.push(`${jstr("fromEmbedded")}:${String(v.fromEmbedded)}`);
   if (v.plugin !== undefined && v.plugin !== "") parts.push(`${jstr("plugin")}:${jstr(v.plugin)}`);
@@ -3345,7 +3345,7 @@ export function decodePluginGenCatalogParams(data: string): PluginGenCatalogPara
 
 export function encodeExplainErrorParams(v: ExplainErrorParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.code !== undefined && v.code !== "") parts.push(`${jstr("code")}:${jstr(v.code)}`);
   return `{${parts.join(",")}}`;
@@ -3369,7 +3369,7 @@ export function decodeGetSchemaParams(data: string): GetSchemaParams {
 
 export function encodeSkillsInstallParams(v: SkillsInstallParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
+  parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootSubject(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.agents !== undefined && v.agents.length > 0) parts.push(`${jstr("agents")}:${`[${v.agents!.map((e0) => jstr(e0)).join(",")}]`}`);
   if (v.global !== undefined && v.global !== false) parts.push(`${jstr("global")}:${String(v.global)}`);
