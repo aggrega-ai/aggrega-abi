@@ -321,6 +321,17 @@ func TestSocketParity_RenderNodeInputOmitsSensitive(t *testing.T) {
 	roundTripBothGolden[abi.RenderNodeInput](t, "RenderNodeInputOmitsSensitive")
 }
 
+// TestSocketParity_RenderNodeInputOmitsSubchart pins an omit entry's subchart. The
+// subchart is omitted when empty, so every other vector carrying omit entries has the
+// same bytes whether the codec handles it or drops it; this one does not. The entry
+// naming a subchart comes first and also names a namespace, the one naming none
+// after it, so a codec that dropped the subchart, ordered it wrongly beside the
+// namespace, or sorted the list fails the byte-compare.
+func TestSocketParity_RenderNodeInputOmitsSubchart(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.RenderNodeInput](t, "RenderNodeInputOmitsSubchart")
+}
+
 // TestSocketParity_RenderNodeOutputOmitted pins a render output whose per-entry
 // counts are POPULATED, for the same reason as the input above. The counts are a
 // non-zero one followed by a zero: a codec that dropped a zero count, or sorted

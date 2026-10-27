@@ -215,6 +215,11 @@ cbor_vector!(render_node_output_omitted, aggrega_abi::RenderNodeOutput, "RenderN
 // vector carrying omit entries has the same bytes whether the codec handles it or
 // drops it.
 cbor_vector!(render_node_input_omits_sensitive, aggrega_abi::RenderNodeInput, "RenderNodeInputOmitsSensitive");
+// A fourth vector for RenderNodeInput: its first omit entry names the subchart its
+// unit came from and its second does not. The subchart is elided when empty, so
+// every other vector carrying omit entries has the same bytes whether the codec
+// handles it or drops it.
+cbor_vector!(render_node_input_omits_subchart, aggrega_abi::RenderNodeInput, "RenderNodeInputOmitsSubchart");
 // A second vector for IRNodeProjection, so cbor_vector rather than cbor_case: the
 // trait binding for this type is declared once with the map-order probe below.
 // This vector carries a POPULATED per-key sensitivity marking, which no other

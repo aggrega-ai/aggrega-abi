@@ -31,7 +31,7 @@ pub struct RenderNodeInput {
     /// The pre-evaluated artifact set the host hands the guest to place into the node's output, present when the bound Recipe declares artifacts. The host has already read each entry's source, evaluated it as a Go template against the render context, and computed the build-provenance key sets; the guest decides the output format, the provenance placement, the on-disk path, and the final bytes. Absent when the node declares no artifacts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artifacts_projection: Option<Box<ArtifactsProjection>>,
-    /// The entries naming rendered units the guest leaves out of this node's output, in the order the author declared them. Each entry arrives resolved, its fields plain strings, and an entry that does not apply to this build is not carried. What an entry's kind, name and namespace select is this provider's own documented contract, not this socket's: the guest matches every entry against what it rendered in its own format's terms, leaves each unit an entry matches out of everything it returns — its files, the names it declares in derived_keys and the facts it reports in render_facts — and reports in the output's omitted how many units each entry matched. The entries accompany a source listing and no other input: a render of a synthesized workload or of an artifact set never carries them. Absent when there are no entries, and a guest handed none renders exactly as it would if the field did not exist.
+    /// The entries naming rendered units the guest leaves out of this node's output, in the order the author declared them. Each entry arrives resolved, its fields plain strings, and an entry that does not apply to this build is not carried. What an entry's kind, name, namespace and subchart select is this provider's own documented contract, not this socket's: the guest matches every entry against what it rendered in its own format's terms, leaves each unit an entry matches out of everything it returns — its files, the names it declares in derived_keys and the facts it reports in render_facts — and reports in the output's omitted how many units each entry matched. The entries accompany a source listing and no other input: a render of a synthesized workload or of an artifact set never carries them. Absent when there are no entries, and a guest handed none renders exactly as it would if the field did not exist.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub omits: Vec<OmitEntry>,
 }
@@ -175,7 +175,7 @@ pub struct RenderFact {
     pub value: Box<RawValue>,
 }
 
-/// One entry naming rendered units a Provider guest leaves out of a node's output, its fields already resolved to plain strings and marked where any of them was produced from a value declared sensitive. The socket attaches no meaning to them: each provider documents what kind, name and namespace select in its own format, and matches them itself.
+/// One entry naming rendered units a Provider guest leaves out of a node's output, its fields already resolved to plain strings and marked where any of them was produced from a value declared sensitive. The socket attaches no meaning to them: each provider documents what kind, name, namespace and subchart select in its own format, and matches them itself.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OmitEntry {
     /// The kind of rendered unit the entry names, in the provider's own vocabulary.
@@ -185,7 +185,10 @@ pub struct OmitEntry {
     /// The namespace the named unit sits in, for a provider whose format places units in one. Absent when the author wrote none; what an entry with no namespace matches is the provider's own contract.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub namespace: String,
-    /// True when the template that produced any of the entry's kind, name or namespace reads a value an author declared sensitive, or a value traced to one. It is read from each field's template against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the resolved strings. The mark covers the whole entry rather than naming the field, so a guest treats a marked entry as it treats every other marked value on its input: it still matches and counts the entry by its fields, which is what the entry is for, and keeps every field of it out of any text a person reads — a refusal, a warning or a log line. Absent when no field's template reads such a value; absence never states that no field is sensitive.
+    /// The nested source the named unit came from, for a provider whose source is assembled from nested sources, as a chart is from its subcharts. Absent when the author wrote none; what an entry with no subchart matches, and what a provider whose source has no nested sources does with an entry naming one, is the provider's own contract.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub subchart: String,
+    /// True when the template that produced any of the entry's kind, name, namespace or subchart reads a value an author declared sensitive, or a value traced to one. It is read from each field's template against the declarations — a reference reaching a declared value, the template handing on the whole of its data, or a template that does not parse all count — and never from the resolved strings. The mark covers the whole entry rather than naming the field, so a guest treats a marked entry as it treats every other marked value on its input: it still matches and counts the entry by its fields, which is what the entry is for, and keeps every field of it out of any text a person reads — a refusal, a warning or a log line. Absent when no field's template reads such a value; absence never states that no field is sensitive.
     #[serde(default, skip_serializing_if = "is_default")]
     pub sensitive: bool,
 }
@@ -1350,6 +1353,7 @@ impl OmitEntry {
 
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
+        if !self.subchart.is_empty() { n += 1; }
         if !self.namespace.is_empty() { n += 1; }
         if self.sensitive { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
@@ -1357,6 +1361,10 @@ impl OmitEntry {
         crate::cbor_gen::write_text(out, &self.kind);
         crate::cbor_gen::write_text(out, "name");
         crate::cbor_gen::write_text(out, &self.name);
+        if !self.subchart.is_empty() {
+            crate::cbor_gen::write_text(out, "subchart");
+            crate::cbor_gen::write_text(out, &self.subchart);
+        }
         if !self.namespace.is_empty() {
             crate::cbor_gen::write_text(out, "namespace");
             crate::cbor_gen::write_text(out, &self.namespace);
@@ -1379,6 +1387,7 @@ impl OmitEntry {
         let mut f_kind: Option<String> = None;
         let mut f_name: Option<String> = None;
         let mut f_namespace: String = String::new();
+        let mut f_subchart: String = String::new();
         let mut f_sensitive: bool = false;
         let n = dec.read_map_header()?;
         for _ in 0..n {
@@ -1387,6 +1396,7 @@ impl OmitEntry {
                 "kind" => f_kind = Some(dec.read_text()?),
                 "name" => f_name = Some(dec.read_text()?),
                 "namespace" => f_namespace = dec.read_text()?,
+                "subchart" => f_subchart = dec.read_text()?,
                 "sensitive" => f_sensitive = dec.read_bool()?,
                 _ => dec.skip()?,
             }
@@ -1395,6 +1405,7 @@ impl OmitEntry {
             kind: f_kind.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field kind".to_string()))?,
             name: f_name.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field name".to_string()))?,
             namespace: f_namespace,
+            subchart: f_subchart,
             sensitive: f_sensitive,
         })
     }

@@ -130,6 +130,10 @@ const vectors: Array<[string, string]> = [
   // whose second does not. The mark is omitted when false, so this is the vector
   // where dropping a true mark, or writing a false one, moves the bytes.
   ["RenderNodeInputOmitsSensitive", "RenderNodeInput"],
+  // A source render input whose first omit entry names the subchart its unit came
+  // from and whose second does not. The subchart is omitted when empty, so this is
+  // the vector where dropping it moves the bytes.
+  ["RenderNodeInputOmitsSubchart", "RenderNodeInput"],
   ["IRNodeProjectionSensitiveRenderedKeys", "IRNodeProjection"],
   // A node projection whose values are a values mapping's output and say so. The
   // mark is omitted when false, so this is the vector where dropping a true mark
