@@ -565,6 +565,8 @@ export interface SignArtifactsParams {
   timestampUrl?: string;
   // The identity token to sign with, supplied by the caller rather than obtained at a terminal.
   identityToken?: string;
+  // How many references are signed at once. Absent signs one after another. Each reference is still signed exactly as it would be alone — when keyless, with its own certificate and its own transparency-log entry — and the answer keeps the order the references were given.
+  jobs?: number;
 }
 
 // Marks a published version as deprecated, so resolution can report or decline it. The marker is itself published and signed.
@@ -2986,6 +2988,7 @@ export function encodeSignArtifactsParams(v: SignArtifactsParams): string {
   if (v.rekorUrl !== undefined && v.rekorUrl !== "") parts.push(`${jstr("rekorUrl")}:${jstr(v.rekorUrl)}`);
   if (v.timestampUrl !== undefined && v.timestampUrl !== "") parts.push(`${jstr("timestampUrl")}:${jstr(v.timestampUrl)}`);
   if (v.identityToken !== undefined && v.identityToken !== "") parts.push(`${jstr("identityToken")}:${jstr(v.identityToken)}`);
+  if (v.jobs !== undefined && v.jobs !== 0) parts.push(`${jstr("jobs")}:${String(v.jobs)}`);
   return `{${parts.join(",")}}`;
 }
 
