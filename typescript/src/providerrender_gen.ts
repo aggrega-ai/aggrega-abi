@@ -266,8 +266,6 @@ export interface ArtifactProjectionEntry {
 
 // The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs with their merged annotations and deployment waves, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
 export interface AssembleBoundaryInput {
-  // Not populated by the host: it is absent from every assembly input. A dispatch group can merge contributors from several boundaries, so there is no single boundary to carry; a guest reads each contributor's placement from its rendered_nodes entry, its annotations and sync_wave.
-  boundary?: unknown;
   // The per-node render outputs that fed this dispatch group, in node order.
   rendered_nodes: RenderedNode[];
   // The render-time context, carried as the bytes of its JSON document. On this export the host sets only yaml_indent, the render-wide indentation width the assembled files are serialized at; the context's other members carry nothing here, because an assembly merges contributors whose annotations and boundaries differ, and each contributor's annotations arrive on its rendered_nodes entry instead.
@@ -845,7 +843,6 @@ export function decodeArtifactProjectionEntry(data: string): ArtifactProjectionE
 
 export function encodeAssembleBoundaryInput(v: AssembleBoundaryInput): string {
   const parts: string[] = [];
-  if (v.boundary !== undefined && v.boundary !== null) parts.push(`${jstr("boundary")}:${encodeOpaque(v.boundary)}`);
   parts.push(`${jstr("rendered_nodes")}:${`[${v.rendered_nodes!.map((e0) => encodeRenderedNode(e0)).join(",")}]`}`);
   parts.push(`${jstr("context")}:${encodeOpaque(v.context)}`);
   parts.push(`${jstr("boundary_path")}:${jstr(v.boundary_path)}`);
@@ -860,7 +857,6 @@ export function decodeAssembleBoundaryInput(data: string): AssembleBoundaryInput
   const o: any = {};
   readJSONMembers(data, (k, raw) => {
     switch (k) {
-      case "boundary": o["boundary"] = JSON.parse(raw); break;
       case "rendered_nodes": o["rendered_nodes"] = readJSONArray(raw, (r0) => decodeRenderedNode(r0)); break;
       case "context": o["context"] = JSON.parse(raw); break;
       case "boundary_path": o["boundary_path"] = JSON.parse(raw); break;
@@ -2319,7 +2315,6 @@ export function encodeCBORAssembleBoundaryInput(v: AssembleBoundaryInput): Uint8
 export function appendCBORAssembleBoundaryInput(out: number[], v: AssembleBoundaryInput): void {
   let n = 3;
   if (v.edges !== undefined && v.edges.length > 0) n++;
-  if (v.boundary !== undefined && v.boundary !== null) n++;
   if (v.chart_name !== undefined && v.chart_name !== "") n++;
   if (v.sub_charts !== undefined && v.sub_charts.length > 0) n++;
   if (v.aggregate_name !== undefined && v.aggregate_name !== "") n++;
@@ -2336,10 +2331,6 @@ export function appendCBORAssembleBoundaryInput(out: number[], v: AssembleBounda
   }
   writeText(out, "context");
   writeBytes(out, utf8Encode(JSON.stringify(v.context)));
-  if (v.boundary !== undefined && v.boundary !== null) {
-    writeText(out, "boundary");
-    writeBytes(out, utf8Encode(JSON.stringify(v.boundary)));
-  }
   if (v.chart_name !== undefined && v.chart_name !== "") {
     writeText(out, "chart_name");
     writeText(out, v.chart_name);
@@ -2381,7 +2372,6 @@ export function decodeCBORAssembleBoundaryInputFrom(dec: CborDec): AssembleBound
   for (let i = 0; i < n; i++) {
     const k = dec.readText();
     switch (k) {
-      case "boundary": o["boundary"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "rendered_nodes": o["rendered_nodes"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORRenderedNodeFrom(dec)); } return a; })(); break;
       case "context": o["context"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "boundary_path": o["boundary_path"] = dec.readText(); break;

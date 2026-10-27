@@ -331,9 +331,6 @@ pub struct ArtifactProjectionEntry {
 /// The payload a Provider guest receives on its assemble_boundary export — the export that merges the per-node render outputs at one dispatch group into a single assembled artifact (an umbrella chart, a merged compose file). It carries the per-node render outputs with their merged annotations and deployment waves, the dispatch-group output path the assembled artifact lands at, the graph's uses edges for per-service dependency inference, and the render-time context. Not every provider declares the export: providers that emit only flat per-node output omit it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssembleBoundaryInput {
-    /// Not populated by the host: it is absent from every assembly input. A dispatch group can merge contributors from several boundaries, so there is no single boundary to carry; a guest reads each contributor's placement from its rendered_nodes entry, its annotations and sync_wave.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub boundary: Option<Box<RawValue>>,
     /// The per-node render outputs that fed this dispatch group, in node order.
     pub rendered_nodes: Vec<RenderedNode>,
     /// The render-time context, carried as the bytes of its JSON document. On this export the host sets only yaml_indent, the render-wide indentation width the assembled files are serialized at; the context's other members carry nothing here, because an assembly merges contributors whose annotations and boundaries differ, and each contributor's annotations arrive on its rendered_nodes entry instead.
@@ -2094,7 +2091,6 @@ impl AssembleBoundaryInput {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 3;
         if !self.edges.is_empty() { n += 1; }
-        if self.boundary.is_some() { n += 1; }
         if !self.chart_name.is_empty() { n += 1; }
         if !self.sub_charts.is_empty() { n += 1; }
         if !self.aggregate_name.is_empty() { n += 1; }
@@ -2111,10 +2107,6 @@ impl AssembleBoundaryInput {
         }
         crate::cbor_gen::write_text(out, "context");
         crate::cbor_gen::write_bytes(out, self.context.get().as_bytes());
-        if let Some(ref x) = self.boundary {
-            crate::cbor_gen::write_text(out, "boundary");
-            crate::cbor_gen::write_bytes(out, x.get().as_bytes());
-        }
         if !self.chart_name.is_empty() {
             crate::cbor_gen::write_text(out, "chart_name");
             crate::cbor_gen::write_text(out, &self.chart_name);
@@ -2154,7 +2146,6 @@ impl AssembleBoundaryInput {
     }
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
-        let mut f_boundary: Option<Box<RawValue>> = None;
         let mut f_rendered_nodes: Option<Vec<RenderedNode>> = None;
         let mut f_context: Option<Box<RawValue>> = None;
         let mut f_boundary_path: Option<String> = None;
@@ -2166,7 +2157,6 @@ impl AssembleBoundaryInput {
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
-                "boundary" => f_boundary = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "rendered_nodes" => f_rendered_nodes = Some({ let sn = dec.read_array_header()?; let mut sv: Vec<RenderedNode> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(RenderedNode::decode_cbor_from(dec)?); } sv }),
                 "context" => f_context = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "boundary_path" => f_boundary_path = Some(dec.read_text()?),
@@ -2178,7 +2168,6 @@ impl AssembleBoundaryInput {
             }
         }
         Ok(Self {
-            boundary: f_boundary,
             rendered_nodes: f_rendered_nodes.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field rendered_nodes".to_string()))?,
             context: f_context.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field context".to_string()))?,
             boundary_path: f_boundary_path.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field boundary_path".to_string()))?,
