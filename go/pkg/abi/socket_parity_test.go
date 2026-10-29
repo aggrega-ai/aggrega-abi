@@ -486,9 +486,7 @@ func TestSocketParity_LinkResolveOutput(t *testing.T) {
 // shape of one export's input or reply carrying its members: validate_node_input's
 // diagnostics, carve's and reassemble's file bytes and units — a structured unit
 // whose tree is an opaque document and an opaque unit carrying none — name_bound's
-// proposal and verdicts, rendered_name's identities and answer, and
-// boundary_env_overrides' edges, its author-ordered infra and the per-consumer
-// overrides it returns.
+// proposal and verdicts, and rendered_name's identities and answer.
 
 func TestSocketParity_ValidateNodeOutput(t *testing.T) {
 	t.Parallel()
@@ -533,16 +531,6 @@ func TestSocketParity_RenderedNameInput(t *testing.T) {
 func TestSocketParity_RenderedNameOutput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.RenderedNameOutput](t, "RenderedNameOutput")
-}
-
-func TestSocketParity_BoundaryEnvOverridesInput(t *testing.T) {
-	t.Parallel()
-	roundTripBothGolden[abi.BoundaryEnvOverridesInput](t, "BoundaryEnvOverridesInput")
-}
-
-func TestSocketParity_BoundaryEnvOverridesOutput(t *testing.T) {
-	t.Parallel()
-	roundTripBothGolden[abi.BoundaryEnvOverridesOutput](t, "BoundaryEnvOverridesOutput")
 }
 
 // The two describe goldens are both the PluginDescriptor wire — the shape every

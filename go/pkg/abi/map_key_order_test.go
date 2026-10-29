@@ -78,8 +78,6 @@ const stabilityRepeats = 24
 var mapBearingPayloads = []any{
 	abi.AnnotationTarget{},
 	abi.ArtifactProjectionEntry{},
-	abi.BoundaryEnvOverridesInput{},
-	abi.BoundaryEnvOverridesOutput{},
 	abi.DocumentSet{},
 	abi.EmittedEntity{},
 	abi.FRPStepInput{},
@@ -372,14 +370,6 @@ func TestSocketParity_MapOrderProbes(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.ArtifactProjectionEntry](t, "MapOrderArtifactProjectionEntry")
 	})
-	t.Run("BoundaryEnvOverridesInput", func(t *testing.T) {
-		t.Parallel()
-		roundTripBothGolden[abi.BoundaryEnvOverridesInput](t, "MapOrderBoundaryEnvOverridesInput")
-	})
-	t.Run("BoundaryEnvOverridesOutput", func(t *testing.T) {
-		t.Parallel()
-		roundTripBothGolden[abi.BoundaryEnvOverridesOutput](t, "MapOrderBoundaryEnvOverridesOutput")
-	})
 	t.Run("DocumentSet", func(t *testing.T) {
 		t.Parallel()
 		roundTripBothGolden[abi.DocumentSet](t, "MapOrderDocumentSet")
@@ -486,8 +476,8 @@ func TestMapBearingCensusIsComplete(t *testing.T) {
 	// declares it, under the kind of its outermost container: a plain map of
 	// order-preserving ones counts as plain.
 	const (
-		wantPlainMapFields   = 12
-		wantOrderedMapFields = 32
+		wantPlainMapFields   = 11
+		wantOrderedMapFields = 31
 	)
 
 	plain, ordered := 0, 0

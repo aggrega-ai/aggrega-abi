@@ -166,9 +166,7 @@ const vectors: Array<[string, string]> = [
   // members populated: validate_node_input's diagnostics, carve's and reassemble's
   // file bytes and units — a structured unit whose tree keeps its keys out of key
   // order, and an opaque unit carrying none — name_bound's proposal and verdicts,
-  // one carrying a bound and one not, rendered_name's identities and answer, and
-  // boundary_env_overrides' edges, its author-ordered infra and its per-consumer
-  // overrides.
+  // one carrying a bound and one not, and rendered_name's identities and answer.
   ["ValidateNodeOutput", "ValidateNodeOutput"],
   ["CarveInput", "CarveInput"],
   ["CarveOutput", "CarveOutput"],
@@ -178,8 +176,6 @@ const vectors: Array<[string, string]> = [
   ["NameBoundOutput", "NameBoundOutput"],
   ["RenderedNameInput", "RenderedNameInput"],
   ["RenderedNameOutput", "RenderedNameOutput"],
-  ["BoundaryEnvOverridesInput", "BoundaryEnvOverridesInput"],
-  ["BoundaryEnvOverridesOutput", "BoundaryEnvOverridesOutput"],
   ["PluginDescriptorCLI", "PluginDescriptor"],
   ["PluginDescriptorProvider", "PluginDescriptor"],
   // A provider contract claiming to honour omit entries: the claim is omitted
@@ -299,8 +295,6 @@ const vectors: Array<[string, string]> = [
   // interface is erased before it runs and the payload types cannot be walked.
   ["MapOrderAnnotationTarget", "AnnotationTarget"],
   ["MapOrderArtifactProjectionEntry", "ArtifactProjectionEntry"],
-  ["MapOrderBoundaryEnvOverridesInput", "BoundaryEnvOverridesInput"],
-  ["MapOrderBoundaryEnvOverridesOutput", "BoundaryEnvOverridesOutput"],
   ["MapOrderDocumentSet", "DocumentSet"],
   ["MapOrderEmittedEntity", "EmittedEntity"],
   ["MapOrderFRPStepInput", "FRPStepInput"],

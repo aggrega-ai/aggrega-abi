@@ -1,1 +1,0 @@
-{"overrides":{"web":{"API_TOKEN_FILE":"/run/secrets/api-token","API_URL":"http://api:18000"},"worker":{"QUEUE_HOST":"queue"}}}

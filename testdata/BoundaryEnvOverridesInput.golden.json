@@ -1,1 +1,0 @@
-{"internal_uses_edges":[{"source":"web","target":"api","socket":"backend","provides":{"port":"8080","host":"api"}}],"infra":{"listen_port_base":18000,"upstream":{"selector":"host","fallback":"address"}}}

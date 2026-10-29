@@ -274,8 +274,7 @@ cbor_case!(link_resolve_output, aggrega_abi::LinkResolveOutput, "LinkResolveOutp
 // probe below — is cbor_vector; the rest are cbor_case. Each carries its members
 // populated: validate_node_input's diagnostics, carve's and reassemble's file bytes
 // and units, name_bound's proposal and verdicts (one carrying a bound, one not),
-// rendered_name's identities and answer, and boundary_env_overrides' edges, its
-// author-ordered infra and its per-consumer overrides.
+// and rendered_name's identities and answer.
 cbor_vector!(validate_node_output, aggrega_abi::ValidateNodeOutput, "ValidateNodeOutput");
 cbor_case!(carve_input, aggrega_abi::CarveInput, "CarveInput");
 cbor_case!(carve_output, aggrega_abi::CarveOutput, "CarveOutput");
@@ -285,8 +284,6 @@ cbor_case!(name_bound_input, aggrega_abi::NameBoundInput, "NameBoundInput");
 cbor_vector!(name_bound_output, aggrega_abi::NameBoundOutput, "NameBoundOutput");
 cbor_case!(rendered_name_input, aggrega_abi::RenderedNameInput, "RenderedNameInput");
 cbor_vector!(rendered_name_output, aggrega_abi::RenderedNameOutput, "RenderedNameOutput");
-cbor_vector!(boundary_env_overrides_input, aggrega_abi::BoundaryEnvOverridesInput, "BoundaryEnvOverridesInput");
-cbor_vector!(boundary_env_overrides_output, aggrega_abi::BoundaryEnvOverridesOutput, "BoundaryEnvOverridesOutput");
 cbor_case!(parse_input, aggrega_abi::ParseInput, "ParseInput");
 // A second vector for ParseInput, so cbor_vector rather than cbor_case: the trait
 // binding for this type is declared by the vector above. Its source bytes are not
@@ -409,8 +406,6 @@ cbor_case!(annotation_transform_output, aggrega_abi::AnnotationTransformOutput, 
 // payload, as the ir-verdict role hands it to a guest.
 cbor_case!(map_order_annotation_target, aggrega_abi::AnnotationTarget, "MapOrderAnnotationTarget");
 cbor_case!(map_order_artifact_projection_entry, aggrega_abi::ArtifactProjectionEntry, "MapOrderArtifactProjectionEntry");
-cbor_case!(map_order_boundary_env_overrides_input, aggrega_abi::BoundaryEnvOverridesInput, "MapOrderBoundaryEnvOverridesInput");
-cbor_case!(map_order_boundary_env_overrides_output, aggrega_abi::BoundaryEnvOverridesOutput, "MapOrderBoundaryEnvOverridesOutput");
 cbor_case!(map_order_document_set, aggrega_abi::DocumentSet, "MapOrderDocumentSet");
 cbor_case!(map_order_emitted_entity, aggrega_abi::EmittedEntity, "MapOrderEmittedEntity");
 cbor_vector!(map_order_frp_step_input, aggrega_abi::FRPStepInput, "MapOrderFRPStepInput");

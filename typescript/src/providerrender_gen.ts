@@ -373,20 +373,6 @@ export interface ReassembleOutput {
   body: string;
 }
 
-// The payload a Provider guest receives on its optional boundary_env_overrides export: a boundary's internal uses edges and the driving feature's resolved infra, from which the guest computes per-consumer environment overrides for the boundary-to-consumer env channel. A guest whose provider drives that channel (a compose guest bridging cross-network endpoints) advertises the export; a provider that drives no such channel omits it, and the host applies no overrides for it. The edges and infra are opaque at this schema layer — the guest reads their shapes through the template-context wire contract; the schema does not interpret them.
-export interface BoundaryEnvOverridesInput {
-  // The boundary's internal uses edges — the directed edges whose endpoints both live inside the boundary's subtree, each enriched with the producer's provides and the consumer's inject mapping. The guest reads them to decide which consumers need an env override and what value to write. Opaque at this schema layer; the guest reads the enriched-edge shape through the template-context wire contract.
-  internal_uses_edges?: unknown[];
-  // The driving feature's resolved infra, an author-ordered key set the guest reads for the channel's tunables (for a compose bridge, the listen-port base and the upstream host provides-field selector). Preserves author order so the payload is byte-identical across runs of identical input.
-  infra?: Map<string, unknown>;
-}
-
-// The payload a Provider guest returns from its boundary_env_overrides export: the per-consumer environment overrides the host applies to each named consumer's injected env after the per-node render pass. The values are opaque strings the host carries without interpretation; a consumer absent from the map is left untouched.
-export interface BoundaryEnvOverridesOutput {
-  // The per-consumer environment overrides, keyed by consumer node id to a map of environment-variable name to override value. An empty or absent map means the guest computed no overrides.
-  overrides?: Record<string, Record<string, string>>;
-}
-
 // The payload a Provider guest receives on its optional name_bound export: one name the host proposes to use as a node's component identity, for the guest to judge against every name it would derive from that identity for its target. The guest answers with a constraint rather than with a name of its own — a derived name travelling back would put the host in the business of composing names for a target it knows nothing about, which is exactly what asking the question removes. A provider whose target bounds or restricts the names it accepts advertises the export; a provider whose target accepts any name omits it and is never asked, and its rendering is unchanged.
 export interface NameBoundInput {
   // The name the host proposes as the node's component identity. The guest derives from it, in memory, every name it derives from a component identity and reports whether each one is a name its target accepts. A verdict speaks about the PROPOSAL rather than about the node: the host asks one question wherever it composes an identity, and it does not say which of that node's names this identity will end up being the basis for, so a guest answers as though it were the basis for all of them. That is the conservative direction, because the host only ever shortens on the answer and never lengthens — a name the node will in fact derive from some other carry is therefore judged too strictly rather than too loosely.
@@ -992,34 +978,6 @@ export function encodeReassembleOutput(v: ReassembleOutput): string {
 
 export function decodeReassembleOutput(data: string): ReassembleOutput {
   return JSON.parse(data) as ReassembleOutput;
-}
-
-export function encodeBoundaryEnvOverridesInput(v: BoundaryEnvOverridesInput): string {
-  const parts: string[] = [];
-  if (v.internal_uses_edges !== undefined && v.internal_uses_edges.length > 0) parts.push(`${jstr("internal_uses_edges")}:${`[${v.internal_uses_edges!.map((e0) => encodeOpaque(e0)).join(",")}]`}`);
-  if (v.infra !== undefined && v.infra.size > 0) parts.push(`${jstr("infra")}:${writeOrderedObject(v.infra!, (v0) => encodeOpaque(v0))}`);
-  return `{${parts.join(",")}}`;
-}
-
-export function decodeBoundaryEnvOverridesInput(data: string): BoundaryEnvOverridesInput {
-  const o: any = {};
-  readJSONMembers(data, (k, raw) => {
-    switch (k) {
-      case "internal_uses_edges": o["internal_uses_edges"] = JSON.parse(raw); break;
-      case "infra": o["infra"] = readOrderedObject(raw, (r0) => JSON.parse(r0)); break;
-    }
-  });
-  return o as BoundaryEnvOverridesInput;
-}
-
-export function encodeBoundaryEnvOverridesOutput(v: BoundaryEnvOverridesOutput): string {
-  const parts: string[] = [];
-  if (v.overrides !== undefined && Object.keys(v.overrides).length > 0) parts.push(`${jstr("overrides")}:${`{${Object.keys(v.overrides!).sort().map((k0) => `${jstr(k0)}:${`{${Object.keys(v.overrides![k0]!).sort().map((k1) => `${jstr(k1)}:${jstr(v.overrides![k0]![k1])}`).join(",")}}`}`).join(",")}}`}`);
-  return `{${parts.join(",")}}`;
-}
-
-export function decodeBoundaryEnvOverridesOutput(data: string): BoundaryEnvOverridesOutput {
-  return JSON.parse(data) as BoundaryEnvOverridesOutput;
 }
 
 export function encodeNameBoundInput(v: NameBoundInput): string {
@@ -2802,110 +2760,6 @@ export function decodeCBORReassembleOutputFrom(dec: CborDec): ReassembleOutput {
     }
   }
   return o as ReassembleOutput;
-}
-
-export function encodeCBORBoundaryEnvOverridesInput(v: BoundaryEnvOverridesInput): Uint8Array {
-  const out: number[] = [];
-  appendCBORBoundaryEnvOverridesInput(out, v);
-  return new Uint8Array(out);
-}
-
-export function appendCBORBoundaryEnvOverridesInput(out: number[], v: BoundaryEnvOverridesInput): void {
-  let n = 0;
-  if (v.infra !== undefined && v.infra.size > 0) n++;
-  if (v.internal_uses_edges !== undefined && v.internal_uses_edges.length > 0) n++;
-  writeHead(out, 5, n);
-  if (v.infra !== undefined && v.infra.size > 0) {
-    writeText(out, "infra");
-    {
-      const m0 = v.infra;
-      writeHead(out, 4, m0.size);
-      for (const [kk0, vv0] of m0) {
-        writeHead(out, 4, 2);
-        writeText(out, kk0);
-        writeBytes(out, utf8Encode(JSON.stringify(vv0)));
-      }
-    }
-  }
-  if (v.internal_uses_edges !== undefined && v.internal_uses_edges.length > 0) {
-    writeText(out, "internal_uses_edges");
-    {
-      const a0 = v.internal_uses_edges;
-      writeHead(out, 4, a0.length);
-      for (const ee0 of a0) {
-        writeBytes(out, utf8Encode(JSON.stringify(ee0)));
-      }
-    }
-  }
-}
-
-export function decodeCBORBoundaryEnvOverridesInput(data: Uint8Array): BoundaryEnvOverridesInput {
-  const dec = new CborDec(data);
-  return decodeCBORBoundaryEnvOverridesInputFrom(dec);
-}
-
-export function decodeCBORBoundaryEnvOverridesInputFrom(dec: CborDec): BoundaryEnvOverridesInput {
-  const o: any = {};
-  const n = dec.readMapHeader();
-  for (let i = 0; i < n; i++) {
-    const k = dec.readText();
-    switch (k) {
-      case "internal_uses_edges": o["internal_uses_edges"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(JSON.parse(utf8Decode(dec.readBytes()))); } return a; })(); break;
-      case "infra": o["infra"] = (() => { const m = new Map<string, any>(); const mn = dec.readArrayHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readEntryKey(); if (m.has(mk)) throw duplicateKeyError(mk); m.set(mk, JSON.parse(utf8Decode(dec.readBytes()))); } return m; })(); break;
-      default: dec.skip();
-    }
-  }
-  return o as BoundaryEnvOverridesInput;
-}
-
-export function encodeCBORBoundaryEnvOverridesOutput(v: BoundaryEnvOverridesOutput): Uint8Array {
-  const out: number[] = [];
-  appendCBORBoundaryEnvOverridesOutput(out, v);
-  return new Uint8Array(out);
-}
-
-export function appendCBORBoundaryEnvOverridesOutput(out: number[], v: BoundaryEnvOverridesOutput): void {
-  let n = 0;
-  if (v.overrides !== undefined && Object.keys(v.overrides).length > 0) n++;
-  writeHead(out, 5, n);
-  if (v.overrides !== undefined && Object.keys(v.overrides).length > 0) {
-    writeText(out, "overrides");
-    {
-      const m0 = v.overrides;
-      const ks0 = Object.keys(m0); sortKeys(ks0);
-      writeHead(out, 5, ks0.length);
-      for (const kk0 of ks0) {
-        writeText(out, kk0);
-        {
-          const m1 = m0[kk0];
-          const ks1 = Object.keys(m1); sortKeys(ks1);
-          writeHead(out, 5, ks1.length);
-          for (const kk1 of ks1) {
-            writeText(out, kk1);
-            writeText(out, m1[kk1]);
-          }
-        }
-      }
-    }
-  }
-}
-
-export function decodeCBORBoundaryEnvOverridesOutput(data: Uint8Array): BoundaryEnvOverridesOutput {
-  const dec = new CborDec(data);
-  return decodeCBORBoundaryEnvOverridesOutputFrom(dec);
-}
-
-export function decodeCBORBoundaryEnvOverridesOutputFrom(dec: CborDec): BoundaryEnvOverridesOutput {
-  const o: any = {};
-  const n = dec.readMapHeader();
-  for (let i = 0; i < n; i++) {
-    const k = dec.readText();
-    switch (k) {
-      case "overrides": o["overrides"] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = (() => { const m: any = {}; const mn = dec.readMapHeader(); for (let j = 0; j < mn; j++) { const mk = dec.readText(); m[mk] = dec.readText(); } return m; })(); } return m; })(); break;
-      default: dec.skip();
-    }
-  }
-  return o as BoundaryEnvOverridesOutput;
 }
 
 export function encodeCBORNameBoundInput(v: NameBoundInput): Uint8Array {
