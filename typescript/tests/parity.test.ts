@@ -156,6 +156,10 @@ const vectors: Array<[string, string]> = [
   ["IRSpecAttachmentRealization", "IRSpec"],
   ["IRNodeSensitivePayloadLeaves", "IRNode"],
   ["IRBoundaryFeatureSensitivePayloadLeaves", "IRBoundaryFeature"],
+  // A connection's own marking, one coordinate from each pillar, values first: the
+  // field is omitted when empty, so this is the vector where dropping it moves the
+  // bytes.
+  ["IREdgeSensitivePayloadLeaves", "IREdge"],
   ["AssembleBoundaryInput", "AssembleBoundaryInput"],
   ["AssembleBoundaryOutput", "AssembleBoundaryOutput"],
   ["LinkPublishInput", "LinkPublishInput"],

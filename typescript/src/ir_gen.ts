@@ -179,6 +179,8 @@ export interface IREdge {
   infra?: unknown;
   // Agnostic injection routing. Maps local variables to Target provides keys.
   inject?: unknown;
+  // The leaves this edge's values and infra carry that the socket they are written against declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The declaration read is the per-connection contract on the CONSUMING component — the edge's source — under the socket this edge is wired into: its valueSchema governs values and its infraSchema governs infra, which is the same contract both payloads are validated against. The target's declarations play no part: what the target publishes is a different datum from the configuration the consumer writes for the connection. It is the same field, read the same way, as the marking on a node, a different subject from it: a node's marking names the node's own data against its Component's schema, and this one names the connection's configuration against the socket's contract, so neither is recoverable from the other. The payloads read here are the ones this edge carries, so a leaf standing at a value the socket's contract declares as a default is named alongside one an author wrote. A leaf appears where a path the contract declares sensitive covers it: the declaration names that leaf, or names an object containing it. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. A surface that withholds declared-sensitive values from the graph withholds these leaves in this edge's values and infra, and in the consuming node's `uses` entry for the same connection, which carries the values as the author wrote them. An absent key states that this edge names no leaf its socket's contract declares sensitive, which includes the case where the socket declares no contract this reader could read. It does not assert that the configuration is insensitive, and a consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the payloads hold them, the values pillar's before the infra pillar's, which is what keeps the graph byte-identical across runs of identical input. Absent when the edge carries no leaf its socket's contract declares sensitive.
+  sensitive_payload_leaves?: string[];
 }
 
 // Identity of the graph: the Aggregate it was built from.
@@ -400,6 +402,7 @@ export function encodeIREdge(v: IREdge): string {
   if (v.values !== undefined && v.values !== null) parts.push(`${jstr("values")}:${encodeOpaque(v.values)}`);
   if (v.infra !== undefined && v.infra !== null) parts.push(`${jstr("infra")}:${encodeOpaque(v.infra)}`);
   if (v.inject !== undefined && v.inject !== null) parts.push(`${jstr("inject")}:${encodeOpaque(v.inject)}`);
+  if (v.sensitive_payload_leaves !== undefined && v.sensitive_payload_leaves.length > 0) parts.push(`${jstr("sensitive_payload_leaves")}:${`[${v.sensitive_payload_leaves!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -1081,6 +1084,7 @@ export function appendCBORIREdge(out: number[], v: IREdge): void {
   if (v.origin_feature !== undefined && v.origin_feature !== "") n++;
   if (v.origin_release !== undefined && v.origin_release !== false) n++;
   if (v.origin_feature_instance !== undefined && v.origin_feature_instance !== "") n++;
+  if (v.sensitive_payload_leaves !== undefined && v.sensitive_payload_leaves.length > 0) n++;
   writeHead(out, 5, n);
   if (v.alias !== undefined && v.alias !== "") {
     writeText(out, "alias");
@@ -1120,6 +1124,16 @@ export function appendCBORIREdge(out: number[], v: IREdge): void {
     writeText(out, "origin_feature_instance");
     writeText(out, v.origin_feature_instance);
   }
+  if (v.sensitive_payload_leaves !== undefined && v.sensitive_payload_leaves.length > 0) {
+    writeText(out, "sensitive_payload_leaves");
+    {
+      const a0 = v.sensitive_payload_leaves;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
 }
 
 export function decodeCBORIREdge(data: Uint8Array): IREdge {
@@ -1144,6 +1158,7 @@ export function decodeCBORIREdgeFrom(dec: CborDec): IREdge {
       case "values": o["values"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "infra": o["infra"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "inject": o["inject"] = JSON.parse(utf8Decode(dec.readBytes())); break;
+      case "sensitive_payload_leaves": o["sensitive_payload_leaves"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       default: dec.skip();
     }
   }

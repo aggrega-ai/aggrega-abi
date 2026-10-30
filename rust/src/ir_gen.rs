@@ -232,6 +232,9 @@ pub struct IREdge {
     /// Agnostic injection routing. Maps local variables to Target provides keys.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inject: Option<Box<RawValue>>,
+    /// The leaves this edge's values and infra carry that the socket they are written against declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The declaration read is the per-connection contract on the CONSUMING component — the edge's source — under the socket this edge is wired into: its valueSchema governs values and its infraSchema governs infra, which is the same contract both payloads are validated against. The target's declarations play no part: what the target publishes is a different datum from the configuration the consumer writes for the connection. It is the same field, read the same way, as the marking on a node, a different subject from it: a node's marking names the node's own data against its Component's schema, and this one names the connection's configuration against the socket's contract, so neither is recoverable from the other. The payloads read here are the ones this edge carries, so a leaf standing at a value the socket's contract declares as a default is named alongside one an author wrote. A leaf appears where a path the contract declares sensitive covers it: the declaration names that leaf, or names an object containing it. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. A surface that withholds declared-sensitive values from the graph withholds these leaves in this edge's values and infra, and in the consuming node's `uses` entry for the same connection, which carries the values as the author wrote them. An absent key states that this edge names no leaf its socket's contract declares sensitive, which includes the case where the socket declares no contract this reader could read. It does not assert that the configuration is insensitive, and a consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the payloads hold them, the values pillar's before the infra pillar's, which is what keeps the graph byte-identical across runs of identical input. Absent when the edge carries no leaf its socket's contract declares sensitive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sensitive_payload_leaves: Vec<String>,
 }
 
 /// Identity of the graph: the Aggregate it was built from.
@@ -1045,6 +1048,7 @@ impl IREdge {
         if !self.origin_feature.is_empty() { n += 1; }
         if self.origin_release { n += 1; }
         if !self.origin_feature_instance.is_empty() { n += 1; }
+        if !self.sensitive_payload_leaves.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.alias.is_empty() {
             crate::cbor_gen::write_text(out, "alias");
@@ -1084,6 +1088,16 @@ impl IREdge {
             crate::cbor_gen::write_text(out, "origin_feature_instance");
             crate::cbor_gen::write_text(out, &self.origin_feature_instance);
         }
+        if !self.sensitive_payload_leaves.is_empty() {
+            crate::cbor_gen::write_text(out, "sensitive_payload_leaves");
+            {
+                let c = &self.sensitive_payload_leaves;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -1106,6 +1120,7 @@ impl IREdge {
         let mut f_values: Option<Box<RawValue>> = None;
         let mut f_infra: Option<Box<RawValue>> = None;
         let mut f_inject: Option<Box<RawValue>> = None;
+        let mut f_sensitive_payload_leaves: Vec<String> = Vec::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -1121,6 +1136,7 @@ impl IREdge {
                 "values" => f_values = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "infra" => f_infra = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "inject" => f_inject = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
+                "sensitive_payload_leaves" => f_sensitive_payload_leaves = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
                 _ => dec.skip()?,
             }
         }
@@ -1136,6 +1152,7 @@ impl IREdge {
             values: f_values,
             infra: f_infra,
             inject: f_inject,
+            sensitive_payload_leaves: f_sensitive_payload_leaves,
         })
     }
 }

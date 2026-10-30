@@ -263,6 +263,12 @@ cbor_vector!(ir_spec_attachment_realization, aggrega_abi::IRSpec, "IRSpecAttachm
 // cbor_case because no other vector carries that shape on its own.
 cbor_vector!(ir_node_sensitive_payload_leaves, aggrega_abi::IRNode, "IRNodeSensitivePayloadLeaves");
 cbor_case!(ir_boundary_feature_sensitive_payload_leaves, aggrega_abi::IRBoundaryFeature, "IRBoundaryFeatureSensitivePayloadLeaves");
+// The fourth unit: a connection's own values and infra, governed by the contract the
+// consuming component declares on the socket. Its marking is elided when empty, so
+// every other vector carrying an edge has the same bytes whether the codec handles it
+// or drops it; this one carries a coordinate from each pillar, values first.
+// IREdge is cbor_case because no other vector carries that shape on its own.
+cbor_case!(ir_edge_sensitive_payload_leaves, aggrega_abi::IREdge, "IREdgeSensitivePayloadLeaves");
 cbor_case!(assemble_boundary_input, aggrega_abi::AssembleBoundaryInput, "AssembleBoundaryInput");
 cbor_case!(assemble_boundary_output, aggrega_abi::AssembleBoundaryOutput, "AssembleBoundaryOutput");
 cbor_case!(link_publish_input, aggrega_abi::LinkPublishInput, "LinkPublishInput");

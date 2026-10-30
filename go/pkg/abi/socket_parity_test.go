@@ -452,6 +452,17 @@ func TestSocketParity_IRBoundaryFeatureSensitivePayloadLeaves(t *testing.T) {
 	roundTripBothGolden[abi.IRBoundaryFeature](t, "IRBoundaryFeatureSensitivePayloadLeaves")
 }
 
+// TestSocketParity_IREdgeSensitivePayloadLeaves pins the fourth unit: a
+// connection whose own values and infra carry leaves the socket's per-edge
+// contract declares sensitive. The marking is omitted when it names nothing, so
+// every other vector carrying an edge has the same bytes whether a codec handles
+// the field or drops it; this one carries a coordinate from each pillar, values
+// first, so a codec that sorted the sequence would be visible here too.
+func TestSocketParity_IREdgeSensitivePayloadLeaves(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.IREdge](t, "IREdgeSensitivePayloadLeaves")
+}
+
 func TestSocketParity_AssembleBoundaryInput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.AssembleBoundaryInput](t, "AssembleBoundaryInput")

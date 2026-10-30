@@ -170,6 +170,8 @@ type IREdge struct {
 	Infra json.RawMessage `json:"infra,omitempty" yaml:"infra,omitempty" cbor:"infra,omitempty"`
 	// Inject Agnostic injection routing. Maps local variables to Target provides keys.
 	Inject json.RawMessage `json:"inject,omitempty" yaml:"inject,omitempty" cbor:"inject,omitempty"`
+	// SensitivePayloadLeaves The leaves this edge's values and infra carry that the socket they are written against declares sensitive, each as the pillar-prefixed dotted path the datum occupies: values.<path> or infra.<path>. The declaration read is the per-connection contract on the CONSUMING component — the edge's source — under the socket this edge is wired into: its valueSchema governs values and its infraSchema governs infra, which is the same contract both payloads are validated against. The target's declarations play no part: what the target publishes is a different datum from the configuration the consumer writes for the connection. It is the same field, read the same way, as the marking on a node, a different subject from it: a node's marking names the node's own data against its Component's schema, and this one names the connection's configuration against the socket's contract, so neither is recoverable from the other. The payloads read here are the ones this edge carries, so a leaf standing at a value the socket's contract declares as a default is named alongside one an author wrote. A leaf appears where a path the contract declares sensitive covers it: the declaration names that leaf, or names an object containing it. Matching runs segment-wise over the dotted path, with nothing read out of the path's own text and no value inspected, so a declaration at `db` covers `db.password` and does not reach a sibling leaf named `dbPassword`. A surface that withholds declared-sensitive values from the graph withholds these leaves in this edge's values and infra, and in the consuming node's `uses` entry for the same connection, which carries the values as the author wrote them. An absent key states that this edge names no leaf its socket's contract declares sensitive, which includes the case where the socket declares no contract this reader could read. It does not assert that the configuration is insensitive, and a consumer that reads an absent key as permission to display or emit a value in the clear has read it backwards. Leaves arrive in the order the payloads hold them, the values pillar's before the infra pillar's, which is what keeps the graph byte-identical across runs of identical input. Absent when the edge carries no leaf its socket's contract declares sensitive.
+	SensitivePayloadLeaves []string `json:"sensitive_payload_leaves,omitempty" yaml:"sensitive_payload_leaves,omitempty" cbor:"sensitive_payload_leaves,omitempty"`
 }
 
 // IRMetadata Identity of the graph: the Aggregate it was built from.
@@ -1572,6 +1574,22 @@ func (t IREdge) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"inject\":")
 		buf.Write(t.Inject)
 	}
+	if len(t.SensitivePayloadLeaves) != 0 {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"sensitive_payload_leaves\":")
+		buf.WriteByte('[')
+		for i := range t.SensitivePayloadLeaves {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			ev := t.SensitivePayloadLeaves[i]
+			writeJSONString(&buf, ev)
+		}
+		buf.WriteByte(']')
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -1656,6 +1674,23 @@ func (t *IREdge) UnmarshalJSON(data []byte) error {
 			} else {
 				t.Inject = raw
 			}
+		case "sensitive_payload_leaves":
+			t.SensitivePayloadLeaves = nil
+			if err := expectDelim(dec, '['); err != nil {
+				return err
+			}
+			for dec.More() {
+				var elem string
+				if s, err := readString(dec); err != nil {
+					return err
+				} else {
+					elem = s
+				}
+				t.SensitivePayloadLeaves = append(t.SensitivePayloadLeaves, elem)
+			}
+			if err := expectDelim(dec, ']'); err != nil {
+				return err
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -1675,7 +1710,7 @@ func (t *IREdge) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *IREdge) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "source", "target", "socket", "alias", "socket_declaration", "origin_feature", "origin_feature_instance", "origin_release", "values", "infra", "inject"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "source", "target", "socket", "alias", "socket_declaration", "origin_feature", "origin_feature_instance", "origin_release", "values", "infra", "inject", "sensitive_payload_leaves"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -3522,6 +3557,9 @@ func (t IREdge) appendCBOR(dst []byte) ([]byte, error) {
 	if t.OriginFeatureInstance != "" {
 		n++
 	}
+	if len(t.SensitivePayloadLeaves) != 0 {
+		n++
+	}
 	dst = appendCBORHead(dst, 5, uint64(n))
 	if t.Alias != "" {
 		dst = appendCBORTextString(dst, "alias")
@@ -3560,6 +3598,14 @@ func (t IREdge) appendCBOR(dst []byte) ([]byte, error) {
 	if t.OriginFeatureInstance != "" {
 		dst = appendCBORTextString(dst, "origin_feature_instance")
 		dst = appendCBORTextString(dst, t.OriginFeatureInstance)
+	}
+	if len(t.SensitivePayloadLeaves) != 0 {
+		dst = appendCBORTextString(dst, "sensitive_payload_leaves")
+		dst = appendCBORHead(dst, 4, uint64(len(t.SensitivePayloadLeaves)))
+		for i := range t.SensitivePayloadLeaves {
+			ev := t.SensitivePayloadLeaves[i]
+			dst = appendCBORTextString(dst, ev)
+		}
 	}
 	return dst, nil
 }
@@ -3648,6 +3694,24 @@ func (t *IREdge) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.Inject = json.RawMessage(v)
 			}
+		case "sensitive_payload_leaves":
+			{
+				sn, err := dec.readArrayHeader()
+				if err != nil {
+					return err
+				}
+				s := make([]string, 0, sn)
+				for si := 0; si < sn; si++ {
+					var ev string
+					if s, err := dec.readTextString(); err != nil {
+						return err
+					} else {
+						ev = s
+					}
+					s = append(s, ev)
+				}
+				t.SensitivePayloadLeaves = s
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -3664,7 +3728,7 @@ func (t *IREdge) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *IREdge) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "source", "target", "socket", "alias", "socket_declaration", "origin_feature", "origin_feature_instance", "origin_release", "values", "infra", "inject"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "source", "target", "socket", "alias", "socket_declaration", "origin_feature", "origin_feature_instance", "origin_release", "values", "infra", "inject", "sensitive_payload_leaves"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

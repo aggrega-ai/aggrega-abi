@@ -1,0 +1,1 @@
+{"source":"web","target":"db","socket":"databases","alias":"db","socket_declaration":"declared","values":{"probe_token":"placeholder-token"},"infra":{"probe_key":"placeholder-key"},"inject":{"env":{"ADMINER_DEFAULT_SERVER":"host"}},"sensitive_payload_leaves":["values.probe_token","infra.probe_key"]}
