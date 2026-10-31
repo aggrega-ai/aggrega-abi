@@ -569,21 +569,21 @@ export interface SignArtifactsParams {
   jobs?: number;
 }
 
-// Marks a published version as deprecated, so resolution can report or decline it. The marker is itself published and signed.
+// Marks a published version as deprecated, so resolution can report or decline it. The marker is itself published and signed. A request sends either one reference with its content, or a batch file whose entries carry their own — never both, and never content beside the batch file.
 export interface DeprecateArtifactParams {
   workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
-  // The published reference to mark.
+  // The published reference to mark. An alternative to `from`: a request carrying both is refused.
   reference?: string;
-  // How strongly the marker speaks — whether resolution reports the version or declines it.
+  // How strongly the marker speaks — whether resolution reports the version or declines it. Required with `reference`; refused beside `from`, whose batch file carries each marker's own.
   severity?: string;
-  // Why the version is deprecated.
+  // Why the version is deprecated. Required with `reference`; refused beside `from`, whose batch file carries each marker's own.
   reason?: string;
-  // The reference to use instead.
+  // The reference to use instead. Refused beside `from`, whose batch file carries each marker's own.
   replacement?: string;
-  // What a consumer meeting the marker is told.
+  // What a consumer meeting the marker is told. Refused beside `from`, whose batch file carries each marker's own.
   message?: string;
-  // The earliest version the marker covers, for marking a span rather than one version.
+  // A batch file of withdrawal entries, as a path relative to the workspace root, attaching one marker per entry. Each entry carries its own reference, severity and reason, and optionally a replacement and a message. An alternative to `reference`: a request carrying both, or carrying a severity, reason, replacement or message beside it, is refused.
   from?: string;
   // The certificate authority to obtain a signing certificate from.
   fulcioUrl?: string;
