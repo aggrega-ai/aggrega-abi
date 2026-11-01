@@ -898,11 +898,11 @@ export interface GetSchemaParams {
   kind?: string;
 }
 
-// Writes the assistant skill built into the binary into the skill folder of each named assistant. Without global it writes each assistant's project folder inside the workspace the request names, and every path it would write there is held to that workspace; with global it writes each assistant's per-user folder under the home directory. Every target is checked before anything is written, so a refusal leaves every folder as it was.
+// Writes the assistant skill built into the binary into the skill folder of each assistant the request names or, for a global request naming none, each assistant found on this machine. Without global it writes each assistant's project folder inside the workspace the request names, and every path it would write there is held to that workspace; with global it writes each assistant's per-user folder under the home directory. Every target is checked before anything is written, so a refusal leaves every folder as it was.
 export interface SkillsInstallParams {
   workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
-  // The assistants to install the skill for, by the identifiers the listing reports. A request naming none is refused, and so is an identifier no skill folder is known for, by name. An identifier given twice is installed once.
+  // The assistants to install the skill for, by the identifiers the listing reports. A project request naming none is refused. A global request naming none installs the skill for the assistants found on this machine, each one whose configuration folder is in the home directory or whose command is on the PATH, and is refused with nothing written where none is found. An identifier no skill folder is known for is refused, by name, and an identifier given twice is installed once.
   agents?: string[];
   // Write each assistant's per-user skill folder under the home directory, which it reads in every project, instead of its project folder in the workspace.
   global?: boolean;
