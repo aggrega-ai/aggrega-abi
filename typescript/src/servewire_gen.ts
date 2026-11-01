@@ -1304,6 +1304,8 @@ export interface HostUpdate {
   skipped: SkippedRepo[] | null;
   // The markers the walk met.
   deprecations: DeprecationNote[] | null;
+  // How many of the walk's reads the registry refused or dropped in passing and were asked again, each read counted once however many attempts it took and whether or not it then succeeded; zero where none was. A walk whose reads all succeeded in the end lists no repository under `skipped`, so this count is what says how close it came to leaving one out.
+  readsRetried: number;
   // What failed for this host, so a walk over several reports which of them failed without the caller correlating anything.
   error?: string;
   // Whether this registry could not be reached: its name did not resolve, a connection to it was refused or could not be opened, or a secure connection to it could not be established. It is read from the failure itself rather than from error, it is set only beside error, and only where the failure shows the registry was never reached; a registry that answered, whatever it answered, leaves it absent.
@@ -3807,6 +3809,7 @@ export function encodeHostUpdate(v: HostUpdate): string {
   parts.push(`${jstr("deprecationsRecorded")}:${String(v.deprecationsRecorded)}`);
   parts.push(`${jstr("skipped")}:${v.skipped === null ? "null" : `[${v.skipped!.map((e0) => encodeSkippedRepo(e0)).join(",")}]`}`);
   parts.push(`${jstr("deprecations")}:${v.deprecations === null ? "null" : `[${v.deprecations!.map((e0) => encodeDeprecationNote(e0)).join(",")}]`}`);
+  parts.push(`${jstr("readsRetried")}:${String(v.readsRetried)}`);
   if (v.error !== undefined && v.error !== "") parts.push(`${jstr("error")}:${jstr(v.error)}`);
   if (v.unreachable !== undefined && v.unreachable !== false) parts.push(`${jstr("unreachable")}:${String(v.unreachable)}`);
   return `{${parts.join(",")}}`;
