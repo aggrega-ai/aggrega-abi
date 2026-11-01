@@ -798,14 +798,21 @@ export interface ImportParams {
   sync?: boolean;
 }
 
-// Drafts a starter document for an entity kind. The skeleton is derived from the schema set the binary carries, so nothing is read from a workspace and nothing is written — the answer is text, and where it goes is the client's.
+// Drafts a starter document for an entity kind, or writes one of the documentation's runnable examples into a new directory of the workspace, or lists them. Drafting derives the skeleton from the schema set the binary carries, so nothing is read from a workspace and nothing is written — the answer is text, and where it goes is the client's. Writing an example writes the new directory and nothing else, and the examples are read from the signed documentation bundle published for the binary's version, or the newest published before it where none is, verified against the workspace's signature policy before it is kept or read: a bundle that does not verify is refused, and offline only a copy already cached is read. A request sending the fields of two forms together — kind with example or list, list with example, name with example or list, dir without example — is refused before anything is read.
 export interface ScaffoldEntityParams {
-  workspaceRoot?: WorkspaceRootAccepted;
+  // The absolute path of the workspace. Drafting does not read it. Writing or listing an example requires it: the workspace's configuration decides where the documentation is fetched from and which signatures it must carry, and an example is written inside it.
+  workspaceRoot?: string;
   workDoneToken?: ProgressToken;
   // The entity kind to draft, named by its lowercase token, such as component, aggregate, release, recipe or featurerecipe — the token `aggrega/getSchema` lists for it.
   kind?: string;
-  // The name to write into the drafted document.
+  // The name to write into the drafted document. Sent only with kind.
   name?: string;
+  // The runnable example to write, by the name the list of examples gives it. Sent instead of kind.
+  example?: string;
+  // Whether to answer with every runnable example the documentation publishes, writing nothing. Sent without example and without kind.
+  list?: boolean;
+  // The new directory to write the example into, relative to the workspace root; absent writes it into a directory named after the example there. It must not exist yet or must be empty: one holding anything is refused and left as it is, and an absolute value, or one leading out of the workspace as written or through a link, is refused before anything is read. Sent only with example.
+  dir?: string;
 }
 
 // Checks catalog publishing conventions over one entity, over everything a Release's closure reaches, or over everything under the configured catalog directories. Nothing is written under any mode. Naming neither an entity nor a Release checks the whole catalog: in a workspace whose configuration gives no Release catalog directories of its own, once over the workspace's directories; in a workspace that names Releases under workspace.releases, once for each Release over the directories that Release reads, never over all of them together.
@@ -2171,12 +2178,34 @@ export interface ImportResult {
   halted: boolean;
 }
 
-// The drafted starter document.
+// The drafted starter document, the list of runnable examples, or the example written — each form answering with its own fields and leaving the others absent.
 export interface ScaffoldEntityResult {
-  // The entity kind that was drafted.
-  kind: string;
-  // The drafted document's text.
-  skeleton: string;
+  // The entity kind that was drafted. Present on a draft.
+  kind?: string;
+  // The drafted document's text. Present on a draft.
+  skeleton?: string;
+  // Every runnable example the documentation publishes, each once, in name order. Present on a list that found any.
+  examples?: ScaffoldExample[];
+  // The example that was written. Present on a write.
+  example?: string;
+  // The directory the example was written into, relative to the workspace root, as the request named it or, where it named none, as the example's name. Present on a write.
+  dir?: string;
+  // Each file written, relative to dir and slash-separated, in the order the documentation carries them. Present on a write.
+  files?: string[];
+  // The commands the example's page gives for building it, line by line as the page writes them, comments included: the first shell block under its Build heading. Absent where the page gives none.
+  next?: string[];
+  // The version of the documentation the example was read from: the binary's own where one is published for it, otherwise the newest published before it. Present on a write.
+  version?: string;
+}
+
+// One runnable example the documentation publishes.
+export interface ScaffoldExample {
+  // The example's name, which a request sends as example to write it.
+  name: string;
+  // The level the example's page declares for it.
+  level: string;
+  // The first sentence of the example's page.
+  summary: string;
 }
 
 // What the convention check found, counted by severity and listed per document. A whole-catalog check that ran once for each Release also carries passes; the counts and files then cover every pass together.
@@ -3260,10 +3289,13 @@ export function decodeImportParams(data: string): ImportParams {
 
 export function encodeScaffoldEntityParams(v: ScaffoldEntityParams): string {
   const parts: string[] = [];
-  if (v.workspaceRoot !== undefined) parts.push(`${jstr("workspaceRoot")}:${encodeWorkspaceRootAccepted(v.workspaceRoot)}`);
+  if (v.workspaceRoot !== undefined && v.workspaceRoot !== "") parts.push(`${jstr("workspaceRoot")}:${jstr(v.workspaceRoot)}`);
   if (v.workDoneToken !== undefined) parts.push(`${jstr("workDoneToken")}:${encodeProgressToken(v.workDoneToken)}`);
   if (v.kind !== undefined && v.kind !== "") parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
   if (v.name !== undefined && v.name !== "") parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  if (v.example !== undefined && v.example !== "") parts.push(`${jstr("example")}:${jstr(v.example)}`);
+  if (v.list !== undefined && v.list !== false) parts.push(`${jstr("list")}:${String(v.list)}`);
+  if (v.dir !== undefined && v.dir !== "") parts.push(`${jstr("dir")}:${jstr(v.dir)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -4753,13 +4785,31 @@ export function decodeImportResult(data: string): ImportResult {
 
 export function encodeScaffoldEntityResult(v: ScaffoldEntityResult): string {
   const parts: string[] = [];
-  parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
-  parts.push(`${jstr("skeleton")}:${jstr(v.skeleton)}`);
+  if (v.kind !== undefined && v.kind !== "") parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
+  if (v.skeleton !== undefined && v.skeleton !== "") parts.push(`${jstr("skeleton")}:${jstr(v.skeleton)}`);
+  if (v.examples !== undefined && v.examples.length > 0) parts.push(`${jstr("examples")}:${`[${v.examples!.map((e0) => encodeScaffoldExample(e0)).join(",")}]`}`);
+  if (v.example !== undefined && v.example !== "") parts.push(`${jstr("example")}:${jstr(v.example)}`);
+  if (v.dir !== undefined && v.dir !== "") parts.push(`${jstr("dir")}:${jstr(v.dir)}`);
+  if (v.files !== undefined && v.files.length > 0) parts.push(`${jstr("files")}:${`[${v.files!.map((e0) => jstr(e0)).join(",")}]`}`);
+  if (v.next !== undefined && v.next.length > 0) parts.push(`${jstr("next")}:${`[${v.next!.map((e0) => jstr(e0)).join(",")}]`}`);
+  if (v.version !== undefined && v.version !== "") parts.push(`${jstr("version")}:${jstr(v.version)}`);
   return `{${parts.join(",")}}`;
 }
 
 export function decodeScaffoldEntityResult(data: string): ScaffoldEntityResult {
   return JSON.parse(data) as ScaffoldEntityResult;
+}
+
+export function encodeScaffoldExample(v: ScaffoldExample): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("name")}:${jstr(v.name)}`);
+  parts.push(`${jstr("level")}:${jstr(v.level)}`);
+  parts.push(`${jstr("summary")}:${jstr(v.summary)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeScaffoldExample(data: string): ScaffoldExample {
+  return JSON.parse(data) as ScaffoldExample;
 }
 
 export function encodeLintResult(v: LintResult): string {
