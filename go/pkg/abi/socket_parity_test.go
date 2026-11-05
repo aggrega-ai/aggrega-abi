@@ -504,6 +504,15 @@ func TestSocketParity_ValidateNodeOutput(t *testing.T) {
 	roundTripBothGolden[abi.ValidateNodeOutput](t, "ValidateNodeOutput")
 }
 
+// A diagnostic whose location names the instance it concerns beside the document
+// it points into: every string member of the location populated, so the instance
+// is pinned in its declared position on the JSON wire and in its canonical one on
+// the CBOR wire, next to the members it is not.
+func TestSocketParity_ValidateNodeOutputInstanceLocation(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.ValidateNodeOutput](t, "ValidateNodeOutputInstanceLocation")
+}
+
 func TestSocketParity_CarveInput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.CarveInput](t, "CarveInput")

@@ -172,6 +172,9 @@ const vectors: Array<[string, string]> = [
   // order, and an opaque unit carrying none — name_bound's proposal and verdicts,
   // one carrying a bound and one not, and rendered_name's identities and answer.
   ["ValidateNodeOutput", "ValidateNodeOutput"],
+  // A diagnostic whose location names the instance it concerns beside the document
+  // it points into.
+  ["ValidateNodeOutputInstanceLocation", "ValidateNodeOutput"],
   ["CarveInput", "CarveInput"],
   ["CarveOutput", "CarveOutput"],
   ["ReassembleInput", "ReassembleInput"],

@@ -39,7 +39,7 @@ pub struct Diagnostic {
     pub suggest: String,
 }
 
-/// Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind). Every field is optional; a socket populates the representation it can produce and omits the rest.
+/// Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind), and names the instance of the build the diagnostic concerns where there is one (instance). Every field is optional; a socket populates the representation it can produce and omits the rest.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Location {
     /// The span of raw source bytes the diagnostic locates, when the emitter parses source and can pin the issue to a byte range (a parser). Absent otherwise.
@@ -48,7 +48,7 @@ pub struct Location {
     /// A dotted path to the offending element within a structured source document, when the emitter locates the issue structurally (a renderer). Absent otherwise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub key_path: String,
-    /// An identifier for the source artifact the diagnostic concerns, when the emitter knows it (a renderer). Absent otherwise.
+    /// An identifier for the source artifact the diagnostic concerns, when the emitter knows it (a renderer). Absent otherwise. It never names an instance of the build; instance carries that.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub uri: String,
     /// A line number within the structured source document, distinct from the raw-byte line and column carried by span. Present when the emitter knows a document line (a renderer). Absent otherwise.
@@ -57,6 +57,9 @@ pub struct Location {
     /// An open string naming the source surface the location refers to, when the emitter distinguishes surfaces (a renderer). Absent otherwise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub kind: String,
+    /// The instance of the build the diagnostic concerns, by the identity the build gives it: a component by the name the Aggregate declares it under, a component a module contributes by its path dotted through the module, a component the build derives by the identity the build composes for it, and a module by its own path. Present when the diagnostic is about one instance; absent otherwise.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub instance: String,
 }
 
 /// A span of the original source bytes: the byte offsets are the primary, exact location, and the line and column numbers accompany them for human-readable diagnostics.
@@ -185,6 +188,7 @@ impl Location {
         if !self.kind.is_empty() { n += 1; }
         if self.line != 0 { n += 1; }
         if self.span.is_some() { n += 1; }
+        if !self.instance.is_empty() { n += 1; }
         if !self.key_path.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.uri.is_empty() {
@@ -202,6 +206,10 @@ impl Location {
         if let Some(ref x) = self.span {
             crate::cbor_gen::write_text(out, "span");
             x.append_cbor(out)?;
+        }
+        if !self.instance.is_empty() {
+            crate::cbor_gen::write_text(out, "instance");
+            crate::cbor_gen::write_text(out, &self.instance);
         }
         if !self.key_path.is_empty() {
             crate::cbor_gen::write_text(out, "key_path");
@@ -223,6 +231,7 @@ impl Location {
         let mut f_uri: String = String::new();
         let mut f_line: i64 = 0;
         let mut f_kind: String = String::new();
+        let mut f_instance: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -232,6 +241,7 @@ impl Location {
                 "uri" => f_uri = dec.read_text()?,
                 "line" => f_line = dec.read_int()?,
                 "kind" => f_kind = dec.read_text()?,
+                "instance" => f_instance = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
@@ -241,6 +251,7 @@ impl Location {
             uri: f_uri,
             line: f_line,
             kind: f_kind,
+            instance: f_instance,
         })
     }
 }

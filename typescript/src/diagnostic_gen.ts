@@ -42,18 +42,20 @@ export interface Diagnostic {
   suggest?: string;
 }
 
-// Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind). Every field is optional; a socket populates the representation it can produce and omits the rest.
+// Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind), and names the instance of the build the diagnostic concerns where there is one (instance). Every field is optional; a socket populates the representation it can produce and omits the rest.
 export interface Location {
   // The span of raw source bytes the diagnostic locates, when the emitter parses source and can pin the issue to a byte range (a parser). Absent otherwise.
   span?: Span;
   // A dotted path to the offending element within a structured source document, when the emitter locates the issue structurally (a renderer). Absent otherwise.
   key_path?: string;
-  // An identifier for the source artifact the diagnostic concerns, when the emitter knows it (a renderer). Absent otherwise.
+  // An identifier for the source artifact the diagnostic concerns, when the emitter knows it (a renderer). Absent otherwise. It never names an instance of the build; instance carries that.
   uri?: string;
   // A line number within the structured source document, distinct from the raw-byte line and column carried by span. Present when the emitter knows a document line (a renderer). Absent otherwise.
   line?: number;
   // An open string naming the source surface the location refers to, when the emitter distinguishes surfaces (a renderer). Absent otherwise.
   kind?: string;
+  // The instance of the build the diagnostic concerns, by the identity the build gives it: a component by the name the Aggregate declares it under, a component a module contributes by its path dotted through the module, a component the build derives by the identity the build composes for it, and a module by its own path. Present when the diagnostic is about one instance; absent otherwise.
+  instance?: string;
 }
 
 // A span of the original source bytes: the byte offsets are the primary, exact location, and the line and column numbers accompany them for human-readable diagnostics.
@@ -96,6 +98,7 @@ export function encodeLocation(v: Location): string {
   if (v.uri !== undefined && v.uri !== "") parts.push(`${jstr("uri")}:${jstr(v.uri)}`);
   if (v.line !== undefined && v.line !== 0) parts.push(`${jstr("line")}:${String(v.line)}`);
   if (v.kind !== undefined && v.kind !== "") parts.push(`${jstr("kind")}:${jstr(v.kind)}`);
+  if (v.instance !== undefined && v.instance !== "") parts.push(`${jstr("instance")}:${jstr(v.instance)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -200,6 +203,7 @@ export function appendCBORLocation(out: number[], v: Location): void {
   if (v.kind !== undefined && v.kind !== "") n++;
   if (v.line !== undefined && v.line !== 0) n++;
   if (v.span !== undefined && v.span !== null) n++;
+  if (v.instance !== undefined && v.instance !== "") n++;
   if (v.key_path !== undefined && v.key_path !== "") n++;
   writeHead(out, 5, n);
   if (v.uri !== undefined && v.uri !== "") {
@@ -217,6 +221,10 @@ export function appendCBORLocation(out: number[], v: Location): void {
   if (v.span !== undefined && v.span !== null) {
     writeText(out, "span");
     appendCBORSpan(out, v.span);
+  }
+  if (v.instance !== undefined && v.instance !== "") {
+    writeText(out, "instance");
+    writeText(out, v.instance);
   }
   if (v.key_path !== undefined && v.key_path !== "") {
     writeText(out, "key_path");
@@ -240,6 +248,7 @@ export function decodeCBORLocationFrom(dec: CborDec): Location {
       case "uri": o["uri"] = dec.readText(); break;
       case "line": o["line"] = dec.readInt(); break;
       case "kind": o["kind"] = dec.readText(); break;
+      case "instance": o["instance"] = dec.readText(); break;
       default: dec.skip();
     }
   }

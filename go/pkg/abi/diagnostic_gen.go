@@ -34,18 +34,20 @@ type Diagnostic struct {
 	Suggest string `json:"suggest,omitempty" yaml:"suggest,omitempty" cbor:"suggest,omitempty"`
 }
 
-// Location Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind). Every field is optional; a socket populates the representation it can produce and omits the rest.
+// Location Where a diagnostic points. It carries one unified locator that serves both a byte-precise position in raw source text (a parser fills the span) and a structured position within a source document (a renderer fills key_path, uri, line, and kind), and names the instance of the build the diagnostic concerns where there is one (instance). Every field is optional; a socket populates the representation it can produce and omits the rest.
 type Location struct {
 	// Span The span of raw source bytes the diagnostic locates, when the emitter parses source and can pin the issue to a byte range (a parser). Absent otherwise.
 	Span *Span `json:"span,omitempty" yaml:"span,omitempty" cbor:"span,omitempty"`
 	// KeyPath A dotted path to the offending element within a structured source document, when the emitter locates the issue structurally (a renderer). Absent otherwise.
 	KeyPath string `json:"key_path,omitempty" yaml:"key_path,omitempty" cbor:"key_path,omitempty"`
-	// URI An identifier for the source artifact the diagnostic concerns, when the emitter knows it (a renderer). Absent otherwise.
+	// URI An identifier for the source artifact the diagnostic concerns, when the emitter knows it (a renderer). Absent otherwise. It never names an instance of the build; instance carries that.
 	URI string `json:"uri,omitempty" yaml:"uri,omitempty" cbor:"uri,omitempty"`
 	// Line A line number within the structured source document, distinct from the raw-byte line and column carried by span. Present when the emitter knows a document line (a renderer). Absent otherwise.
 	Line int `json:"line,omitempty" yaml:"line,omitempty" cbor:"line,omitempty"`
 	// Kind An open string naming the source surface the location refers to, when the emitter distinguishes surfaces (a renderer). Absent otherwise.
 	Kind string `json:"kind,omitempty" yaml:"kind,omitempty" cbor:"kind,omitempty"`
+	// Instance The instance of the build the diagnostic concerns, by the identity the build gives it: a component by the name the Aggregate declares it under, a component a module contributes by its path dotted through the module, a component the build derives by the identity the build composes for it, and a module by its own path. Present when the diagnostic is about one instance; absent otherwise.
+	Instance string `json:"instance,omitempty" yaml:"instance,omitempty" cbor:"instance,omitempty"`
 }
 
 // Span A span of the original source bytes: the byte offsets are the primary, exact location, and the line and column numbers accompany them for human-readable diagnostics.
@@ -279,6 +281,14 @@ func (t Location) MarshalJSON() ([]byte, error) {
 		buf.WriteString("\"kind\":")
 		writeJSONString(&buf, t.Kind)
 	}
+	if t.Instance != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"instance\":")
+		writeJSONString(&buf, t.Instance)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -331,6 +341,12 @@ func (t *Location) UnmarshalJSON(data []byte) error {
 			} else {
 				t.Kind = s
 			}
+		case "instance":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Instance = s
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -350,7 +366,7 @@ func (t *Location) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *Location) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "span", "key_path", "uri", "line", "kind"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "span", "key_path", "uri", "line", "kind", "instance"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -656,6 +672,9 @@ func (t Location) appendCBOR(dst []byte) ([]byte, error) {
 	if t.Span != nil {
 		n++
 	}
+	if t.Instance != "" {
+		n++
+	}
 	if t.KeyPath != "" {
 		n++
 	}
@@ -680,6 +699,10 @@ func (t Location) appendCBOR(dst []byte) ([]byte, error) {
 		} else if dst, err = t.Span.appendCBOR(dst); err != nil {
 			return nil, err
 		}
+	}
+	if t.Instance != "" {
+		dst = appendCBORTextString(dst, "instance")
+		dst = appendCBORTextString(dst, t.Instance)
 	}
 	if t.KeyPath != "" {
 		dst = appendCBORTextString(dst, "key_path")
@@ -738,6 +761,12 @@ func (t *Location) decodeCBOR(dec *cborDec) error {
 			} else {
 				t.Kind = s
 			}
+		case "instance":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Instance = s
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -754,7 +783,7 @@ func (t *Location) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *Location) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "span", "key_path", "uri", "line", "kind"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "span", "key_path", "uri", "line", "kind", "instance"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

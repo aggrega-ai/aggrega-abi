@@ -282,6 +282,9 @@ cbor_case!(link_resolve_output, aggrega_abi::LinkResolveOutput, "LinkResolveOutp
 // and units, name_bound's proposal and verdicts (one carrying a bound, one not),
 // and rendered_name's identities and answer.
 cbor_vector!(validate_node_output, aggrega_abi::ValidateNodeOutput, "ValidateNodeOutput");
+// A diagnostic whose location names the instance it concerns beside the document it
+// points into.
+cbor_vector!(validate_node_output_instance_location, aggrega_abi::ValidateNodeOutput, "ValidateNodeOutputInstanceLocation");
 cbor_case!(carve_input, aggrega_abi::CarveInput, "CarveInput");
 cbor_case!(carve_output, aggrega_abi::CarveOutput, "CarveOutput");
 cbor_case!(reassemble_input, aggrega_abi::ReassembleInput, "ReassembleInput");

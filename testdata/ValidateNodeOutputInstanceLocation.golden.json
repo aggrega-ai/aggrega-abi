@@ -1,0 +1,1 @@
+{"diagnostics":[{"severity":"warn","message":"values.legacyPort is deprecated","code":"deprecated-field","location":{"key_path":"spec.replicas","uri":"payments-api/deployment.yaml","kind":"helm","instance":"payments-api"}}]}
