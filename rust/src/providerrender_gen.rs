@@ -468,7 +468,7 @@ pub struct ReassembleOutput {
     pub body: String,
 }
 
-/// The payload a Provider guest receives on its optional name_bound export: one name the host proposes to use as a node's component identity, for the guest to judge against every name it would derive from that identity for its target. The guest answers with a constraint rather than with a name of its own — a derived name travelling back would put the host in the business of composing names for a target it knows nothing about, which is exactly what asking the question removes. A provider whose target bounds or restricts the names it accepts advertises the export; a provider whose target accepts any name omits it and is never asked, and its rendering is unchanged.
+/// The payload a Provider guest receives on its optional name_bound export: one name the host proposes to use as a node's component identity, for the guest to judge against every name it would derive from that identity for its target, together with the facts of the node's resolved workload that some of those names depend on, where the identity is settled after that workload is resolved. The guest answers with a constraint rather than with a name of its own — a derived name travelling back would put the host in the business of composing names for a target it knows nothing about, which is exactly what asking the question removes. A provider whose target bounds or restricts the names it accepts advertises the export; a provider whose target accepts any name omits it and is never asked, and its rendering is unchanged.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct NameBoundInput {
     /// The name the host proposes as the node's component identity. The guest derives from it, in memory, every name it derives from a component identity and reports whether each one is a name its target accepts. A verdict speaks about the PROPOSAL rather than about the node: the host asks one question wherever it composes an identity, and it does not say which of that node's names this identity will end up being the basis for, so a guest answers as though it were the basis for all of them. That is the conservative direction, because the host only ever shortens on the answer and never lengthens — a name the node will in fact derive from some other carry is therefore judged too strictly rather than too loosely.
@@ -476,6 +476,12 @@ pub struct NameBoundInput {
     /// Whether the proposed name is one a person wrote rather than one the compiler composed from authored parts. It is carried so a guest can phrase its reason for the reader who is able to act on it. It does not decide what a refusal does: an authored name is refused and a composed one is shortened, and that decision is the host's.
     #[serde(default, skip_serializing_if = "is_default")]
     pub authored: bool,
+    /// The form of the workload the node's Recipe or FeatureRecipe resolves to, as its workload template produced it, carried when the identity is settled after that workload is resolved and the workload states a form. It is carried as written; the host does not interpret it. A guest whose target bounds a name it emits for one form only — a scheduled job, whose name the target holds shorter than its other names because a suffix is appended to it for each run — reads it to judge that name. Absent means the host carries no form for this question: the node declares no workload, its workload states none, or the identity is settled before any workload is resolved. A guest then judges no name that depends on the form, and answers exactly as it would if the field did not exist.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub workload_form: String,
+    /// The keys of the Services the node's resolved workload declares, in the order the workload declares them, carried when the identity is settled after that workload is resolved and the workload declares any. A guest whose target names each Service it emits for the node from the component identity and the Service's key reads them to judge each such name. A key is written by the Recipe's or FeatureRecipe's author rather than by whoever wrote the identity, so a guest words a refusal a key causes for that author too. Absent means the host carries no keys for this question: the node declares no workload, its workload declares no Service, or the identity is settled before any workload is resolved. A guest then judges no name built from a Service key, and answers exactly as it would if the field did not exist.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub service_keys: Vec<String>,
 }
 
 /// One name kind's verdict on a proposed identity: whether the name the guest would derive for that kind is one its target accepts, and — where a shorter identity would be accepted — the greatest length that would be. It carries a constraint and a reason, never a name the guest built.
@@ -2707,6 +2713,8 @@ impl NameBoundInput {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 1;
         if self.authored { n += 1; }
+        if !self.service_keys.is_empty() { n += 1; }
+        if !self.workload_form.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if self.authored {
             crate::cbor_gen::write_text(out, "authored");
@@ -2714,6 +2722,20 @@ impl NameBoundInput {
         }
         crate::cbor_gen::write_text(out, "proposed");
         crate::cbor_gen::write_text(out, &self.proposed);
+        if !self.service_keys.is_empty() {
+            crate::cbor_gen::write_text(out, "service_keys");
+            {
+                let c = &self.service_keys;
+                crate::cbor_gen::write_head(out, 4, c.len() as u64);
+                for ev in c {
+                    crate::cbor_gen::write_text(out, ev);
+                }
+            }
+        }
+        if !self.workload_form.is_empty() {
+            crate::cbor_gen::write_text(out, "workload_form");
+            crate::cbor_gen::write_text(out, &self.workload_form);
+        }
         Ok(())
     }
 
@@ -2727,18 +2749,24 @@ impl NameBoundInput {
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_proposed: Option<String> = None;
         let mut f_authored: bool = false;
+        let mut f_workload_form: String = String::new();
+        let mut f_service_keys: Vec<String> = Vec::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "proposed" => f_proposed = Some(dec.read_text()?),
                 "authored" => f_authored = dec.read_bool()?,
+                "workload_form" => f_workload_form = dec.read_text()?,
+                "service_keys" => f_service_keys = { let sn = dec.read_array_header()?; let mut sv: Vec<String> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(dec.read_text()?); } sv },
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             proposed: f_proposed.ok_or_else(|| crate::cbor_gen::CborError("cbor: missing required field proposed".to_string()))?,
             authored: f_authored,
+            workload_form: f_workload_form,
+            service_keys: f_service_keys,
         })
     }
 }

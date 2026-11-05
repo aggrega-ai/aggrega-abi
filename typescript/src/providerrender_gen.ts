@@ -373,12 +373,16 @@ export interface ReassembleOutput {
   body: string;
 }
 
-// The payload a Provider guest receives on its optional name_bound export: one name the host proposes to use as a node's component identity, for the guest to judge against every name it would derive from that identity for its target. The guest answers with a constraint rather than with a name of its own — a derived name travelling back would put the host in the business of composing names for a target it knows nothing about, which is exactly what asking the question removes. A provider whose target bounds or restricts the names it accepts advertises the export; a provider whose target accepts any name omits it and is never asked, and its rendering is unchanged.
+// The payload a Provider guest receives on its optional name_bound export: one name the host proposes to use as a node's component identity, for the guest to judge against every name it would derive from that identity for its target, together with the facts of the node's resolved workload that some of those names depend on, where the identity is settled after that workload is resolved. The guest answers with a constraint rather than with a name of its own — a derived name travelling back would put the host in the business of composing names for a target it knows nothing about, which is exactly what asking the question removes. A provider whose target bounds or restricts the names it accepts advertises the export; a provider whose target accepts any name omits it and is never asked, and its rendering is unchanged.
 export interface NameBoundInput {
   // The name the host proposes as the node's component identity. The guest derives from it, in memory, every name it derives from a component identity and reports whether each one is a name its target accepts. A verdict speaks about the PROPOSAL rather than about the node: the host asks one question wherever it composes an identity, and it does not say which of that node's names this identity will end up being the basis for, so a guest answers as though it were the basis for all of them. That is the conservative direction, because the host only ever shortens on the answer and never lengthens — a name the node will in fact derive from some other carry is therefore judged too strictly rather than too loosely.
   proposed: string;
   // Whether the proposed name is one a person wrote rather than one the compiler composed from authored parts. It is carried so a guest can phrase its reason for the reader who is able to act on it. It does not decide what a refusal does: an authored name is refused and a composed one is shortened, and that decision is the host's.
   authored?: boolean;
+  // The form of the workload the node's Recipe or FeatureRecipe resolves to, as its workload template produced it, carried when the identity is settled after that workload is resolved and the workload states a form. It is carried as written; the host does not interpret it. A guest whose target bounds a name it emits for one form only — a scheduled job, whose name the target holds shorter than its other names because a suffix is appended to it for each run — reads it to judge that name. Absent means the host carries no form for this question: the node declares no workload, its workload states none, or the identity is settled before any workload is resolved. A guest then judges no name that depends on the form, and answers exactly as it would if the field did not exist.
+  workload_form?: string;
+  // The keys of the Services the node's resolved workload declares, in the order the workload declares them, carried when the identity is settled after that workload is resolved and the workload declares any. A guest whose target names each Service it emits for the node from the component identity and the Service's key reads them to judge each such name. A key is written by the Recipe's or FeatureRecipe's author rather than by whoever wrote the identity, so a guest words a refusal a key causes for that author too. Absent means the host carries no keys for this question: the node declares no workload, its workload declares no Service, or the identity is settled before any workload is resolved. A guest then judges no name built from a Service key, and answers exactly as it would if the field did not exist.
+  service_keys?: string[];
 }
 
 // One name kind's verdict on a proposed identity: whether the name the guest would derive for that kind is one its target accepts, and — where a shorter identity would be accepted — the greatest length that would be. It carries a constraint and a reason, never a name the guest built.
@@ -984,6 +988,8 @@ export function encodeNameBoundInput(v: NameBoundInput): string {
   const parts: string[] = [];
   parts.push(`${jstr("proposed")}:${jstr(v.proposed)}`);
   if (v.authored !== undefined && v.authored !== false) parts.push(`${jstr("authored")}:${String(v.authored)}`);
+  if (v.workload_form !== undefined && v.workload_form !== "") parts.push(`${jstr("workload_form")}:${jstr(v.workload_form)}`);
+  if (v.service_keys !== undefined && v.service_keys.length > 0) parts.push(`${jstr("service_keys")}:${`[${v.service_keys!.map((e0) => jstr(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -2771,6 +2777,8 @@ export function encodeCBORNameBoundInput(v: NameBoundInput): Uint8Array {
 export function appendCBORNameBoundInput(out: number[], v: NameBoundInput): void {
   let n = 1;
   if (v.authored !== undefined && v.authored !== false) n++;
+  if (v.service_keys !== undefined && v.service_keys.length > 0) n++;
+  if (v.workload_form !== undefined && v.workload_form !== "") n++;
   writeHead(out, 5, n);
   if (v.authored !== undefined && v.authored !== false) {
     writeText(out, "authored");
@@ -2778,6 +2786,20 @@ export function appendCBORNameBoundInput(out: number[], v: NameBoundInput): void
   }
   writeText(out, "proposed");
   writeText(out, v.proposed);
+  if (v.service_keys !== undefined && v.service_keys.length > 0) {
+    writeText(out, "service_keys");
+    {
+      const a0 = v.service_keys;
+      writeHead(out, 4, a0.length);
+      for (const ee0 of a0) {
+        writeText(out, ee0);
+      }
+    }
+  }
+  if (v.workload_form !== undefined && v.workload_form !== "") {
+    writeText(out, "workload_form");
+    writeText(out, v.workload_form);
+  }
 }
 
 export function decodeCBORNameBoundInput(data: Uint8Array): NameBoundInput {
@@ -2793,6 +2815,8 @@ export function decodeCBORNameBoundInputFrom(dec: CborDec): NameBoundInput {
     switch (k) {
       case "proposed": o["proposed"] = dec.readText(); break;
       case "authored": o["authored"] = dec.readBool(); break;
+      case "workload_form": o["workload_form"] = dec.readText(); break;
+      case "service_keys": o["service_keys"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(dec.readText()); } return a; })(); break;
       default: dec.skip();
     }
   }

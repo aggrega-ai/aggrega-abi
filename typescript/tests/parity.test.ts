@@ -177,6 +177,9 @@ const vectors: Array<[string, string]> = [
   ["ReassembleInput", "ReassembleInput"],
   ["ReassembleOutput", "ReassembleOutput"],
   ["NameBoundInput", "NameBoundInput"],
+  // The question carrying the facts of a node's resolved workload: both are omitted
+  // when absent, so this is the vector where dropping either moves the bytes.
+  ["NameBoundInputWorkload", "NameBoundInput"],
   ["NameBoundOutput", "NameBoundOutput"],
   ["RenderedNameInput", "RenderedNameInput"],
   ["RenderedNameOutput", "RenderedNameOutput"],

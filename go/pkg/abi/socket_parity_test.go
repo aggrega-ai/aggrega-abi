@@ -529,6 +529,15 @@ func TestSocketParity_NameBoundInput(t *testing.T) {
 	roundTripBothGolden[abi.NameBoundInput](t, "NameBoundInput")
 }
 
+// TestSocketParity_NameBoundInputWorkload pins the question carrying the facts of
+// a node's resolved workload: a form and Service keys in the order the workload
+// declares them. The vector above carries neither, so it pins their omission, and
+// this one is the vector where dropping either moves the bytes.
+func TestSocketParity_NameBoundInputWorkload(t *testing.T) {
+	t.Parallel()
+	roundTripBothGolden[abi.NameBoundInput](t, "NameBoundInputWorkload")
+}
+
 func TestSocketParity_NameBoundOutput(t *testing.T) {
 	t.Parallel()
 	roundTripBothGolden[abi.NameBoundOutput](t, "NameBoundOutput")

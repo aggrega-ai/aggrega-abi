@@ -287,6 +287,10 @@ cbor_case!(carve_output, aggrega_abi::CarveOutput, "CarveOutput");
 cbor_case!(reassemble_input, aggrega_abi::ReassembleInput, "ReassembleInput");
 cbor_case!(reassemble_output, aggrega_abi::ReassembleOutput, "ReassembleOutput");
 cbor_case!(name_bound_input, aggrega_abi::NameBoundInput, "NameBoundInput");
+// A second vector for NameBoundInput, so cbor_vector rather than cbor_case: it
+// carries the facts of a node's resolved workload — a form and Service keys in
+// declaration order — which the vector above omits.
+cbor_vector!(name_bound_input_workload, aggrega_abi::NameBoundInput, "NameBoundInputWorkload");
 cbor_vector!(name_bound_output, aggrega_abi::NameBoundOutput, "NameBoundOutput");
 cbor_case!(rendered_name_input, aggrega_abi::RenderedNameInput, "RenderedNameInput");
 cbor_vector!(rendered_name_output, aggrega_abi::RenderedNameOutput, "RenderedNameOutput");
