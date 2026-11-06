@@ -37,3 +37,8 @@ aggrega-abi/
 
 Per-language entry points live in `<language>/README.md`. Start there
 for the language you author plugins in.
+
+## License
+
+The Aggrega plugin ABI codecs are released under the Apache License, Version 2.0; the full text is in the
+[`LICENSE`](LICENSE) file.
