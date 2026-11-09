@@ -22,7 +22,7 @@ language Plugin Development Kits depend on `aggrega-abi` and re-export
 it, adding the Extism input/output plumbing and the Aggrega
 host-function bindings on top.
 
-Contract floor: `v1alpha1`. The three codecs export a common version
+Contract floor: `v1beta1`. The three codecs export a common version
 constant and stay coordinated at every socket-shape change.
 
 ## Layout

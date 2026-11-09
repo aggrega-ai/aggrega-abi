@@ -18,10 +18,11 @@ package abi
 // any other at load rather than mis-invoking it at dispatch.
 //
 // The version the host speaks has its own home, and it is NOT generated from
-// this schema: the compiler declares it by hand as ABIVersionV1Alpha1 in
-// aggrega-cli/internal/wasm/describe.go, and the descriptor check in that file
-// is what rejects a guest at load. That home is named here because it is the
-// enforcing one, and it is held to this schema by a cross-check in the
+// this schema: the compiler declares it by hand as Version in
+// aggrega-cli/internal/pluginabi, beside the versions it no longer speaks, and
+// the descriptor check in aggrega-cli/internal/wasm/describe.go is what rejects
+// a guest at load. That home is named here because it is the enforcing one,
+// and it is held to this schema by a cross-check in the
 // compiler's own test suite. So bumping the ABI is a schema edit plus a
 // regeneration AND a hand edit to the host constant, and a bump that stops at
 // the regeneration fails that cross-check rather than silently leaving the
@@ -32,5 +33,5 @@ package abi
 // The two are separate vocabularies.
 
 const (
-	AbiVersion = "v1alpha1"
+	AbiVersion = "v1beta1"
 )

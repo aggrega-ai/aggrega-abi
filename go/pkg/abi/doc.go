@@ -27,5 +27,5 @@
 // decoder refuses an encoded OrderedMap that repeats a key. The wire bytes
 // are identical to the host's.
 //
-// Contract floor: v1alpha1.
+// Contract floor: v1beta1.
 package abi

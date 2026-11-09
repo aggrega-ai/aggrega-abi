@@ -1,1 +1,1 @@
-{"abi_version":"v1alpha1","plugin_type":"cli","exports":[{"name":"cli_run"}]}
+{"abi_version":"v1beta1","plugin_type":"cli","exports":[{"name":"cli_run"}]}

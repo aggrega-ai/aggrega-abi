@@ -17,7 +17,7 @@
  * consumable directly by plugin authors working against the raw Extism
  * runtime, and is re-exported by the TypeScript Plugin Development Kit.
  *
- * Contract floor: v1alpha1.
+ * Contract floor: v1beta1.
  */
 
 export * from "./abi_version_enums_gen.ts";

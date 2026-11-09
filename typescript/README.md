@@ -14,4 +14,4 @@ Extism runtime. The TypeScript Plugin Development Kit
 re-exports it, adding the Extism plumbing and the Aggrega
 host-function bindings.
 
-Contract floor: `v1alpha1`.
+Contract floor: `v1beta1`.

@@ -14,7 +14,7 @@
 //! consumable directly by plugin authors working against the raw Extism
 //! runtime, and is re-exported by the Rust Plugin Development Kit.
 //!
-//! Contract floor: `v1alpha1`.
+//! Contract floor: `v1beta1`.
 
 mod abi_version_enums_gen;
 mod annotationtransform_gen;

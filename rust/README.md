@@ -13,4 +13,4 @@ Extism runtime. The Rust Plugin Development Kit (`aggrega-pdk-rust`)
 depends on this crate and re-exports it, adding the Extism plumbing and
 the Aggrega host-function bindings.
 
-Contract floor: `v1alpha1`.
+Contract floor: `v1beta1`.

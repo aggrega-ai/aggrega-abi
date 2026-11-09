@@ -1,1 +1,1 @@
-{"abi_version":"v1alpha1","plugin_type":"provider","capabilities":["helm"],"exports":[{"name":"render_node"}],"contract":{"input_kinds":{"sourced":true,"synthesized":false,"artifacts_standalone":false},"boundary_assembly":"none","reusable_instance":true,"omits":true}}
+{"abi_version":"v1beta1","plugin_type":"provider","capabilities":["helm"],"exports":[{"name":"render_node"}],"contract":{"input_kinds":{"sourced":true,"synthesized":false,"artifacts_standalone":false},"boundary_assembly":"none","reusable_instance":true,"omits":true}}

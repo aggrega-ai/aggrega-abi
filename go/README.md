@@ -13,4 +13,4 @@ Extism runtime. The Go Plugin Development Kit (`aggrega-pdk-go`)
 depends on this module and re-exports it, adding the Extism plumbing
 and the Aggrega host-function bindings.
 
-Contract floor: `v1alpha1`.
+Contract floor: `v1beta1`.

@@ -20,7 +20,7 @@ import (
 func TestPluginDescriptor_OmitsAbsentOptionals(t *testing.T) {
 	t.Parallel()
 	d := abi.PluginDescriptor{
-		AbiVersion: "v1alpha1",
+		AbiVersion: "v1beta1",
 		PluginType: "cli",
 		Exports:    []abi.PluginExport{{Name: "cli_run"}},
 	}
@@ -34,7 +34,7 @@ func TestPluginDescriptor_OmitsAbsentOptionals(t *testing.T) {
 			t.Errorf("absent optional %s leaked into wire: %s", key, got)
 		}
 	}
-	const want = `{"abi_version":"v1alpha1","plugin_type":"cli","exports":[{"name":"cli_run"}]}`
+	const want = `{"abi_version":"v1beta1","plugin_type":"cli","exports":[{"name":"cli_run"}]}`
 	if string(got) != want {
 		t.Errorf("bare descriptor wire mismatch:\n want: %s\n  got: %s", want, got)
 	}
@@ -65,7 +65,7 @@ func TestProviderContract_OmitsAbsentNestedObjects(t *testing.T) {
 // today (the pluginDescriptor const in the moo guest). It is a real published
 // guest that declares no render-behavior contract, so its wire carries no
 // contract key — the case this codec must reproduce faithfully.
-const mooDescriptor = `{"abi_version":"v1alpha1","plugin_type":"cli","commands":[{"name":"moo","description":"This Aggrega has Super Cow Powers. Pass --alien for a UFO abduction scene."}],"exports":[{"name":"cli_run","host_functions":["aggrega_cli_write_stdout"]}],"metadata":{"author":"aggrega","license":"Apache-2.0"}}`
+const mooDescriptor = `{"abi_version":"v1beta1","plugin_type":"cli","commands":[{"name":"moo","description":"This Aggrega has Super Cow Powers. Pass --alien for a UFO abduction scene."}],"exports":[{"name":"cli_run","host_functions":["aggrega_cli_write_stdout"]}],"metadata":{"author":"aggrega","license":"Apache-2.0"}}`
 
 // TestMooDescribeRoundTrip decodes moo's exact describe() string and re-encodes
 // it through the codec, asserting the codec neither invents a contract key nor
@@ -93,7 +93,7 @@ func TestMooDescribeRoundTrip(t *testing.T) {
 	}
 	// The canonical wire holds exactly moo's declared content, with the
 	// codec's field-declaration order (exports before commands).
-	const canonical = `{"abi_version":"v1alpha1","plugin_type":"cli","exports":[{"name":"cli_run","host_functions":["aggrega_cli_write_stdout"]}],"commands":[{"name":"moo","description":"This Aggrega has Super Cow Powers. Pass --alien for a UFO abduction scene."}],"metadata":{"author":"aggrega","license":"Apache-2.0"}}`
+	const canonical = `{"abi_version":"v1beta1","plugin_type":"cli","exports":[{"name":"cli_run","host_functions":["aggrega_cli_write_stdout"]}],"commands":[{"name":"moo","description":"This Aggrega has Super Cow Powers. Pass --alien for a UFO abduction scene."}],"metadata":{"author":"aggrega","license":"Apache-2.0"}}`
 	if string(got) != canonical {
 		t.Errorf("moo canonical wire mismatch:\n want: %s\n  got: %s", canonical, got)
 	}
