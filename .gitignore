@@ -1,1 +1,3 @@
 search-refusals.log
+# The pinned tools scripts/check-api-compat.sh installs when run with --tools .api-tools.
+/.api-tools/

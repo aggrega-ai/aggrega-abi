@@ -1,0 +1,76 @@
+name: API compatibility
+
+# On dev, where the next release is prepared, a push or a pull request fails when it
+# removes or changes an item a codec exports and the version being prepared does not
+# mark a breaking change against the newest release tag. An added item passes.
+#
+# The check is scripts/check-api-compat.sh (its --help is the contract). It runs as
+# it stands at the revision the change is judged against — a pull request's base, or
+# the commit a push moved dev from — so a change cannot weaken the check that judges
+# it; where that revision does not carry the check, the change's own copy runs. It
+# pins and installs its own tools, and the Rust toolchain whose rustdoc it reads,
+# into the per-run directory it is given.
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-compat:
+    name: Refuse an unmarked breaking API change (dev)
+    # Shared self-hosted-runner switch: set the AGGREGA_RUNNER org/repo variable to route here.
+    runs-on: ${{ vars.AGGREGA_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    steps:
+      - name: Check out with history and tags
+        uses: actions/checkout@v5
+        with:
+          path: aggrega-abi
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          # The pinned apidiff needs a newer Go than the module's floor.
+          go-version: '1.26'
+          cache: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+
+      - name: Install Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Take the check from the revision the change is judged against
+        env:
+          JUDGED_AGAINST: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          check="$RUNNER_TEMP/check-api-compat.sh"
+          if [ -n "$JUDGED_AGAINST" ] \
+            && git -C aggrega-abi cat-file -e "$JUDGED_AGAINST:scripts/check-api-compat.sh" 2>/dev/null; then
+            git -C aggrega-abi show "$JUDGED_AGAINST:scripts/check-api-compat.sh" > "$check"
+            echo "check taken from $JUDGED_AGAINST"
+          else
+            cp aggrega-abi/scripts/check-api-compat.sh "$check"
+            echo "the judged-against revision carries no check: the change's own copy runs"
+          fi
+          chmod +x "$check"
+
+      - name: Refuse an unmarked breaking change to a codec's exported API
+        run: >-
+          "$RUNNER_TEMP/check-api-compat.sh"
+          --tools "$RUNNER_TEMP/api-tools"
+          aggrega-abi
