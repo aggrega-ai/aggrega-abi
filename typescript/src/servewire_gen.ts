@@ -2270,6 +2270,8 @@ export interface PluginAddResult {
   // The configuration document's text, for a request that asked to be shown it rather than have it written.
   content?: string;
   retraction?: PluginRetraction;
+  // True when the query named the version that was pinned and a retraction this workspace trusts has withdrawn that version. A named version is pinned all the same, because naming it is the override. Absent otherwise, and absence does not mean the version is not withdrawn: where the withdrawal markers of a named version could not be read, retraction.unscreened says why, and with no version named, the latest published version is chosen and retraction reports what the withdrawal check concluded about that choice.
+  withdrawn?: boolean;
 }
 
 // What detaching a plugin wrote, and where.
@@ -4859,6 +4861,7 @@ export function encodePluginAddResult(v: PluginAddResult): string {
   parts.push(`${jstr("written")}:${String(v.written)}`);
   if (v.content !== undefined && v.content !== "") parts.push(`${jstr("content")}:${jstr(v.content)}`);
   if (v.retraction !== undefined) parts.push(`${jstr("retraction")}:${encodePluginRetraction(v.retraction)}`);
+  if (v.withdrawn !== undefined && v.withdrawn !== false) parts.push(`${jstr("withdrawn")}:${String(v.withdrawn)}`);
   return `{${parts.join(",")}}`;
 }
 
