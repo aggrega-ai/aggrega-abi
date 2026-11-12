@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 Cognitio S.r.l.
+# Copyright 2026 Cognitio s.r.l.
 #
 # check-api-compat.sh — refuse a breaking change to a kit's exported API that its
 # version does not announce. Run with --help for the contract.

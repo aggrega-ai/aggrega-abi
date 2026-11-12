@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 Cognitio S.r.l.
+// Copyright 2026 Cognitio s.r.l.
 
 //! The order-keeping container: insertion order kept through a JSON decode and
 //! encode, a key inserted again keeping its position, removal closing the gap,
