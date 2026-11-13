@@ -780,7 +780,7 @@ export interface ConfigCaptureParams {
   allPlugins?: boolean;
 }
 
-// Converts a foreign source description into draft authoring documents, and writes beside them `.aggrega-import.json`, the record of what the import wrote — the target it was given, where it was given one, each drafted file, and each key of a drafted Aggregate or Release at every depth — which a later sync reads. A source it could not fully convert is an answer rather than a failure: the drafts it did produce are written and the findings say what it could not convert — except under sync, which writes nothing from a conversion that stopped.
+// Converts a foreign source description into draft authoring documents, and writes beside them `.aggrega-import.json`, the record of what the import wrote — the target it was given, where it was given one, the catalog snapshot it read, where it read one, each drafted file, and each key of a drafted Aggregate or Release at every depth — which a later sync reads. A source it could not fully convert is an answer rather than a failure: the drafts it did produce are written and the findings say what it could not convert — except under sync, which writes nothing from a conversion that stopped.
 export interface ImportParams {
   workspaceRoot: WorkspaceRootSubject;
   workDoneToken?: ProgressToken;
@@ -796,6 +796,8 @@ export interface ImportParams {
   dryRun?: boolean;
   // Whether to bring what an earlier import drafted beneath outputDir up to date with the source, rather than writing the draft whole. Only what the import wrote changes, as the record beside the drafts lists it: a part the source left alone stays as it is on disk, edited or not; a part the source changed, dropped or gained is written anew, removed — a drafted file deleted whole — or added, where what is on disk is what the import last wrote; and everything else, a key an author added — the environment a drafted Release leaves for its author among them — or a comment not written directly above a drafted key, stays byte for byte. A sync that would change or remove what an author edited or added, or add a part where an author already wrote one, is refused naming each part, and so is a sync over an Aggregate no record lists; nothing is written either way. Without it, a request whose drafts would be written over an Aggregate already in outputDir is refused, under dryRun too.
   sync?: boolean;
+  // Whether to fetch the newest catalog snapshot the workspace's default registry publishes and import against it, holding it from then on in place of the one the workspace holds or the one the record beside the drafts names; it changes nothing where the workspace names a catalog folder, and is refused offline.
+  upgrade?: boolean;
 }
 
 // Drafts a starter document for an entity kind, or writes one of the documentation's runnable examples into a new directory of the workspace, or lists them. Drafting derives the skeleton from the schema set the binary carries, so nothing is read from a workspace and nothing is written — the answer is text, and where it goes is the client's. Writing an example writes the new directory and nothing else, and the examples are read from the signed documentation bundle published for the binary's version, or the newest published before it where none is, verified against the workspace's signature policy before it is kept or read: a bundle that does not verify is refused, and offline only a copy already cached is read. A request sending the fields of two forms together — kind with example or list, list with example, name with example or list, dir without example — is refused before anything is read.
@@ -3282,6 +3284,7 @@ export function encodeImportParams(v: ImportParams): string {
   if (v.target !== undefined && v.target !== "") parts.push(`${jstr("target")}:${jstr(v.target)}`);
   if (v.dryRun !== undefined && v.dryRun !== false) parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
   if (v.sync !== undefined && v.sync !== false) parts.push(`${jstr("sync")}:${String(v.sync)}`);
+  if (v.upgrade !== undefined && v.upgrade !== false) parts.push(`${jstr("upgrade")}:${String(v.upgrade)}`);
   return `{${parts.join(",")}}`;
 }
 
