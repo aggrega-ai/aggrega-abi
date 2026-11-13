@@ -4,7 +4,7 @@ Portable codec for the [Aggrega](https://aggrega.ai) Wasm plugin ABI.
 Three siblings live here, one per supported source language:
 
 - **`go/`** — Go codec; targets publication to `pkg.go.dev` as
-  `github.com/aggrega-ai/aggrega-abi-go`.
+  `github.com/aggrega-ai/aggrega-abi/go`.
 - **`rust/`** — Rust codec; targets publication to `crates.io` as
   `aggrega-abi`.
 - **`typescript/`** — TypeScript codec; targets publication to npm as

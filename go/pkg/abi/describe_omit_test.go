@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/aggrega-ai/aggrega-abi-go/pkg/abi"
+	"github.com/aggrega-ai/aggrega-abi/go/pkg/abi"
 )
 
 // TestPluginDescriptor_OmitsAbsentOptionals pins the wire-faithful omission of
