@@ -798,8 +798,10 @@ export interface ImportParams {
   sync?: boolean;
   // Whether to fetch the newest catalog snapshot the workspace's default registry publishes and import against it, holding it from then on in place of the one the workspace holds or the one the record beside the drafts names; it changes nothing where the workspace names a catalog folder, and is refused offline.
   upgrade?: boolean;
-  // The answers file the values the drafts leave empty that no source can hold are read from and written to, relative to the workspace root; an absolute value, or one leading out of the workspace as written or through a link, is refused. It holds, under each drafted file's path, the key path inside that document and its answer, and the answers are written into the drafts. Absent reads the one the record beside the drafts names, or else import-answers.yaml beside the source file or inside the source directory. A secret's answer names where the secret comes from — a variable name, ${NAME}, or the name of a Kubernetes Secret — and anything else is refused with nothing written. Nothing is asked: each value still owed is a warning finding naming the drafted file, the key and what it is, and where the drafts are written the last finding says how many are owed and where. Where the drafts include a Release, owe nothing and the conversion finished, its dependencies are then pulled, writing its lockfile, and a pull that fails closes the findings saying why, the drafts written; offline nothing is pulled and a finding names the pull to run. An answer for a key these drafts do not leave empty is kept in the file and not applied, so one answers file serves every target.
+  // The answers file the values the drafts leave empty that no source can hold are read from and written to, relative to the workspace root; an absolute value, or one leading out of the workspace as written or through a link, is refused. It holds, under each drafted file's path, the key path inside that document and its answer, and the answers are written into the drafts. Absent reads the one the record beside the drafts names, or else import-answers.yaml beside the source file or inside the source directory. A secret's answer names where the secret comes from — a variable name, ${NAME}, or the name of a Kubernetes Secret — and anything else is refused with nothing written. Nothing is asked: each value still owed is an entry of the answer's owed and a warning finding naming the drafted file, the key and what it is, its answer is sent as answered, and where the drafts are written the last finding says how many are owed and where. Where the drafts include a Release, owe nothing and the conversion finished, its dependencies are then pulled, writing its lockfile, and a pull that fails closes the findings saying why, the drafts written; offline nothing is pulled and a finding names the pull to run. An answer for a key these drafts do not leave empty is kept in the file and not applied, so one answers file serves every target.
   answers?: string;
+  // Answers for values the answer's owed listed, each naming the drafted file and the keys as owed named them. Each is judged, kept in the answers file and written into the drafts exactly as an answer typed at a terminal is: a secret's answer names where the secret comes from — a variable name, ${NAME}, or the name of a Kubernetes Secret — and one that does not is neither kept nor written, its value staying owed with the reason as its secretAdvice. A value the answers file already answers is answered from the file; an empty answer, or one naming a value the drafts do not owe, is not applied. Send it with sync once the drafts are written, since a request that is not a sync is refused over an Aggregate already in outputDir. Under dryRun, which keeps no answer, and under a sync whose conversion stopped, which writes nothing, no answer sent is applied.
+  answered?: ImportAnswered[];
 }
 
 // Drafts a starter document for an entity kind, or writes one of the documentation's runnable examples into a new directory of the workspace, or lists them. Drafting derives the skeleton from the schema set the binary carries, so nothing is read from a workspace and nothing is written — the answer is text, and where it goes is the client's. Writing an example writes the new directory and nothing else, and the examples are read from the signed documentation bundle published for the binary's version, or the newest published before it where none is, verified against the workspace's signature policy before it is kept or read: a bundle that does not verify is refused, and offline only a copy already cached is read. A request sending the fields of two forms together — kind with example or list, list with example, name with example or list, dir without example — is refused before anything is read.
@@ -1416,6 +1418,30 @@ export interface ImportDrift {
   file: string;
   // The keys leading to the part from the top of a drafted Aggregate or Release, one entry per key, so a key holding a full stop stays one entry. Empty where the part is the whole file.
   key: string[];
+}
+
+// One value the drafts still leave empty that no source could supply and no answer did.
+export interface ImportOwed {
+  // The drafted file the value is in, as a path relative to the answer's outputDir.
+  file: string;
+  // The keys leading to the value from the top of that document, one entry per key, so a key holding a full stop stays one entry. An answer sent as answered names the value by these keys.
+  key: string[];
+  // What the value is: its schema's description, or else the comment the draft writes above its key, or else what its schema says it takes.
+  question: string;
+  // Whether the value is a secret's, whose answer names where the secret comes from and never holds the secret itself.
+  sensitive: boolean;
+  // Present on a secret's value: what its answer must be, in the sentence a person answering it at a terminal is shown — or, where the answer sent for it as answered was refused, why it was refused.
+  secretAdvice?: string;
+}
+
+// One answer for a value the answer's owed listed.
+export interface ImportAnswered {
+  // The drafted file the value is in, as owed names it.
+  file: string;
+  // The keys leading to the value, as owed names them.
+  key: string[];
+  // The answer. An empty one leaves the value owed.
+  answer: string;
 }
 
 // One thing a conversion could not convert. These are the conversion's most useful output, so they are reported in full rather than reduced to a verdict.
@@ -2178,6 +2204,8 @@ export interface ImportResult {
   diagnostics: ImportDiagnostic[] | null;
   // How the importer mapped each source node, in the importer's order and exactly as it reported it: what tells you where the conversion guessed. Carried under both deliveries and whether or not the conversion stopped, and an empty list for an importer that reports none.
   decisions: ImportDecision[];
+  // Each value the drafts still leave empty that no source could supply and no answer did, in the order the drafts are written — the values the warning findings name. Every answer carries it, an empty list where the drafts owe nothing.
+  owed?: ImportOwed[];
   // Whether the conversion stopped rather than finishing with findings.
   halted: boolean;
 }
@@ -3288,6 +3316,7 @@ export function encodeImportParams(v: ImportParams): string {
   if (v.sync !== undefined && v.sync !== false) parts.push(`${jstr("sync")}:${String(v.sync)}`);
   if (v.upgrade !== undefined && v.upgrade !== false) parts.push(`${jstr("upgrade")}:${String(v.upgrade)}`);
   if (v.answers !== undefined && v.answers !== "") parts.push(`${jstr("answers")}:${jstr(v.answers)}`);
+  if (v.answered !== undefined && v.answered.length > 0) parts.push(`${jstr("answered")}:${`[${v.answered!.map((e0) => encodeImportAnswered(e0)).join(",")}]`}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -3954,6 +3983,32 @@ export function encodeImportDrift(v: ImportDrift): string {
 
 export function decodeImportDrift(data: string): ImportDrift {
   return JSON.parse(data) as ImportDrift;
+}
+
+export function encodeImportOwed(v: ImportOwed): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("file")}:${jstr(v.file)}`);
+  parts.push(`${jstr("key")}:${`[${v.key!.map((e0) => jstr(e0)).join(",")}]`}`);
+  parts.push(`${jstr("question")}:${jstr(v.question)}`);
+  parts.push(`${jstr("sensitive")}:${String(v.sensitive)}`);
+  if (v.secretAdvice !== undefined && v.secretAdvice !== "") parts.push(`${jstr("secretAdvice")}:${jstr(v.secretAdvice)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeImportOwed(data: string): ImportOwed {
+  return JSON.parse(data) as ImportOwed;
+}
+
+export function encodeImportAnswered(v: ImportAnswered): string {
+  const parts: string[] = [];
+  parts.push(`${jstr("file")}:${jstr(v.file)}`);
+  parts.push(`${jstr("key")}:${`[${v.key!.map((e0) => jstr(e0)).join(",")}]`}`);
+  parts.push(`${jstr("answer")}:${jstr(v.answer)}`);
+  return `{${parts.join(",")}}`;
+}
+
+export function decodeImportAnswered(data: string): ImportAnswered {
+  return JSON.parse(data) as ImportAnswered;
 }
 
 export function encodeImportDiagnostic(v: ImportDiagnostic): string {
@@ -4783,6 +4838,7 @@ export function encodeImportResult(v: ImportResult): string {
   parts.push(`${jstr("drift")}:${`[${v.drift!.map((e0) => encodeImportDrift(e0)).join(",")}]`}`);
   parts.push(`${jstr("diagnostics")}:${v.diagnostics === null ? "null" : `[${v.diagnostics!.map((e0) => encodeImportDiagnostic(e0)).join(",")}]`}`);
   parts.push(`${jstr("decisions")}:${`[${v.decisions!.map((e0) => encodeImportDecision(e0)).join(",")}]`}`);
+  if (v.owed !== undefined && v.owed.length > 0) parts.push(`${jstr("owed")}:${`[${v.owed!.map((e0) => encodeImportOwed(e0)).join(",")}]`}`);
   parts.push(`${jstr("halted")}:${String(v.halted)}`);
   return `{${parts.join(",")}}`;
 }
