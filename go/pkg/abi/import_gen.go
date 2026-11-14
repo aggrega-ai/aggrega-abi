@@ -14,7 +14,7 @@ import (
 	"sort"
 )
 
-// ImportInput The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
+// ImportInput The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, a view of the Components the workspace's catalog holds, and the target the import drafts for.
 type ImportInput struct {
 	// Format The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
 	Format string `json:"format" yaml:"format" cbor:"format"`
@@ -28,6 +28,8 @@ type ImportInput struct {
 	Settings json.RawMessage `json:"settings,omitempty" yaml:"settings,omitempty" cbor:"settings,omitempty"`
 	// Catalog A view of the Components the workspace's own catalog holds — the catalog the importer itself was selected from — so the importer can weigh them as candidates when it maps a source node to a catalog entity. The host builds it from that local catalog alone, and it carries names, versions, labels and declared structure only: never a value, a default or a secret. Its order is fixed, so one catalog yields one byte sequence. Absent when the catalog holds no Component.
 	Catalog *CatalogProjection `json:"catalog,omitempty" yaml:"catalog,omitempty" cbor:"catalog,omitempty"`
+	// Target The provider capability the import drafts for, such as compose or helm: the target the import was given, or, for an import refreshing an earlier one that names none, the target that earlier import recorded. An importer writes what only that target needs into the drafts as declarations, and leaves out what only another target needs. The host pipes it through as given, once it has checked that a Recipe of the workspace's catalog binds to it. Absent where the import names no target.
+	Target string `json:"target,omitempty" yaml:"target,omitempty" cbor:"target,omitempty"`
 }
 
 // CatalogProjection The workspace's catalog as an importer sees it: one entry per Component the catalog holds, each carrying the metadata an importer weighs when it scores a candidate.
@@ -236,6 +238,14 @@ func (t ImportInput) MarshalJSON() ([]byte, error) {
 			buf.Write(enc)
 		}
 	}
+	if t.Target != "" {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString("\"target\":")
+		writeJSONString(&buf, t.Target)
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -307,6 +317,12 @@ func (t *ImportInput) UnmarshalJSON(data []byte) error {
 				}
 				t.Catalog = v
 			}
+		case "target":
+			if s, err := readString(dec); err != nil {
+				return err
+			} else {
+				t.Target = s
+			}
 		default:
 			if _, err := readRaw(dec, data); err != nil {
 				return err
@@ -326,7 +342,7 @@ func (t *ImportInput) UnmarshalJSON(data []byte) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the object's own keys and does not descend.
 func (t *ImportInput) UnmarshalJSONStrict(data []byte) error {
-	if err := refuseUndeclaredJSONKeys(data, "format", "bytes", "name", "sources", "settings", "catalog"); err != nil {
+	if err := refuseUndeclaredJSONKeys(data, "format", "bytes", "name", "sources", "settings", "catalog", "target"); err != nil {
 		return err
 	}
 	return t.UnmarshalJSON(data)
@@ -1863,6 +1879,9 @@ func (t ImportInput) appendCBOR(dst []byte) ([]byte, error) {
 	if t.Name != "" {
 		n++
 	}
+	if t.Target != "" {
+		n++
+	}
 	if t.Catalog != nil {
 		n++
 	}
@@ -1882,6 +1901,10 @@ func (t ImportInput) appendCBOR(dst []byte) ([]byte, error) {
 	dst = appendCBORByteString(dst, t.Bytes)
 	dst = appendCBORTextString(dst, "format")
 	dst = appendCBORTextString(dst, t.Format)
+	if t.Target != "" {
+		dst = appendCBORTextString(dst, "target")
+		dst = appendCBORTextString(dst, t.Target)
+	}
 	if t.Catalog != nil {
 		dst = appendCBORTextString(dst, "catalog")
 		if t.Catalog == nil {
@@ -1973,6 +1996,12 @@ func (t *ImportInput) decodeCBOR(dec *cborDec) error {
 				}
 				t.Catalog = v
 			}
+		case "target":
+			if s, err := dec.readTextString(); err != nil {
+				return err
+			} else {
+				t.Target = s
+			}
 		default:
 			if err := dec.skip(); err != nil {
 				return err
@@ -1989,7 +2018,7 @@ func (t *ImportInput) decodeCBOR(dec *cborDec) error {
 // key would yield an empty value indistinguishable from a real one. The
 // check reads the map's own keys and does not descend.
 func (t *ImportInput) DecodeCBORStrict(data []byte) error {
-	if err := refuseUndeclaredCBORKeys(data, "format", "bytes", "name", "sources", "settings", "catalog"); err != nil {
+	if err := refuseUndeclaredCBORKeys(data, "format", "bytes", "name", "sources", "settings", "catalog", "target"); err != nil {
 		return err
 	}
 	return t.DecodeCBOR(data)

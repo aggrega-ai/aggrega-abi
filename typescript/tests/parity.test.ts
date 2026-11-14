@@ -222,6 +222,11 @@ const vectors: Array<[string, string]> = [
   // is the vector where dropping it moves the bytes, and its four-byte key sorts
   // ahead of every other key of the shape.
   ["ImportInputNamed", "ImportInput"],
+  // A file imported for a target: the provider capability the import drafts for,
+  // beside the format. The target is omitted when empty, so this is the vector
+  // where dropping it moves the bytes, and its key is as long as the format's, so
+  // the two are ordered bytewise.
+  ["ImportInputTarget", "ImportInput"],
   ["ImportOutput", "ImportOutput"],
   ["ParseSourceResponse", "ParseSourceResponse"],
   // The parse-source reply's SUCCESS shape, the half its failure envelope cannot

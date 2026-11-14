@@ -320,6 +320,11 @@ cbor_vector!(import_input_catalog, aggrega_abi::ImportInput, "ImportInputCatalog
 // empty, so this is the vector where dropping it moves the bytes, and its
 // four-byte key sorts ahead of every other key of the shape.
 cbor_vector!(import_input_named, aggrega_abi::ImportInput, "ImportInputNamed");
+// A fourth: a file imported for a target, carrying the provider capability the
+// import drafts for beside the format. The target is elided when empty, so this is
+// the vector where dropping it moves the bytes, and its key is as long as the
+// format's, so the two are ordered bytewise.
+cbor_vector!(import_input_target, aggrega_abi::ImportInput, "ImportInputTarget");
 cbor_case!(import_output, aggrega_abi::ImportOutput, "ImportOutput");
 cbor_case!(parse_source_response, aggrega_abi::ParseSourceResponse, "ParseSourceResponse");
 // A second vector for ParseSourceResponse, so cbor_vector rather than cbor_case:

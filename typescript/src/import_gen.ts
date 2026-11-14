@@ -24,7 +24,7 @@ function encodeOpaque(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
+// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, a view of the Components the workspace's catalog holds, and the target the import drafts for.
 export interface ImportInput {
   // The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
   format: string;
@@ -38,6 +38,8 @@ export interface ImportInput {
   settings?: unknown;
   // A view of the Components the workspace's own catalog holds — the catalog the importer itself was selected from — so the importer can weigh them as candidates when it maps a source node to a catalog entity. The host builds it from that local catalog alone, and it carries names, versions, labels and declared structure only: never a value, a default or a secret. Its order is fixed, so one catalog yields one byte sequence. Absent when the catalog holds no Component.
   catalog?: CatalogProjection;
+  // The provider capability the import drafts for, such as compose or helm: the target the import was given, or, for an import refreshing an earlier one that names none, the target that earlier import recorded. An importer writes what only that target needs into the drafts as declarations, and leaves out what only another target needs. The host pipes it through as given, once it has checked that a Recipe of the workspace's catalog binds to it. Absent where the import names no target.
+  target?: string;
 }
 
 // The workspace's catalog as an importer sees it: one entry per Component the catalog holds, each carrying the metadata an importer weighs when it scores a candidate.
@@ -188,6 +190,7 @@ export function encodeImportInput(v: ImportInput): string {
   if (v.sources !== undefined && v.sources.length > 0) parts.push(`${jstr("sources")}:${`[${v.sources!.map((e0) => encodeImportSource(e0)).join(",")}]`}`);
   if (v.settings !== undefined && v.settings !== null) parts.push(`${jstr("settings")}:${encodeOpaque(v.settings)}`);
   if (v.catalog !== undefined && v.catalog !== null) parts.push(`${jstr("catalog")}:${encodeCatalogProjection(v.catalog)}`);
+  if (v.target !== undefined && v.target !== "") parts.push(`${jstr("target")}:${jstr(v.target)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -358,6 +361,7 @@ export function encodeCBORImportInput(v: ImportInput): Uint8Array {
 export function appendCBORImportInput(out: number[], v: ImportInput): void {
   let n = 2;
   if (v.name !== undefined && v.name !== "") n++;
+  if (v.target !== undefined && v.target !== "") n++;
   if (v.catalog !== undefined && v.catalog !== null) n++;
   if (v.sources !== undefined && v.sources.length > 0) n++;
   if (v.settings !== undefined && v.settings !== null) n++;
@@ -370,6 +374,10 @@ export function appendCBORImportInput(out: number[], v: ImportInput): void {
   writeBytes(out, b64decode(v.bytes));
   writeText(out, "format");
   writeText(out, v.format);
+  if (v.target !== undefined && v.target !== "") {
+    writeText(out, "target");
+    writeText(out, v.target);
+  }
   if (v.catalog !== undefined && v.catalog !== null) {
     writeText(out, "catalog");
     appendCBORCatalogProjection(out, v.catalog);
@@ -407,6 +415,7 @@ export function decodeCBORImportInputFrom(dec: CborDec): ImportInput {
       case "sources": o["sources"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORImportSourceFrom(dec)); } return a; })(); break;
       case "settings": o["settings"] = JSON.parse(utf8Decode(dec.readBytes())); break;
       case "catalog": o["catalog"] = decodeCBORCatalogProjectionFrom(dec); break;
+      case "target": o["target"] = dec.readText(); break;
       default: dec.skip();
     }
   }

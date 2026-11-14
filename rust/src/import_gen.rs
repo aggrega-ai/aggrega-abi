@@ -22,7 +22,7 @@ where
     }
 }
 
-/// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, and a view of the Components the workspace's catalog holds.
+/// The payload an importer guest receives: the source format that selects how to read the bytes, the primary source bytes and the name of the file they were read from, any named sources for a multi-file import, an optional opaque options document the consumer supplies for importer-specific behavior, a view of the Components the workspace's catalog holds, and the target the import drafts for.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ImportInput {
     /// The name of the source format to import, matching one of the importer's advertised import:<format> capabilities. The importer reads the sources as this format.
@@ -41,6 +41,9 @@ pub struct ImportInput {
     /// A view of the Components the workspace's own catalog holds — the catalog the importer itself was selected from — so the importer can weigh them as candidates when it maps a source node to a catalog entity. The host builds it from that local catalog alone, and it carries names, versions, labels and declared structure only: never a value, a default or a secret. Its order is fixed, so one catalog yields one byte sequence. Absent when the catalog holds no Component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub catalog: Option<Box<CatalogProjection>>,
+    /// The provider capability the import drafts for, such as compose or helm: the target the import was given, or, for an import refreshing an earlier one that names none, the target that earlier import recorded. An importer writes what only that target needs into the drafts as declarations, and leaves out what only another target needs. The host pipes it through as given, once it has checked that a Recipe of the workspace's catalog binds to it. Absent where the import names no target.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub target: String,
 }
 
 /// The workspace's catalog as an importer sees it: one entry per Component the catalog holds, each carrying the metadata an importer weighs when it scores a candidate.
@@ -236,6 +239,7 @@ impl ImportInput {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 2;
         if !self.name.is_empty() { n += 1; }
+        if !self.target.is_empty() { n += 1; }
         if self.catalog.is_some() { n += 1; }
         if !self.sources.is_empty() { n += 1; }
         if self.settings.is_some() { n += 1; }
@@ -248,6 +252,10 @@ impl ImportInput {
         crate::cbor_gen::write_bytes(out, &crate::cbor_gen::b64_decode(&self.bytes)?);
         crate::cbor_gen::write_text(out, "format");
         crate::cbor_gen::write_text(out, &self.format);
+        if !self.target.is_empty() {
+            crate::cbor_gen::write_text(out, "target");
+            crate::cbor_gen::write_text(out, &self.target);
+        }
         if let Some(ref x) = self.catalog {
             crate::cbor_gen::write_text(out, "catalog");
             x.append_cbor(out)?;
@@ -283,6 +291,7 @@ impl ImportInput {
         let mut f_sources: Vec<ImportSource> = Vec::new();
         let mut f_settings: Option<Box<RawValue>> = None;
         let mut f_catalog: Option<Box<CatalogProjection>> = None;
+        let mut f_target: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
@@ -293,6 +302,7 @@ impl ImportInput {
                 "sources" => f_sources = { let sn = dec.read_array_header()?; let mut sv: Vec<ImportSource> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(ImportSource::decode_cbor_from(dec)?); } sv },
                 "settings" => f_settings = Some(crate::cbor_gen::raw_from_bytes(dec.read_bytes()?)?),
                 "catalog" => f_catalog = Some(Box::new(CatalogProjection::decode_cbor_from(dec)?)),
+                "target" => f_target = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
@@ -303,6 +313,7 @@ impl ImportInput {
             sources: f_sources,
             settings: f_settings,
             catalog: f_catalog,
+            target: f_target,
         })
     }
 }
