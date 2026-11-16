@@ -4,6 +4,10 @@ TypeScript codec for the Aggrega Wasm plugin ABI.
 
 Package name: `@aggrega-ai/aggrega-abi`.
 
+```sh
+npm install @aggrega-ai/aggrega-abi
+```
+
 The package encodes and decodes the Wasm socket payloads to and from
 the JSON wire form. It is reflect-free and generated from the canonical
 schemas, so the wire shape stays byte-stable.

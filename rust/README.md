@@ -4,6 +4,10 @@ Rust codec for the Aggrega Wasm plugin ABI.
 
 Crate name: `aggrega-abi`.
 
+```sh
+cargo add aggrega-abi
+```
+
 The crate encodes and decodes the Wasm socket payloads to and from the
 JSON wire form. It is reflect-free and generated from the canonical
 schemas, so the wire shape stays byte-stable.
