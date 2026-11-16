@@ -34,6 +34,7 @@ aggrega-abi/
 ├── go/                 (Go codec)
 ├── rust/               (Rust codec)
 ├── scripts/            (check-api-compat.sh, the API compatibility check)
+├── testdata/           (the wire vectors every codec is checked against)
 └── typescript/         (TypeScript codec)
 ```
 
@@ -81,6 +82,23 @@ scripts/check-api-compat.sh --tools .api-tools .
 
 Its `--help` states the rule, the tools it pins, and what each
 language's comparison cannot see.
+
+## Regenerating the codecs
+
+The generated codec files (`*_gen.go`, `*_gen.rs`, `*_gen.ts`) are written by
+the type generator in the
+[aggrega-cli](https://github.com/aggrega-ai/aggrega-cli) repository, from the
+canonical schemas it builds against; this repository carries no generator of
+its own. Regenerating is a development step that needs both checkouts: check
+out `aggrega-abi` beside `aggrega-cli`, under these directory names, and run
+from the `aggrega-cli` checkout:
+
+```sh
+go generate ./internal/tools/typegen
+```
+
+The generator writes into `../aggrega-abi`, and stops with an error naming the
+directory when that checkout is absent.
 
 ## License
 
