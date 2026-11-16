@@ -76,20 +76,24 @@ WHAT IS COMPARED, PER LANGUAGE
 
 NOT COMPARABLE — PASSES, SAYING SO
   the baseline is below the first version of the public line;
-  --sibling is given and the baseline's rust/Cargo.toml declares no version on
-  its path dependency on the sibling;
+  --sibling is given and the baseline's rust/Cargo.toml declares no X.Y.Z
+  version of the sibling's crate;
   a language directory the baseline does not have.
   A repository with no vX.Y.Z tag is not a pass: a clone without its tags would
   pass every change unjudged, so the check stops with exit 2 (fetch the tags).
 
 OPTIONS
-  --sibling DIR    a repository REPO's manifests reach by relative path, checked
-                   out beside REPO (DIR's directory name is the one the manifests
-                   name). rust/Cargo.toml declares the sibling's version on that
-                   path dependency (version = "X.Y.Z"), and the declaration is held
-                   equal to the version the sibling's own rust/Cargo.toml carries.
-                   The baseline lays the sibling out beside REPO at the tag
-                   vX.Y.Z the baseline's rust/Cargo.toml declares.
+  --sibling DIR    a repository whose packages REPO depends on, checked out
+                   beside REPO. The sibling release REPO names is the version
+                   REPO's rust/Cargo.toml requires of the sibling's crate (read
+                   through cargo metadata, so a requirement written once in
+                   [workspace.dependencies] counts), and typescript/package.json,
+                   when it depends on the sibling's npm package, must name the
+                   same version. A release tag's rust/Cargo.toml may instead
+                   declare it on a path dependency reaching the sibling
+                   (version = "X.Y.Z"). The baseline lays the sibling out beside
+                   REPO at the tag vX.Y.Z the baseline's rust/Cargo.toml
+                   declares.
   --tools DIR      install the pinned tools into DIR/bin when missing there, and
                    use them. Without it the pinned tools must be on PATH.
   --work DIR       build the compared trees under DIR and keep them; by default a
@@ -130,8 +134,8 @@ EXIT STATUS
   0  the API is compatible, or the version marks the break, or nothing was
      comparable (each said on its own line)
   1  refused: a breaking change the version does not mark; manifests that
-     disagree or declare no X.Y.Z version; or, with --sibling, a declared
-     sibling version unequal to the sibling's own
+     disagree or declare no X.Y.Z version; or, with --sibling, manifests that
+     name no single X.Y.Z sibling version or name different ones
   2  the check could not run: usage, a missing or mismatched tool, a tree that
      does not build, a repository with no release tag, or a sibling missing the
      tag the baseline declares
@@ -263,29 +267,62 @@ for m in rust/Cargo.toml typescript/package.json; do
   fi
 done
 
-# declared_sibling_version CARGO_TOML -> the X.Y.Z the manifest declares on its
-# path dependency on the sibling, a leading requirement operator dropped; nothing
-# when it declares none.
+# declared_sibling_version CARGO_TOML -> the X.Y.Z the manifest declares on a path
+# dependency reaching the sibling, a leading requirement operator dropped; nothing
+# when it declares none. The form a release tag's manifest takes when it built
+# against the sibling checkout.
 declared_sibling_version() {
   local v; v="$(cargo_path_dep_version "$1" "$SIBLING_NAME")"
   v="${v#[=^~]}"; v="${v# }"
   printf '%s' "$v"
 }
 
+# exact_version SPEC -> the X.Y.Z SPEC names, a leading ^ or = dropped; nothing
+# when SPEC names no single X.Y.Z version.
+exact_version() {
+  local v="${1#^}"; v="${v#=}"
+  if [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then printf '%s' "$v"; fi
+}
+
+# required_sibling_version DIR -> the requirement the package in DIR/rust/Cargo.toml
+# places on the sibling's crate, as cargo metadata reports it (a dependency
+# inherited from [workspace.dependencies] included); "-" when it has none.
+required_sibling_version() {
+  local pkg; pkg="$(cargo_package_key "$1/rust/Cargo.toml" name)"
+  cargo metadata --no-deps --offline --format-version 1 --manifest-path "$1/rust/Cargo.toml" 2>/dev/null \
+    | node -e '
+const [pkg, dep] = process.argv.slice(1);
+const m = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const p = m.packages.find((p) => p.name === pkg);
+const d = p && p.dependencies.find((d) => d.name === dep && d.kind === null);
+console.log(d ? d.req : "-");
+' "$pkg" "$SIB_CRATE"
+}
+
+SIB_CRATE=""
+if [ -n "$SIBLING" ]; then
+  SIB_CRATE="$(cargo_package_key "$SIBLING/rust/Cargo.toml" name 2>/dev/null)"
+  [ -n "$SIB_CRATE" ] || fail2 "$SIBLING_NAME/rust/Cargo.toml names no package"
+fi
 if [ -n "$SIBLING" ] && [ -f "$REPO/rust/Cargo.toml" ]; then
-  # The declaration is what pairs a baseline with its sibling, so the working tree
-  # keeps it equal to the sibling version it is built against.
-  declared="$(declared_sibling_version "$REPO/rust/Cargo.toml")"
-  sib_own=""
-  [ -f "$SIBLING/rust/Cargo.toml" ] && sib_own="$(cargo_package_key "$SIBLING/rust/Cargo.toml" version)"
-  if [ -z "$(semver_core "$declared")" ]; then
-    say "REFUSED: $REPO_NAME/rust/Cargo.toml declares no X.Y.Z version on its path dependency on $SIBLING_NAME (\"$declared\"); declare version = \"$sib_own\""
+  # The sibling release REPO names is what pairs a later baseline with its sibling,
+  # so the working tree names one, the same one in every manifest.
+  req="$(required_sibling_version "$REPO")" || req=""
+  [ -n "$req" ] || fail2 "cargo metadata could not read $REPO_NAME/rust/Cargo.toml"
+  declared="$(exact_version "$req")"
+  if [ -z "$declared" ]; then
+    say "REFUSED: $REPO_NAME/rust/Cargo.toml requires $SIB_CRATE \"$req\", which names no single X.Y.Z $SIBLING_NAME release"
     exit 1
   fi
-  if [ "$declared" != "$sib_own" ]; then
-    say "REFUSED: $REPO_NAME/rust/Cargo.toml declares $SIBLING_NAME $declared, and the $SIBLING_NAME it builds against carries $sib_own; set the declared version to $sib_own"
-    exit 1
+  if [ -f "$REPO/typescript/package.json" ] && [ -f "$SIBLING/typescript/package.json" ]; then
+    sib_npm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name || ""))' "$SIBLING/typescript/package.json")"
+    spec="$(node -e 'const p = require(process.argv[1]); const s = (p.dependencies || {})[process.argv[2]]; process.stdout.write(s === undefined ? "-" : String(s))' "$REPO/typescript/package.json" "$sib_npm")"
+    if [ "$spec" != "-" ] && [ "$(exact_version "$spec")" != "$declared" ]; then
+      say "REFUSED: $REPO_NAME's manifests name different $SIBLING_NAME releases: rust/Cargo.toml requires $SIB_CRATE $declared, typescript/package.json names $sib_npm \"$spec\"; make them name the same release"
+      exit 1
+    fi
   fi
+  say "$REPO_NAME names $SIBLING_NAME $declared"
 fi
 
 BASE_TAG="$(newest_tag "$REPO")"
@@ -318,6 +355,12 @@ if [ -n "$SIBLING" ]; then
   base_declared=""
   if git -C "$REPO" cat-file -e "$BASE_TAG:rust/Cargo.toml" 2>/dev/null; then
     base_declared="$(declared_sibling_version <(git -C "$REPO" show "$BASE_TAG:rust/Cargo.toml"))"
+    if [ -z "$base_declared" ]; then
+      base_tree="$(mktemp -d)"
+      git -C "$REPO" archive "$BASE_TAG" rust | tar -x -C "$base_tree" \
+        && base_declared="$(exact_version "$(required_sibling_version "$base_tree")")"
+      rm -rf "$base_tree"
+    fi
   fi
   if [ -z "$(semver_core "$base_declared")" ]; then
     say "$REPO_NAME $BASE_TAG declares no $SIBLING_NAME version in rust/Cargo.toml, so no $SIBLING_NAME tag can be paired with it: not comparable, passes"
