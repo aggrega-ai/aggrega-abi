@@ -307,6 +307,7 @@ fi
 if [ -n "$SIBLING" ] && [ -f "$REPO/rust/Cargo.toml" ]; then
   # The sibling release REPO names is what pairs a later baseline with its sibling,
   # so the working tree names one, the same one in every manifest.
+  # Read here on purpose, not by aggrega-pdk's scripts/check-abi-pins.sh: a check never runs code from the tree it judges.
   req="$(required_sibling_version "$REPO")" || req=""
   [ -n "$req" ] || fail2 "cargo metadata could not read $REPO_NAME/rust/Cargo.toml"
   declared="$(exact_version "$req")"
