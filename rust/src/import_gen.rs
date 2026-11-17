@@ -115,7 +115,7 @@ pub struct ImportOutput {
 /// One entity the import produced: its kind, its name, and how it is emitted — a reference to an existing catalog entity or a newly drafted entity body.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EmittedEntity {
-    /// The kind of entity emitted. The core importers emit Component, Aggregate and Release; a reader tolerates any other kind.
+    /// The kind of the emitted entity, as its document declares it; a reader tolerates any kind.
     pub kind: String,
     /// The name of the emitted entity.
     pub name: String,
