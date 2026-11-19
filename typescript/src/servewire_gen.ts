@@ -521,6 +521,10 @@ export interface PublishEntityParams {
   sign?: boolean;
   // The plugin module to publish alongside a Plugin entity.
   plugin?: string;
+  // The file of the plugin module's third-party notices, as a path relative to the workspace root, published as a layer of the Plugin's manifest. Requires `plugin`.
+  pluginNotices?: string;
+  // The plugin module's SPDX bill of materials in JSON, as a path relative to the workspace root, attached to the published Plugin. Requires `plugin`.
+  pluginSbom?: string;
   // The certificate authority to obtain a signing certificate from.
   fulcioUrl?: string;
   // The transparency log to record the signature in.
@@ -3015,6 +3019,8 @@ export function encodePublishEntityParams(v: PublishEntityParams): string {
   if (v.dryRun !== undefined && v.dryRun !== false) parts.push(`${jstr("dryRun")}:${String(v.dryRun)}`);
   if (v.sign !== undefined && v.sign !== false) parts.push(`${jstr("sign")}:${String(v.sign)}`);
   if (v.plugin !== undefined && v.plugin !== "") parts.push(`${jstr("plugin")}:${jstr(v.plugin)}`);
+  if (v.pluginNotices !== undefined && v.pluginNotices !== "") parts.push(`${jstr("pluginNotices")}:${jstr(v.pluginNotices)}`);
+  if (v.pluginSbom !== undefined && v.pluginSbom !== "") parts.push(`${jstr("pluginSbom")}:${jstr(v.pluginSbom)}`);
   if (v.fulcioUrl !== undefined && v.fulcioUrl !== "") parts.push(`${jstr("fulcioUrl")}:${jstr(v.fulcioUrl)}`);
   if (v.rekorUrl !== undefined && v.rekorUrl !== "") parts.push(`${jstr("rekorUrl")}:${jstr(v.rekorUrl)}`);
   if (v.timestampUrl !== undefined && v.timestampUrl !== "") parts.push(`${jstr("timestampUrl")}:${jstr(v.timestampUrl)}`);
