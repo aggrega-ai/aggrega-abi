@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out with history
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           path: aggrega-abi
           fetch-depth: 0
@@ -38,14 +38,14 @@ jobs:
         # secrets are handed to this action and to no step, and its token to those
         # checkouts, none of which keeps it.
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.SUBMODULE_APP_CLIENT_ID }}
           private-key: ${{ secrets.SUBMODULE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - name: Check out the schemas sibling, which carries the check
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: ${{ github.repository_owner }}/aggrega-schemas
           path: aggrega-schemas
@@ -54,7 +54,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out the codec generator's source from the CLI sibling's dev
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: ${{ github.repository_owner }}/aggrega-cli
           path: aggrega-cli-dev
@@ -64,7 +64,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out the codec generator's source from the CLI sibling's main
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: ${{ github.repository_owner }}/aggrega-cli
           path: aggrega-cli-main
@@ -74,7 +74,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: aggrega-schemas/go.mod
           cache: false
