@@ -32,30 +32,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Mint the token that reads the sibling repositories
-        # The three checkouts below read aggrega-schemas and aggrega-cli with a
-        # GitHub App installation token for those two repositories alone, asking
-        # for read access to their contents and nothing else. The App's secrets
-        # are handed to this action and to no step, and its token to those
-        # checkouts, none of which keeps it.
-        id: app-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
-        with:
-          client-id: ${{ secrets.SUBMODULE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.SUBMODULE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: |
-            aggrega-schemas
-            aggrega-cli
-          permission-contents: read
-
       - name: Check out the schemas sibling, which carries the check
+        # The sibling repositories are public: the run's own token reads them,
+        # and a Dependabot or fork pull request run receives it too.
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: ${{ github.repository_owner }}/aggrega-schemas
           path: aggrega-schemas
           ref: dev
-          token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
 
       - name: Check out the codec generator's source from the CLI sibling's dev
@@ -65,7 +49,6 @@ jobs:
           path: aggrega-cli-dev
           ref: dev
           sparse-checkout: internal/tools/typegen
-          token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
 
       - name: Check out the codec generator's source from the CLI sibling's main
@@ -75,7 +58,6 @@ jobs:
           path: aggrega-cli-main
           ref: main
           sparse-checkout: internal/tools/typegen
-          token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
 
       - name: Set up Go
