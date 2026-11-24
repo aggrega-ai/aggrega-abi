@@ -30,7 +30,7 @@ constant and stay coordinated at every socket-shape change.
 ```text
 aggrega-abi/
 ├── README.md           (this file)
-├── .github/workflows/  (the API compatibility check on dev, the codec freeze on main)
+├── .github/workflows/  (the API compatibility check, dependency review, publishing)
 ├── go/                 (Go codec)
 ├── rust/               (Rust codec)
 ├── scripts/            (check-api-compat.sh, the API compatibility check)
@@ -72,9 +72,9 @@ changed item unless the version being prepared marks a breaking change
 comparing the declaration files the package emits. A change that has to
 break raises the version in `rust/Cargo.toml` and
 `typescript/package.json` in the same change. The workflow
-`api-compat.yml` runs it on every push to `dev` and every pull request
-into it, and the Plugin Development Kits' workflow runs it over the
-kits. To run it locally:
+`api-compat.yml` runs it on every push to `main` or to a `release/vX.Y`
+branch and on every pull request into `main`, and the Plugin
+Development Kits' workflow runs it over the kits. To run it locally:
 
 ```sh
 scripts/check-api-compat.sh --tools .api-tools .
