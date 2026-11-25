@@ -205,12 +205,15 @@ pub struct AssemblyNameAnnotation {
     pub require_unique: bool,
 }
 
-/// What an importer declares about its formats beyond advertising them: the signatures a source of those formats is recognised by. When an import names no format, the host reads the signatures recorded by every importer the import selects among — the importers in the workspace's catalog and the compiler's core importers, whose Plugin entities the binary carries — matches each against the source without knowing what any format is, and reads the source as the format of the one importer whose signature matches. A source no signature matches is refused asking for the format, and a source signatures of more than one format match is refused naming them. The Plugin entity records the same list, and the host refuses an importer whose describe() report differs from the record.
+/// What an importer declares about its formats beyond advertising them: the signatures a source of those formats is recognised by, and the target its drafts default to. When an import names no format, the host reads the signatures recorded by every importer the import selects among — the importers in the workspace's catalog and the compiler's core importers, whose Plugin entities the binary carries — matches each against the source without knowing what any format is, and reads the source as the format of the one importer whose signature matches. A source no signature matches is refused asking for the format, and a source signatures of more than one format match is refused naming them. The Plugin entity records the same list, and the host refuses an importer whose describe() report differs from the record.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ImporterContract {
     /// The signatures that recognise a source of this importer's formats, in declared order; a source is recognised when any one of them matches it. A source recognised by an importer is recognised as every format the importer advertises, so an importer advertising more than one format has every match refused as ambiguous, and an importer whose sources must be recognised advertises one format. Absent or empty declares no signature, and the importer's formats are reached only by naming them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub detect: Vec<DetectSignature>,
+    /// The target an import of this importer's formats drafts for when the import names none and no earlier import's record names one: the provider capability its drafted Manifest maps to, written as a Recipe's spec.capability is. The host applies it only where a Recipe of the import's catalog binds to it, and otherwise drafts no Manifest and says why; an import naming a target drafts for that one. Absent declares none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub default_target: String,
 }
 
 /// One way a source is recognised: the syntax the source is read in, the file names the signature applies to, and the predicates the parsed tree must satisfy. It matches a file whose name matches one of its file patterns — or, where it declares none, a source that is one file, whatever it is called — whose bytes parse in its syntax, and whose parsed tree satisfies every one of its predicates. It matches a directory where it matches one of the directory's files its patterns select, so a signature declaring no pattern matches no directory.
@@ -1020,6 +1023,7 @@ impl ImporterContract {
     pub(crate) fn append_cbor(&self, out: &mut Vec<u8>) -> Result<(), crate::cbor_gen::CborError> {
         let mut n: u64 = 0;
         if !self.detect.is_empty() { n += 1; }
+        if !self.default_target.is_empty() { n += 1; }
         crate::cbor_gen::write_head(out, 5, n);
         if !self.detect.is_empty() {
             crate::cbor_gen::write_text(out, "detect");
@@ -1030,6 +1034,10 @@ impl ImporterContract {
                     ev.append_cbor(out)?;
                 }
             }
+        }
+        if !self.default_target.is_empty() {
+            crate::cbor_gen::write_text(out, "default_target");
+            crate::cbor_gen::write_text(out, &self.default_target);
         }
         Ok(())
     }
@@ -1043,16 +1051,19 @@ impl ImporterContract {
 
     pub(crate) fn decode_cbor_from(dec: &mut crate::cbor_gen::CborDec) -> Result<Self, crate::cbor_gen::CborError> {
         let mut f_detect: Vec<DetectSignature> = Vec::new();
+        let mut f_default_target: String = String::new();
         let n = dec.read_map_header()?;
         for _ in 0..n {
             let k = dec.read_text()?;
             match k.as_str() {
                 "detect" => f_detect = { let sn = dec.read_array_header()?; let mut sv: Vec<DetectSignature> = Vec::with_capacity(sn); for _ in 0..sn { sv.push(DetectSignature::decode_cbor_from(dec)?); } sv },
+                "default_target" => f_default_target = dec.read_text()?,
                 _ => dec.skip()?,
             }
         }
         Ok(Self {
             detect: f_detect,
+            default_target: f_default_target,
         })
     }
 }

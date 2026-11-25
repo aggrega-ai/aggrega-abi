@@ -166,10 +166,12 @@ export interface AssemblyNameAnnotation {
   require_unique?: boolean;
 }
 
-// What an importer declares about its formats beyond advertising them: the signatures a source of those formats is recognised by. When an import names no format, the host reads the signatures recorded by every importer the import selects among — the importers in the workspace's catalog and the compiler's core importers, whose Plugin entities the binary carries — matches each against the source without knowing what any format is, and reads the source as the format of the one importer whose signature matches. A source no signature matches is refused asking for the format, and a source signatures of more than one format match is refused naming them. The Plugin entity records the same list, and the host refuses an importer whose describe() report differs from the record.
+// What an importer declares about its formats beyond advertising them: the signatures a source of those formats is recognised by, and the target its drafts default to. When an import names no format, the host reads the signatures recorded by every importer the import selects among — the importers in the workspace's catalog and the compiler's core importers, whose Plugin entities the binary carries — matches each against the source without knowing what any format is, and reads the source as the format of the one importer whose signature matches. A source no signature matches is refused asking for the format, and a source signatures of more than one format match is refused naming them. The Plugin entity records the same list, and the host refuses an importer whose describe() report differs from the record.
 export interface ImporterContract {
   // The signatures that recognise a source of this importer's formats, in declared order; a source is recognised when any one of them matches it. A source recognised by an importer is recognised as every format the importer advertises, so an importer advertising more than one format has every match refused as ambiguous, and an importer whose sources must be recognised advertises one format. Absent or empty declares no signature, and the importer's formats are reached only by naming them.
   detect?: DetectSignature[];
+  // The target an import of this importer's formats drafts for when the import names none and no earlier import's record names one: the provider capability its drafted Manifest maps to, written as a Recipe's spec.capability is. The host applies it only where a Recipe of the import's catalog binds to it, and otherwise drafts no Manifest and says why; an import naming a target drafts for that one. Absent declares none.
+  default_target?: string;
 }
 
 // One way a source is recognised: the syntax the source is read in, the file names the signature applies to, and the predicates the parsed tree must satisfy. It matches a file whose name matches one of its file patterns — or, where it declares none, a source that is one file, whatever it is called — whose bytes parse in its syntax, and whose parsed tree satisfies every one of its predicates. It matches a directory where it matches one of the directory's files its patterns select, so a signature declaring no pattern matches no directory.
@@ -339,6 +341,7 @@ export function decodeAssemblyNameAnnotation(data: string): AssemblyNameAnnotati
 export function encodeImporterContract(v: ImporterContract): string {
   const parts: string[] = [];
   if (v.detect !== undefined && v.detect.length > 0) parts.push(`${jstr("detect")}:${`[${v.detect!.map((e0) => encodeDetectSignature(e0)).join(",")}]`}`);
+  if (v.default_target !== undefined && v.default_target !== "") parts.push(`${jstr("default_target")}:${jstr(v.default_target)}`);
   return `{${parts.join(",")}}`;
 }
 
@@ -972,6 +975,7 @@ export function encodeCBORImporterContract(v: ImporterContract): Uint8Array {
 export function appendCBORImporterContract(out: number[], v: ImporterContract): void {
   let n = 0;
   if (v.detect !== undefined && v.detect.length > 0) n++;
+  if (v.default_target !== undefined && v.default_target !== "") n++;
   writeHead(out, 5, n);
   if (v.detect !== undefined && v.detect.length > 0) {
     writeText(out, "detect");
@@ -982,6 +986,10 @@ export function appendCBORImporterContract(out: number[], v: ImporterContract): 
         appendCBORDetectSignature(out, ee0);
       }
     }
+  }
+  if (v.default_target !== undefined && v.default_target !== "") {
+    writeText(out, "default_target");
+    writeText(out, v.default_target);
   }
 }
 
@@ -997,6 +1005,7 @@ export function decodeCBORImporterContractFrom(dec: CborDec): ImporterContract {
     const k = dec.readText();
     switch (k) {
       case "detect": o["detect"] = (() => { const a: any[] = []; const sn = dec.readArrayHeader(); for (let j = 0; j < sn; j++) { a.push(decodeCBORDetectSignatureFrom(dec)); } return a; })(); break;
+      case "default_target": o["default_target"] = dec.readText(); break;
       default: dec.skip();
     }
   }
