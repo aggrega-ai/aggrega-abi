@@ -30,7 +30,7 @@ constant and stay coordinated at every socket-shape change.
 ```text
 aggrega-abi/
 ├── README.md           (this file)
-├── .github/workflows/  (the API compatibility check, dependency review, publishing)
+├── .github/workflows/  (the API compatibility check, the checks, the workflow audit, dependency review, publishing)
 ├── go/                 (Go codec)
 ├── rust/               (Rust codec)
 ├── scripts/            (check-api-compat.sh, the API compatibility check)
